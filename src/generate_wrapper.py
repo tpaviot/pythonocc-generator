@@ -511,6 +511,9 @@ def adapt_param_type_and_name(param_type_and_name):
     elif (('Standard_Integer &' in param_type_and_name) or
           (param_type_and_name.startswith('int &'))) and not ('const' in param_type_and_name):
         adapted_param_type_and_name = "Standard_Integer &OutValue"
+    elif (('Standard_Boolean &' in param_type_and_name) or
+         (param_type_and_name.startswith('bool &'))) and not ('const' in param_type_and_name):
+        adapted_param_type_and_name = "Standard_Boolean &OutValue"
     elif ('FairCurve_AnalysisCode &' in param_type_and_name):
         adapted_param_type_and_name = 'FairCurve_AnalysisCode &OutValue'
     else:
