@@ -1,4 +1,4 @@
-##Copyright 2008-2014 Thomas Paviot (tpaviot@gmail.com)
+##Copyright 2008-2015 Thomas Paviot (tpaviot@gmail.com)
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -146,9 +146,12 @@ HXX_TO_EXCLUDE = ['TCollection_AVLNode.hxx',
                   'MeshVS_Buffer.hxx',
                   'SMDS_SetIterator.hxx',
                   'SMESH_Block.hxx',
-                  'SMESH_ExceptHandlers.hxx', 'StdMeshers_Penta_3D.hxx', 'SMESH_ControlsDef.hxx',
+                  'SMESH_ExceptHandlers.hxx', 'StdMeshers_Penta_3D.hxx',
+                  'SMESH_ControlsDef.hxx',
                   'SMESH_Algo.hxx',
-                  'SMESH_0D_Algo.hxx', 'SMESH_1D_Algo.hxx', 'SMESH_2D_Algo.hxx', 'SMESH_3D_Algo.hxx',
+                  'SMESH_0D_Algo.hxx', 'SMESH_1D_Algo.hxx',
+                  'SMESH_2D_Algo.hxx',
+                  'SMESH_3D_Algo.hxx',
                   'IntTools_CurveRangeSampleMapHasher.hxx',
                   'Quantity_Color_1.hxx',
                   'Interface_ValueInterpret.hxx'
@@ -375,7 +378,7 @@ def adapt_header_file(header_content):
     * all define RTTI moved
     """
     global CURRENT_HEADER_CONTENT
-    outer = re.compile("DEFINE_STANDARD_HANDLE[\s]*\([\w\s]+\,+[\w\s]+\)")#\(\)")#[a-zA-Z]*\)")
+    outer = re.compile("DEFINE_STANDARD_HANDLE[\s]*\([\w\s]+\,+[\w\s]+\)")
     matches = outer.findall(header_content)
     if matches:
         for match in matches:
@@ -588,9 +591,9 @@ def adapt_return_type(return_type):
 
 def test_adapt_return_type():
     adapted_1 = adapt_return_type("Standard_EXPORT Standard_Integer")
-    assert(adapted_1 == "Standard_Integer")
+    assert adapted_1 == "Standard_Integer"
     adapted_2 = adapt_return_type("DEFINE_STANDARD_ALLOC Standard_EXPORT static Standard_Integer")
-    assert(adapted_2 == "static Standard_Integer")
+    assert adapted_2 == "static Standard_Integer"
 
 
 def adapt_function_name(f_name):
@@ -601,7 +604,7 @@ def adapt_function_name(f_name):
 
 
 def test_adapt_function_name():
-    assert(adapt_function_name('operator*') == 'operator *')
+    assert adapt_function_name('operator*') == 'operator *'
 
 
 def process_docstring(f):
@@ -622,7 +625,7 @@ def process_docstring(f):
             param_type = param_type.replace("Standard_Boolean &", "bool")
             param_type = param_type.replace("Standard_Boolean", "bool")
             param_type = param_type.replace("Standard_Real", "float")
-            parma_type = param_type.replace("Standard_Integrer", "int")
+            param_type = param_type.replace("Standard_Integer", "int")
             if "gp_" in param_type:
                 param_type = param_type.replace("&", "")
             param_type = param_type.strip()
@@ -708,7 +711,7 @@ def adapt_default_value(def_value):
 
 
 def test_adapt_default_value():
-    assert(adapt_default_value(": : MeshDim_3D") == "MeshDim_3D")
+    assert adapt_default_value(": : MeshDim_3D") == "MeshDim_3D"
 
 
 def filter_member_functions(class_public_methods, member_functions_to_exclude, class_is_abstract):
@@ -739,7 +742,7 @@ def test_filter_member_functions():
     result = filter_member_functions(class_public_methods,
                                      member_functions_to_exclude,
                                      False)
-    assert(result == [{"name": "method_1"}, {"name": "method_3"}])
+    assert result == [{"name": "method_1"}, {"name": "method_3"}]
 
 
 def process_function(f):
@@ -1125,7 +1128,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             else:
                 class_def_str += process_handle(class_name, inheritance_name)
         # We add pickling for TopoDS_Shapes
-        if (class_name == 'TopoDS_Shape'):
+        if class_name == 'TopoDS_Shape':
             class_def_str += '%extend TopoDS_Shape {\n%pythoncode {\n'
             class_def_str += '\tdef __getstate__(self):\n'
             class_def_str += '\t\tfrom .BRepTools import BRepTools_ShapeSet\n'
@@ -1153,15 +1156,15 @@ def is_module(module_name):
     'Standard' should return True
     'inj' should return False
     """
-    for mod in (OCE_MODULES + SMESH_MODULES):
+    for mod in OCE_MODULES + SMESH_MODULES:
         if mod[0] == module_name:
             return True
     return False
 
 
 def test_is_module():
-    assert(is_module('Standard') is True)
-    assert(is_module('something') is False)
+    assert is_module('Standard') is True
+    assert is_module('something') is False
 
 
 def parse_module(module_name):
@@ -1217,7 +1220,7 @@ class ModuleWrapper(object):
         self._classes_str = process_classes(classes, exclude_classes,
                                             exclude_member_functions)
         print("done")
-        print("\t processing free functions ...", end ="")
+        print("\t processing free functions ...", end="")
         self._free_functions_str = process_free_functions(free_functions)
         print("done")
         self._additional_dependencies = additional_dependencies + HEADER_DEPENDENCY
