@@ -676,6 +676,7 @@ def process_docstring(f):
         doxygen_string = doxygen_string.replace("\\r", "")
         # replace \n with space
         doxygen_string = doxygen_string.replace("\n", " ")
+        doxygen_string = doxygen_string.replace("'\\n'", "A newline")
         # replace TRUE and FALSE with True and False
         doxygen_string = doxygen_string.replace("TRUE", "True")
         doxygen_string = doxygen_string.replace("FALSE", "False")
@@ -839,7 +840,9 @@ def process_function(f):
     # this is because Handle (something) some function can not be
     # handled by swig
         return ""
-    str_function = process_docstring(f)
+    # enable autocompactargs feature to enable compilation with swig>3.0.3
+    str_function = '\t\t%%feature("compactdefaultargs") %s;\n' % function_name
+    str_function += process_docstring(f)
     str_function += "\t\t"
     # return type
     # in the return type, we remove the Standard_EXPORT macro
