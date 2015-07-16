@@ -1,6 +1,21 @@
-Version 0.1 - June 0.15
+Version 0.2 - July 2015
 =======================
 
 This release supports oce-0.16 or oce-0.16.1
+
+Used to generate pythonocc-0.16.2
+
+* Fixed swig->3.0.3 issue with default parameters
+
+* Fixed wrapper for Standard_Boolean & parameter
+
+* Few PEP8 fixes ; typo fixes that prevent replacing Standard_Integer with int
+
+Version 0.1 - June 2015
+=======================
+
+This release supports oce-0.16 or oce-0.16.1
+
+Used to generate pythonocc-0.16.1
 
 * initial import
