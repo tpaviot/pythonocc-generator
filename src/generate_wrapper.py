@@ -783,7 +783,7 @@ def process_function(f):
             except:
                 return False
         }
-        """ % param_type    
+        """ % param_type
     # special process for operator !=
     if "operator !=" in function_name:
         param = f["parameters"][0]
@@ -1056,7 +1056,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # for instance TopoDS is both a module and a class
         # then we rename the class with lowercase
         if class_name == CURRENT_MODULE:
-            class_def_str += "%%rename(%s) %s;\n" % (class_name.lower(), class_name)    
+            class_def_str += "%%rename(%s) %s;\n" % (class_name.lower(), class_name)
         # then process the class itself
         if not class_can_have_default_constructor(klass):
         #if not class_name in CLASSES_WITH_DEFAULT_CONSTRUCTORS:
@@ -1345,6 +1345,29 @@ def run_unit_tests():
 if __name__ == '__main__':
     run_unit_tests()
     write__init__()
-    process_all_toolkits()
+
     # to process only one toolkit, uncomment the following line and change the toolkit name
     #process_toolkit("TKernel")
+
+    if config.get("build", "log_build"):
+        from utils import merged_stderr_stdout, stdout_redirected
+        import datetime
+
+        print("capturing output to log file...")
+
+        log_filename = config.get("build", "log_filename")
+        fname, ext = os.path.splitext(log_filename)
+        ext = ".log" if ext == "" else ext
+
+        now = datetime.datetime.now()
+        time_str = '{0:%d}_{0:%B}_{0:%I:%M%p}'.format(now)
+
+        dated_log_filename = "{fname}_{time_str}{ext}".format(**vars())
+
+        with open(dated_log_filename, 'w') as f:
+            with merged_stderr_stdout():
+                with stdout_redirected(f):
+                    process_all_toolkits()
+    else:
+        process_all_toolkits()
+
