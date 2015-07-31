@@ -4,7 +4,7 @@ import sys
 from contextlib import contextmanager
 
 #-------------------------------------------------------------------------------
-# stdout / stderr redirection code couretesy of J.F. Sebastien:
+# stdout / stderr redirection code courtesy of J.F. Sebastien:
 # http://stackoverflow.com/questions/4675728/redirect-stdout-to-a-file-in-python
 #-------------------------------------------------------------------------------
 
