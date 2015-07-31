@@ -3,6 +3,10 @@ import os
 import sys
 from contextlib import contextmanager
 
+#-------------------------------------------------------------------------------
+# stdout / stderr redirection code couretesy of J.F. Sebastien:
+# http://stackoverflow.com/questions/4675728/redirect-stdout-to-a-file-in-python
+#-------------------------------------------------------------------------------
 
 def fileno(file_or_fd):
     fd = getattr(file_or_fd, 'fileno', lambda: file_or_fd)()
