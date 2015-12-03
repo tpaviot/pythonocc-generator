@@ -714,6 +714,15 @@ def adapt_default_value(def_value):
     return def_value
 
 
+def adapt_default_value_parmlist(parm):
+    """ adapts default value to be used in swig parameter list """
+
+    def_value = parm["defaultValue"]
+    def_value = def_value.replace(": : ", "")
+    def_value = def_value.replace(' ', '')
+    return def_value
+
+
 def test_adapt_default_value():
     assert adapt_default_value(": : MeshDim_3D") == "MeshDim_3D"
 
@@ -890,7 +899,7 @@ def process_function(f):
         param_type_and_name = "%s %s" % (param_type, param["name"])
         str_function += adapt_param_type_and_name(param_type_and_name)
         if "defaultValue" in param:
-            def_value = adapt_default_value(param["defaultValue"])
+            def_value = adapt_default_value_parmlist(param)
             str_function += " = %s" % def_value
         # argument separator
         str_function += ","
