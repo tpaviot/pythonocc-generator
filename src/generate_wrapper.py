@@ -242,7 +242,7 @@ class Handle_%s : public Handle_%s {
 def __del__(self):
     try:
         self.thisown = False
-        GarbageCollector.garbage.collect_object(self)
+        OCC.GarbageCollector.garbage.collect_object(self)
     except:
         pass
 %%}
@@ -1123,7 +1123,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         class_def_str += 'def __del__(self):\n'
         class_def_str += '\ttry:\n'
         class_def_str += '\t\tself.thisown = False\n'  # detach python object/C++ object
-        class_def_str += '\t\tGarbageCollector.garbage.collect_object(self)\n'
+        class_def_str += '\t\tOCC.GarbageCollector.garbage.collect_object(self)\n'
         class_def_str += '\texcept:\n\t\tpass\n'
         class_def_str += '%}\n'
         class_def_str += '\n%'
@@ -1271,6 +1271,10 @@ class ModuleWrapper(object):
         for include in includes:
             f.write("%%include ../common/%s.i\n" % include)
         f.write("\n")
+        # import the garbage collector
+        f.write("%pythoncode {\n")
+        f.write("import OCC.GarbageCollector\n")
+        f.write("};\n\n")
         # specific includes
         f.write("%%include %s_headers.i\n\n" % self._module_name)
         # write type_defs
