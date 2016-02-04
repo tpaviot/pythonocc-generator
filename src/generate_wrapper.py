@@ -238,20 +238,6 @@ class Handle_%s : public Handle_%s {
     return (%s*)$self->Access();
     }
 };
-%%feature("shadow") Handle_%s::~Handle_%s %%{
-def __del__(self):
-    try:
-        self.thisown = False
-        OCC.GarbageCollector.garbage.collect_object(self)
-    except:
-        pass
-%%}
-
-%%extend Handle_%s {
-    void _kill_pointed() {
-        delete $self;
-    }
-};
 
 """
     c = tuple([class_name for i in range(handle_body_template.count('%s'))])
@@ -905,7 +891,6 @@ def process_function(f):
             """ % (modified_return_type, function_name, modified_return_type,
                    function_name, function_name, modified_return_type, function_name)
             return str_function
-
     str_function += "%s " % handle_by_value(return_type)
     # function name
     str_function += "%s " % function_name
@@ -1131,30 +1116,22 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         class_def_str += "};\n\n"
         #
         # at last, check if there is a related handle
-        # customize destructors
+        # if yes, we integrate it into it's shadow class
         # TODO: check that the following is not restricted
         # to protected destructors !
-        class_def_str += '\n%'
-        class_def_str += 'feature("shadow") %s::~%s ' % (class_name, class_name)
-        class_def_str += '%{\n'
-        class_def_str += 'def __del__(self):\n'
-        class_def_str += '\ttry:\n'
-        class_def_str += '\t\tself.thisown = False\n'  # detach python object/C++ object
-        class_def_str += '\t\tOCC.GarbageCollector.garbage.collect_object(self)\n'
-        class_def_str += '\texcept:\n\t\tpass\n'
-        class_def_str += '%}\n'
-        class_def_str += '\n%'
-        class_def_str += 'extend %s {\n' % class_name
-        class_def_str += '\tvoid _kill_pointed() {\n\t'
-        class_def_str += '\tdelete $self;'
-        class_def_str += '\n\t}\n};\n'
+        class_def_str += '\n'
         if check_has_related_handle(class_name) or need_handle():
-            # firts, extend the class with the GetObject method
-            class_def_str += "%"
-            class_def_str += "extend %s {\n" % class_name
-            handle_class_name = "Handle_%s" % class_name
-            class_def_str += "\t%s GetHandle() {\n" % handle_class_name
-            class_def_str += "\treturn *(%s*) &$self;\n\t}\n};\n" % handle_class_name
+            # Extend class by GetHandle method
+            class_def_str += '%%extend %s {\n' % class_name
+            class_def_str += '\t%' + 'pythoncode {\n'
+            class_def_str += '\t\tdef GetHandle(self):\n'
+            class_def_str += '\t\t    try:\n'
+            class_def_str += '\t\t        return self.thisHandle\n'
+            class_def_str += '\t\t    except:\n'
+            class_def_str += '\t\t        self.thisHandle = Handle_%s(self)\n' % class_name
+            class_def_str += '\t\t        self.thisown = False\n'
+            class_def_str += '\t\t        return self.thisHandle\n'
+            class_def_str += '\t}\n};\n'
             if class_name == "Standard_Transient":
                 class_def_str += process_handle(class_name, None)
             else:
@@ -1287,11 +1264,7 @@ class ModuleWrapper(object):
                     "FunctionTransformers", "Operators"]
         for include in includes:
             f.write("%%include ../common/%s.i\n" % include)
-        f.write("\n")
-        # import the garbage collector
-        f.write("%pythoncode {\n")
-        f.write("import OCC.GarbageCollector\n")
-        f.write("};\n\n")
+        f.write("\n\n")
         # specific includes
         f.write("%%include %s_headers.i\n\n" % self._module_name)
         # write type_defs
