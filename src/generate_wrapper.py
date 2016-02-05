@@ -758,6 +758,22 @@ def test_filter_member_functions():
     assert result == [{"name": "method_1"}, {"name": "method_3"}]
 
 
+def handle_by_value(return_str):
+    """
+    If function returns reference to Handle, the name of the
+    handle will be returned. None otherwise
+    """
+
+    handlePattern = re.compile(r'(virtual )?(const )?(?P<name>(Handle_)+([A-Za-z_0-9])*)(\s)*(&)')
+    match = re.search(handlePattern, return_str)
+
+    if match:
+        handle_name = match.group('name')
+        return handle_name
+    else:
+        return return_str
+
+
 def process_function(f):
     """ Process function f and returns a SWIG compliant string.
     If process_docstrings is set to True, the documentation string
@@ -889,7 +905,8 @@ def process_function(f):
             """ % (modified_return_type, function_name, modified_return_type,
                    function_name, function_name, modified_return_type, function_name)
             return str_function
-    str_function += "%s " % return_type
+
+    str_function += "%s " % handle_by_value(return_type)
     # function name
     str_function += "%s " % function_name
     # process parameters
