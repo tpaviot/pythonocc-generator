@@ -162,6 +162,15 @@ def process_handle(class_name, inherits_from_class_name):
     """ Given a class name that inherits from Standard_Transient,
     generate the wrapper for the related Handle
     """
+
+    handle_constructor_append = """
+%%pythonappend Handle_%s::Handle_%s %%{
+    # register the handle in the base object
+    if len(args) > 0:
+        register_handle(self, args[0])
+%%}
+""" % (class_name, class_name)
+
     if class_name == "Standard_Transient":
         handle_inheritance_declaration = """
 %nodefaultctor Handle_Standard_Transient;
@@ -241,7 +250,7 @@ class Handle_%s : public Handle_%s {
 
 """
     c = tuple([class_name for i in range(handle_body_template.count('%s'))])
-    return handle_inheritance_declaration + handle_body_template % c
+    return handle_constructor_append + handle_inheritance_declaration + handle_body_template % c
 
 
 def filter_header_list(header_list):
@@ -1267,6 +1276,24 @@ class ModuleWrapper(object):
         f.write("\n\n")
         # specific includes
         f.write("%%include %s_headers.i\n\n" % self._module_name)
+        # write helper functions
+        helper_functions = """
+%pythoncode {
+def register_handle(handle, base_object):
+    \"\"\"
+    Inserts the handle into the base object to
+    prevent memory corruption in certain cases
+    \"\"\"
+    try:
+        if base_object.IsKind("Standard_Transient"):
+            base_object.thisHandle = handle
+            base_object.thisown = False
+    except:
+        pass
+};
+
+"""
+        f.write(helper_functions)
         # write type_defs
         f.write(self._typedefs_str)
         # write public enums
