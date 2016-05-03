@@ -154,7 +154,12 @@ HXX_TO_EXCLUDE = ['TCollection_AVLNode.hxx',
                   'SMESH_3D_Algo.hxx',
                   'IntTools_CurveRangeSampleMapHasher.hxx',
                   'Quantity_Color_1.hxx',
-                  'Interface_ValueInterpret.hxx'
+                  'Interface_ValueInterpret.hxx',
+                  'StepToTopoDS_DataMapOfRI.hxx',
+                  'StepToTopoDS_DataMapOfTRI.hxx',
+                  'StepToTopoDS_DataMapOfRINames.hxx',
+                  'StepToTopoDS_PointEdgeMap.hxx',
+                  'StepToTopoDS_PointVertexMap.hxx'
                   ]
 
 
