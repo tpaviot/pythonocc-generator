@@ -271,8 +271,17 @@ class Handle_%s : public Handle_%s {
     handle_body_template += """
 };
 %%extend Handle_%s {
-    %s* GetObject() {
+    %s* _get_reference() {
     return (%s*)$self->Access();
+    }
+};
+
+%%extend Handle_%s {
+    %%pythoncode {
+        def GetObject(self):
+            obj = self._get_reference()
+            register_handle(self, obj)
+            return obj
     }
 };
 
@@ -821,7 +830,7 @@ def process_function(f):
             except:
                 return False
         }
-        """ % param_type    
+        """ % param_type
     # special process for operator !=
     if "operator !=" in function_name:
         param = f["parameters"][0]
@@ -1026,7 +1035,7 @@ def build_inheritance_tree(classes_dict):
         elif nbr_upper_classes == 1:
             upper_class_name = upper_classes[0]["class"]
             # if the upper class depends on another module
-            # add it to the level 0 list. 
+            # add it to the level 0 list.
             if upper_class_name.split("_")[0] != CURRENT_MODULE:
                 level_0_classes.append(class_name)
             # else build the inheritance tree
@@ -1094,7 +1103,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # for instance TopoDS is both a module and a class
         # then we rename the class with lowercase
         if class_name == CURRENT_MODULE:
-            class_def_str += "%%rename(%s) %s;\n" % (class_name.lower(), class_name)    
+            class_def_str += "%%rename(%s) %s;\n" % (class_name.lower(), class_name)
         # then process the class itself
         if not class_can_have_default_constructor(klass):
             class_def_str += "%%nodefaultctor %s;\n" % class_name
