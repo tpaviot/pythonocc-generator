@@ -37,7 +37,8 @@ all_toolkits = [TOOLKIT_Foundation,
                 TOOLKIT_Visualisation,
                 TOOLKIT_DataExchange,
                 TOOLKIT_OCAF,
-                TOOLKIT_SMesh]
+                #TOOLKIT_SMesh,
+                TOOLKIT_VTK]
 TOOLKITS = {}
 for tk in all_toolkits:
     TOOLKITS.update(tk)
@@ -45,7 +46,7 @@ for tk in all_toolkits:
 #
 # Load configuration file and setup settings
 #
-header_year = "2008-2015"
+header_year = "2008-2016"
 author = "Thomas Paviot"
 author_email = "tpaviot@gmail.com"
 license_header = """
@@ -112,9 +113,9 @@ HXX_TO_EXCLUDE = ['TCollection_AVLNode.hxx',
                   'NCollection_EBTree.hxx',
                   'NCollection_BaseSequence.hxx',
                   'NCollection_Haft.h',
+                  'NCollection_StlIterator.hxx',
                   'Standard_StdAllocator.hxx',
-                  'PLib_HermitJacobi.hxx',
-                  'BndLib_Compute.hxx',
+                  'Standard_CLocaleSentry.hxx',
                   'BOPTools_DataMapOfShapeSet.hxx',
                   'Resource_gb2312.h', 'Resource_Shiftjis.h',
                   'TopOpeBRepBuild_SplitShapes.hxx',
@@ -131,8 +132,6 @@ HXX_TO_EXCLUDE = ['TCollection_AVLNode.hxx',
                   'ChFiKPart_ComputeData_ChPlnCyl.hxx',
                   'ChFiKPart_ComputeData_ChPlnPln.hxx',
                   'ChFiKPart_ComputeData_Sphere.hxx',
-                  'V3d_Plane.hxx',
-                  'AIS_ColoredShape.hxx',
                   'Font_FTFont.hxx', 'Font_FTLibrary.hxx',
                   'IntTools_LineConstructor.hxx',
                   'IntTools_PolyhedronTool.hxx',
@@ -153,14 +152,38 @@ HXX_TO_EXCLUDE = ['TCollection_AVLNode.hxx',
                   'SMESH_2D_Algo.hxx',
                   'SMESH_3D_Algo.hxx',
                   'IntTools_CurveRangeSampleMapHasher.hxx',
-                  'Quantity_Color_1.hxx',
                   'Interface_ValueInterpret.hxx',
                   'StepToTopoDS_DataMapOfRI.hxx',
                   'StepToTopoDS_DataMapOfTRI.hxx',
                   'StepToTopoDS_DataMapOfRINames.hxx',
                   'StepToTopoDS_PointEdgeMap.hxx',
                   'StepToTopoDS_PointVertexMap.hxx'
+                  # New excludes for 0.17
+                  'NCollection_StlIterator.hxx',
+                  #'BOPAlgo_MakerVolume.hxx',
+                  'BOPTools_CoupleOfShape.hxx',
+                  'BRepApprox_SurfaceTool.hxx',
+                  'BRepBlend_HCurveTool.hxx',
+                  'BRepBlend_HCurve2dTool.hxx',
+                  'BRepMesh_FaceAttribute.hxx',
+                  'ChFiKPart_ComputeData_FilPlnCon.hxx',
+                  'ChFiKPart_ComputeData_FilPlnPln.hxx',
+                  'ChFiKPart_ComputeData_FilPlnCyl.hxx',
+                  'ChFiKPart_ComputeData_Rotule.hxx',
+                  'PrsMgr_ListOfPresentableObjects.hxx',
+                  'PrsMgr_PresentableObject.hxx',
+                  'TDF_LabelMapHasher.hxx'
                   ]
+
+
+# some typedefs parsed by CppHeader can't be wrapped
+# and generate SWIG syntax errors. We just forget
+# about wrapping those typedefs
+TYPEDEF_TO_EXCLUDE = ['NCollection_DelMapNode',
+                      'BOPDS_DataMapOfPaveBlockCommonBlock',
+                      'IntWalk_VectorOfWalkingData',
+                      'IntWalk_VectorOfInteger'
+                      ]
 
 
 def process_handle(class_name, inherits_from_class_name):
@@ -276,14 +299,6 @@ def filter_header_list(header_list):
     header_list = [x for x in header_list if not ('XWD' in x)]
     # and osx
     header_list = [x for x in header_list if not ('Cocoa' in x)]
-    # if sys.platform != 'win32':
-    #     header_list = [x for x in header_list if not ('WNT' in x.lower())]
-    #     header_list = [x for x in header_list if not ('wnt' in x.lower())]
-    # if sys.platform != 'linux':
-    #     header_list = [x for x in header_list if not ('X11' in x)]
-    #     header_list = [x for x in header_list if not ('XWD' in x)]
-    # if sys.platform != 'darwin':
-    #     header_list = [x for x in header_list if not ('Cocoa' in x)]
     return header_list
 
 
@@ -337,7 +352,10 @@ def check_has_related_handle(class_name):
     Check if a header exists.
     """
     filename = os.path.join(OCE_INCLUDE_DIR, "Handle_%s.hxx" % class_name)
-    return (os.path.exists(filename) or need_handle())
+    other_possible_filename = filename
+    if class_name.startswith("Graphic3d"):
+        other_possible_filename = os.path.join(OCE_INCLUDE_DIR, "%s_Handle" % class_name)
+    return (os.path.exists(filename) or os.path.exists(other_possible_filename) or need_handle())
 
 
 def get_license_header():
@@ -427,13 +445,6 @@ def filter_typedefs(typedef_dict):
     """ Remove some strange thing that generated SWIG
     errors
     """
-    # some typedefs parsed by CppHeader can't be wrapped
-    # and generate SWIG syntax errors. We just forget
-    # about wrapping those typedefs
-    TYPEDEF_TO_EXCLUDE = ['NCollection_DelMapNode',
-                          'BOPDS_DataMapOfPaveBlockCommonBlock',
-                          'IntWalk_VectorOfWalkingData',
-                          'IntWalk_VectorOfInteger']
     if '{' in typedef_dict:
         del typedef_dict['{']
     if ':' in typedef_dict:
@@ -702,13 +713,8 @@ def process_docstring(f):
 
 def adapt_default_value(def_value):
     """ adapt default value """
-    #print "Before:%s" % def_value
     def_value = def_value.replace(": : ", "")
-    #def_value = def_value.replace('""', "xx_tmp__")
-    #def_value = def_value.replace('"', '')
-    #def_value = def_value.replace("xx_tmp__", '""')
     def_value = def_value.replace(' ', '')
-    #print "After: %s" % def_value
     def_value = def_value.replace('"', "'")
     def_value = def_value.replace("''", '""')
     return def_value
@@ -716,7 +722,6 @@ def adapt_default_value(def_value):
 
 def adapt_default_value_parmlist(parm):
     """ adapts default value to be used in swig parameter list """
-
     def_value = parm["defaultValue"]
     def_value = def_value.replace(": : ", "")
     def_value = def_value.replace(' ', '')
@@ -737,9 +742,11 @@ def filter_member_functions(class_public_methods, member_functions_to_exclude, c
         #print(public_method)
         method_name = public_method["name"]
         if method_name in member_functions_to_exclude:
-            continue  # print("\tFunction name %s\n===\n\t%s" % (public_method["name"], public_method))
+            continue
         elif class_is_abstract and public_method["constructor"]:
             print("Constructor skipped for abstract class")
+            continue
+        elif method_name == "ShallowCopy":  # specific to 0.17.1 and Mingw
             continue
         else:  # finally, we add this method to process
             member_functions_to_process.append(public_method)
@@ -763,7 +770,6 @@ def handle_by_value(return_str):
     If function returns reference to Handle, the name of the
     handle will be returned. None otherwise
     """
-
     handlePattern = re.compile(r'(virtual )?(const )?(?P<name>(Handle_)+([A-Za-z_0-9])*)(\s)*(&)')
     match = re.search(handlePattern, return_str)
 
@@ -1053,7 +1059,6 @@ def build_inheritance_tree(classes_dict):
     # first classes with level 0, then 1, 2 etc.
     # at last, we return the class_list containing a list
     # of ordered classes.
-
     class_list = []
     for class_name, depth_value in sorted(inheritance_depth.iteritems(),
                                           key=lambda (k, v): (v, k)):
@@ -1077,7 +1082,6 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
     for klass in inheritance_tree_list:
         # class name
         class_name = klass["name"]
-        #print("class name : %s" % class_name)
         if class_name in exclude_classes:
             # if the class has to be excluded,
             # we go on with the next one to be processed
@@ -1093,7 +1097,6 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             class_def_str += "%%rename(%s) %s;\n" % (class_name.lower(), class_name)    
         # then process the class itself
         if not class_can_have_default_constructor(klass):
-        #if not class_name in CLASSES_WITH_DEFAULT_CONSTRUCTORS:
             class_def_str += "%%nodefaultctor %s;\n" % class_name
         class_def_str += "class %s" % class_name
         # inheritance process
@@ -1247,7 +1250,9 @@ class ModuleWrapper(object):
         self._free_functions_str = process_free_functions(free_functions)
         print("done")
         self._additional_dependencies = additional_dependencies + HEADER_DEPENDENCY
+        print("generating SWIG file")
         self.generate_SWIG_files()
+        print("SWIG file generated")
 
     def generate_SWIG_files(self):
         #
@@ -1351,6 +1356,7 @@ def process_module(module_name):
                 modules_exclude_member_functions = module[3]
             else:
                 modules_exclude_member_functions = {}
+            print("Next to be processed : %s " % module_name)
             ModuleWrapper(module_name,
                           module_additionnal_dependencies,
                           module_exclude_classes,
@@ -1369,27 +1375,21 @@ def process_toolkit(toolkit_name):
 
 
 def process_all_toolkits():
-
     parallel_build = config.get('build', 'parallel_build')
-
-    if parallel_build:
-
+    if parallel_build == "True":  # multitask
+    	print("parralel")
         from multiprocessing import Pool
         pool = Pool()
-
         try:
             # the timeout is required for proper handling when exciting the parallel build
             pool.map_async(process_toolkit, TOOLKITS).get(9999999999)
-
         except KeyboardInterrupt:
             pool.terminate()
             pool.join()
-
         else:
             pool.close()
             pool.join()
-
-    else:
+    else:  # single task
         for toolkit in TOOLKITS:
             process_toolkit(toolkit)
 
@@ -1404,12 +1404,16 @@ def run_unit_tests():
     test_adapt_function_name()
     test_filter_member_functions()
     test_adapt_param_type_and_name()
-    test_adapt_default_value
+    test_adapt_default_value()
     print("done.")
 
 if __name__ == '__main__':
     run_unit_tests()
-    write__init__()
-    process_all_toolkits()
+    if len(sys.argv) > 1:
+        for module_to_process in sys.argv[1:]:
+            process_module(module_to_process)
+    else:
+        write__init__()
+        process_all_toolkits()
     # to process only one toolkit, uncomment the following line and change the toolkit name
     #process_toolkit("TKernel")
