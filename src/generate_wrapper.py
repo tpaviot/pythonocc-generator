@@ -509,11 +509,6 @@ def adapt_param_type(param_type):
     param_type = param_type.replace("::MeshDimension", " MeshDimension")
     param_type = param_type.replace("TShapeShapeMap", " StdMeshers_ProjectionUtils::TShapeShapeMap")
     param_type = param_type.replace("TAncestorMap", "StdMeshers_ProjectionUtils::TAncestorMap")
-    # remove byref parameters for gp and TopoDS modules
-    # TODO : check that for other modules
-    if not CURRENT_MODULE.startswith('Handle'):
-        if CURRENT_MODULE in ['gp']:
-            param_type = param_type.replace("&", "")
     check_dependency(param_type)
     return param_type
 
