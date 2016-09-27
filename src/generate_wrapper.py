@@ -363,7 +363,7 @@ def check_has_related_handle(class_name):
     filename = os.path.join(OCE_INCLUDE_DIR, "Handle_%s.hxx" % class_name)
     other_possible_filename = filename
     if class_name.startswith("Graphic3d"):
-        other_possible_filename = os.path.join(OCE_INCLUDE_DIR, "%s_Handle" % class_name)
+        other_possible_filename = os.path.join(OCE_INCLUDE_DIR, "%s_Handle.hxx" % class_name)
     return (os.path.exists(filename) or os.path.exists(other_possible_filename) or need_handle())
 
 
