@@ -966,6 +966,28 @@ def process_methods(methods_list):
     return str_functions
 
 
+def must_ignore_default_destructor(klass):
+    """ Some classes, like for instance BRepFeat_MakeCylindricalHole
+    has a protected destructor that must explicitely be ignored
+    This is done by the directive
+    %ignore Class::~Class() just before the wrapper definition
+    """
+    class_protected_methods = klass['methods']['protected']
+    for protected_method in class_protected_methods:
+        #print(public_method)
+        #if klass["name"]=="BOPAlgo_BuilderShape":
+        #  print(protected_method)
+        if protected_method["destructor"]:
+            return True
+    class_private_methods = klass['methods']['private']
+    # finally, return True, the default constructor can be safely defined
+    for private_method in class_private_methods:
+        #print(public_method)
+        if private_method["destructor"]:
+            return True
+    return False
+
+
 def class_can_have_default_constructor(klass):
     """ By default, classes don't have default constructor.
     We only use default constructor for classes that :
@@ -1102,6 +1124,10 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # then process the class itself
         if not class_can_have_default_constructor(klass):
             class_def_str += "%%nodefaultctor %s;\n" % class_name
+        if must_ignore_default_destructor(klass):
+        # check if the destructor is protected or private
+            class_def_str += "%%ignore %s::~%s();\n" % (class_name, class_name)
+        # then defines the wrapper
         class_def_str += "class %s" % class_name
         # inheritance process
         # in OCE, only single inheritance
