@@ -562,7 +562,7 @@ OCE_MODULES = [
            ('Graphic3d', 
             ['TShort', 'TColQuantity'],
             ['Graphic3d_UniformValue', 'Graphic3d_UniformValueType',
-             'Graphic3d_ClipPlane', 'Graphic3d_UniformValueTypeID', 'Graphic3d_Buffer',
+             'Graphic3d_UniformValueTypeID', 'Graphic3d_Buffer',
              'Graphic3d_IndexBuffer'],
             {'Graphic3d_ShaderVariable': 'Create',
              'Graphic3d_ValueInterface': 'As',
