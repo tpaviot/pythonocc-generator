@@ -558,7 +558,7 @@ def check_dependency(item):
     if not item:
         return False
     filt = ["const ", "static ", "virtual ", "clocale_t", "pointer",
-            "size_type", "void", "reference", "const_"]
+            "size_type", "void", "reference", "const_", "inline "]
     for f in filt:
         item = item.replace(f, '')
     if len(item) == 0:
