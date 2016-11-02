@@ -1141,9 +1141,9 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # process class typedefs here
         typedef_str = ''
         for typedef_value in list(klass["typedefs"]['public']):
-            if ')' in typedef_value['name']:
+            if ')' in typedef_value:
                 continue
-            typedef_str += "typedef %s %s;\n" % (typedef_value['type'], typedef_value['name'])
+            typedef_str += "typedef %s %s;\n" % (klass._public_typedefs[typedef_value], typedef_value)
         class_def_str += typedef_str
         # process class enums here
         class_enums_list = klass["enums"].items()[1][1]

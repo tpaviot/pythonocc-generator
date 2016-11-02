@@ -1879,7 +1879,7 @@ class _CppHeader( Resolver ):
                 typedef = self._parse_typedef( self.stack )
                 name = typedef['name']
                 klass = self.classes[ self.curClass ]
-                klass[ 'typedefs' ][ self.curAccessSpecifier ].append( typedef )
+                klass[ 'typedefs' ][ self.curAccessSpecifier ].append( name )
                 if self.curAccessSpecifier == 'public': klass._public_typedefs[ name ] = typedef['type']
                 Resolver.SubTypedefs[ name ] = self.curClass
             else: assert 0
