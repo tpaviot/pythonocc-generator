@@ -331,8 +331,8 @@ OCE_MODULES = [
            ('BRepIntCurveSurface', [], []),
            ('BRepTopAdaptor', ['Geom', 'Geom2d', 'GeomAdaptor',
                                'TopLoc', 'Geom2dAdaptor'], []),
-           ('BRepBuilderAPI', ['BRep', 'TopLoc', 'TShort', 'Poly'], [],
-            {'BRepBuilderAPI_VertexInspector': 'Inspect'}),
+           ('BRepBuilderAPI', ['BRep', 'TopLoc', 'TShort', 'Poly'], [], {}),
+
            ('BRepApprox', ['TopLoc', 'TopoDS', 'FEmTool', 'GeomAdaptor',
                            'Geom2dAdaptor', 'Adaptor3d'], [],
             {'BRepApprox_ResConstraintOfMyGradientbisOfTheComputeLineOfApprox': 'Error',
@@ -395,14 +395,15 @@ OCE_MODULES = [
            ('BRepMesh', ['TShort', 'Adaptor3d', 'Geom2dAdaptor', 'Message',
                          'Adaptor2d', 'GeomAdaptor', 'Geom', 'TopLoc',
                          'Geom2d'],
-            ['BRepMesh_DiscretFactory', 'BRepMesh_Triangle',
-            'BRepMesh_WireInterferenceChecker', 'BRepMesh_EdgeTessellationExtractor',
-            'BRepMesh_EdgeTessellator', 'BRepMesh_EdgeParameterProvider'],
-            {'BRepMesh_CircleInspector': ['BRepMesh_CircleInspector', 'Inspect'],
-             'BRepMesh_Delaun': ['Frontier', 'InternalEdges', 'FreeEdges'],
-             'BRepMesh_VertexInspector': ['BRepMesh_VertexInspector', 'Add', 'Inspect'],
-             'BRepMesh_DataStructureOfDelaun': ['ElementNodes'],
-             'BRepMesh_GeomTool': ['IntLinLin', 'Normal', 'IntFlag', 'IntSegSeg'],},
+
+
+
+
+            ['BRepMesh_WireInterferenceChecker'],
+            {'BRepMesh_Delaun': ['Frontier', 'InternalEdges', 'FreeEdges']},
+
+
+
             ),
            ('IntPoly', ['TColStd', 'TopLoc'], []),
            ### TKShHealing

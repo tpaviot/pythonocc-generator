@@ -922,7 +922,10 @@ def process_function(f):
     str_function += "("
     for param in f["parameters"]:
         param_type = adapt_param_type(param["type"])
-        param_type_and_name = "%s %s" % (param_type, param["name"])
+        if 'array_size' in param:
+            param_type_and_name = "%s %s[%s]" % (param_type, param["name"], param["array_size"])
+        else:
+            param_type_and_name = "%s %s" % (param_type, param["name"])
         str_function += adapt_param_type_and_name(param_type_and_name)
         if "defaultValue" in param:
             def_value = adapt_default_value_parmlist(param)
