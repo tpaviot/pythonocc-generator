@@ -567,7 +567,6 @@ OCE_MODULES = [
             {'Graphic3d_ShaderVariable': 'Create',
              'Graphic3d_ValueInterface': 'As',
              'Graphic3d_ShaderProgram': 'PushVariable',
-             'Graphic3d_AspectText3d': 'Values',
              'Graphic3d_Group': 'SetGroupPrimitivesAspect',
              'Graphic3d_GraphicDriver': 'Print'}),
            ('Visual3d', ['TShort', 'TColQuantity'], [],
