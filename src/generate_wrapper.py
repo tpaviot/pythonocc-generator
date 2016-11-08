@@ -500,7 +500,7 @@ def process_enums(enums_list):
 
 
 def adapt_param_type(param_type):
-    param_type = param_type.replace("Standard_CString", "char *")
+    param_type = param_type.replace("Standard_CString", "const char *")
     # for SMESH
     param_type = param_type.replace("TDefaults", "SMESH_0D_Algo::TDefaults")
     param_type = param_type.replace("DistrType", "StdMeshers_NumberOfSegments::DistrType")
@@ -590,7 +590,7 @@ def adapt_return_type(return_type):
     for replace in replaces:
         return_type = return_type.replace(replace, "")
     # replace Standard_CString with char *
-    return_type = return_type.replace("Standard_CString", "char *")
+    return_type = return_type.replace("Standard_CString", "const char *")
     # remove const if const virtual double *  # SMESH only
     return_type = return_type.replace("const virtual double *", "virtual double *")
     return_type = return_type.replace("DistrType", "StdMeshers_NumberOfSegments::DistrType")
@@ -943,6 +943,7 @@ def process_function(f):
             }
         };
         """
+    str_function = str_function.replace('const const', 'const')
     return str_function
 
 
