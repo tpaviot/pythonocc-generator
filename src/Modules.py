@@ -395,15 +395,10 @@ OCE_MODULES = [
            ('BRepMesh', ['TShort', 'Adaptor3d', 'Geom2dAdaptor', 'Message',
                          'Adaptor2d', 'GeomAdaptor', 'Geom', 'TopLoc',
                          'Geom2d'],
-
-
-
-
-            ['BRepMesh_WireInterferenceChecker'],
-            {'BRepMesh_Delaun': ['Frontier', 'InternalEdges', 'FreeEdges']},
-
-
-
+            ['BRepMesh_WireInterferenceChecker', 'BRepMesh_EdgeTessellator',
+             'BRepMesh_EdgeTessellationExtractor', 'BRepMesh_EdgeParameterProvider'],
+            {'BRepMesh_Delaun': ['Frontier', 'InternalEdges', 'FreeEdges'],
+             'BRepMesh_GeomTool': ['IntLinLin', 'Normal', 'IntSegSeg'],},
             ),
            ('IntPoly', ['TColStd', 'TopLoc'], []),
            ### TKShHealing
