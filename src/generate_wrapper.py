@@ -493,8 +493,8 @@ def process_enums(enums_list):
         enum_str += "enum %s {\n" % enum_name
         for enum_value in enum["values"]:
             enum_str += "\t%s = %s,\n" % (enum_value["name"], enum_value["value"])
-        enum_str += "};\n"
-    enum_str += "/* end public enums declaration */\n"
+        enum_str += "};\n\n"
+    enum_str += "/* end public enums declaration */\n\n"
     return enum_str
 
 
@@ -1144,7 +1144,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             class_def_str += " : %s %s" % (inheritance_access, inheritance_name)
         class_def_str += " {\n"
         # process class typedefs here
-        typedef_str = 'public:\n'
+        typedef_str = '\tpublic:\n'
         for typedef_value in list(klass["typedefs"]['public']):
             if ')' in typedef_value:
                 continue
