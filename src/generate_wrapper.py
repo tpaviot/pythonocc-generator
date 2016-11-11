@@ -159,7 +159,6 @@ HXX_TO_EXCLUDE = ['TCollection_AVLNode.hxx',
                   'StepToTopoDS_PointEdgeMap.hxx',
                   'StepToTopoDS_PointVertexMap.hxx'
                   # New excludes for 0.17
-                  'NCollection_StlIterator.hxx',
                   #'BOPAlgo_MakerVolume.hxx',
                   'BOPTools_CoupleOfShape.hxx',
                   'BRepApprox_SurfaceTool.hxx',
@@ -470,10 +469,10 @@ def test_filter_typedefs():
 
 
 def process_typedefs(typedefs_dict):
-    """ Take a typedef dictionnary and returns a SWIG definition string
+    """ Take a typedef dictionary and returns a SWIG definition string
     """
     typedef_str = "/* typedefs */\n"
-    # carful, there might be some strange things returned by CppHeaderParser
+    # careful, there might be some strange things returned by CppHeaderParser
     # they should not be taken into account
     filtered_typedef_dict = filter_typedefs(typedefs_dict)
     for typedef_value in filtered_typedef_dict.keys():
@@ -494,8 +493,8 @@ def process_enums(enums_list):
         enum_str += "enum %s {\n" % enum_name
         for enum_value in enum["values"]:
             enum_str += "\t%s = %s,\n" % (enum_value["name"], enum_value["value"])
-        enum_str += "};\n\n"
-    enum_str += "/* end public enums declaration */\n\n"
+        enum_str += "};\n"
+    enum_str += "/* end public enums declaration */\n"
     return enum_str
 
 
@@ -639,11 +638,7 @@ def process_docstring(f):
         for param in f["parameters"]:
             param_type = adapt_param_type(param["type"])
             # remove const and &
-            param_type = param_type.replace("const", "")
-            param_type = param_type.replace("Standard_Boolean &", "bool")
-            param_type = param_type.replace("Standard_Boolean", "bool")
-            param_type = param_type.replace("Standard_Real", "float")
-            param_type = param_type.replace("Standard_Integer", "int")
+            param_type = fix_type(param_type)
             if "gp_" in param_type:
                 param_type = param_type.replace("&", "")
             param_type = param_type.strip()
@@ -659,12 +654,9 @@ def process_docstring(f):
     returns_string = '\t:rtype:'
     ret = adapt_return_type(f["rtnType"])
     if ret != 'void':
-        ret = ret.replace("const", "")
         ret = ret.replace("&", "")
         ret = ret.replace("virtual", "")
-        ret = ret.replace("Standard_Boolean", "bool")
-        ret = ret.replace("Standard_Integer", "int")
-        ret = ret.replace("Standard_Real", "float")
+        ret = fix_type(ret)
         ret = ret.replace("static ", "")
         ret = ret.strip()
         returns_string += " %s\n" % ret
@@ -1067,7 +1059,7 @@ def build_inheritance_tree(classes_dict):
             # inheritance
             print("\nWARNING : NOT SINGLE INHERITANCE")
             print("CLASS %s has %i ancestors" % (class_name, nbr_upper_classes))
-    # then, after that, we process both dictionnaries, list so
+    # then, after that, we process both dictionaries, list so
     # that we reorder class.
     # first, we build something called the inheritance_depth.
     # that is to say a dict with the class name and the number of upper classes
@@ -1097,9 +1089,18 @@ def build_inheritance_tree(classes_dict):
     return class_list
 
 
+def fix_type(type_str):
+    type_str = type_str.replace("Standard_Boolean &", "bool")
+    type_str = type_str.replace("Standard_Boolean", "bool")
+    type_str = type_str.replace("Standard_Real", "float")
+    type_str = type_str.replace("Standard_Integer", "int")
+    type_str = type_str.replace("const", "")
+    return type_str
+
+
 def process_classes(classes_dict, exclude_classes, exclude_member_functions):
     """ Generate the SWIG string for the class wrapper.
-    Works from a dictionnary of all classes, generated with CppHeaderParser.
+    Works from a dictionary of all classes, generated with CppHeaderParser.
     All classes but the ones in exclude_classes are wrapped.
     excludes_classes is a list with the class names to exclude_classes
     exclude_member_functions is a dict with classes names as keys and member
@@ -1143,16 +1144,27 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             class_def_str += " : %s %s" % (inheritance_access, inheritance_name)
         class_def_str += " {\n"
         # process class typedefs here
-        typedef_str = ''
+        typedef_str = 'public:\n'
         for typedef_value in list(klass["typedefs"]['public']):
             if ')' in typedef_value:
                 continue
             typedef_str += "typedef %s %s;\n" % (klass._public_typedefs[typedef_value], typedef_value)
         class_def_str += typedef_str
         # process class enums here
-        class_enums_list = klass["enums"].items()[1][1]
+        class_enums_list = klass["enums"]['public']
         if class_enums_list:
             class_def_str += process_enums(class_enums_list)
+        # process class properties here
+        properties_str = ''
+        for property_value in list(klass["properties"]['public']):
+            if property_value['constant'] or 'virtual' in property_value['raw_type'] or 'Standard_EXPORT' in property_value['raw_type'] or 'allback' in property_value['raw_type']:
+                continue
+            if 'array_size' in property_value:
+                temp = "\t\t%s %s[%s];\n" % (fix_type(property_value['type']), property_value['name'], property_value['array_size'])
+            else:
+                temp = "\t\t%s %s;\n" % (fix_type(property_value['type']), property_value['name'])
+            properties_str += temp
+        class_def_str += properties_str
         # process methods here
         class_public_methods = klass['methods']['public']
         # remove, from this list, all functions that
@@ -1164,13 +1176,12 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # if ever the header defines DEFINE STANDARD ALLOC
         # then we wrap a copy constructor. Very convenient
         # to create python classes that inherit from OCE ones!
-        class_def_str += "\tpublic:\n"
         if class_name in ['TopoDS_Shape', 'TopoDS_Vertex']:
             class_def_str += '\t\t%feature("autodoc", "1");\n'
             class_def_str += '\t\t%s(const %s arg0);\n' % (class_name, class_name)
         methods_to_process = filter_member_functions(class_public_methods, members_functions_to_exclude, klass["abstract"])
         class_def_str += process_methods(methods_to_process)
-        # then terminate the classe definition
+        # then terminate the class definition
         class_def_str += "};\n\n"
         #
         # at last, check if there is a related handle
@@ -1253,7 +1264,7 @@ def parse_module(module_name):
     module_classes = {}
     module_free_functions = []
     for header in cpp_headers:
-        # builde the typedef dictionnary
+        # build the typedef dictionary
         module_typedefs = dict(module_typedefs.items() + header.typedefs.items())
         # build the enum list
         module_enums += header.enums
@@ -1418,7 +1429,7 @@ def process_toolkit(toolkit_name):
 def process_all_toolkits():
     parallel_build = config.get('build', 'parallel_build')
     if parallel_build == "True":  # multitask
-    	print("parralel")
+    	print("parallel")
         from multiprocessing import Pool
         pool = Pool()
         try:
