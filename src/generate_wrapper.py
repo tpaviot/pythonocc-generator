@@ -93,7 +93,7 @@ if not os.path.isdir(SWIG_OUTPUT_PATH):
 # the following var is set when the module
 # is created
 CURRENT_MODULE = None
-CURRENT_HEADER_CONTENT = None
+classes_with_handle = []
 PYTHON_MODULE_DEPENDENCY = []
 HEADER_DEPENDENCY = []
 
@@ -363,7 +363,7 @@ def check_has_related_handle(class_name):
     other_possible_filename = filename
     if class_name.startswith("Graphic3d"):
         other_possible_filename = os.path.join(OCE_INCLUDE_DIR, "%s_Handle.hxx" % class_name)
-    return (os.path.exists(filename) or os.path.exists(other_possible_filename) or need_handle())
+    return (os.path.exists(filename) or os.path.exists(other_possible_filename) or need_handle(class_name))
 
 
 def get_license_header():
@@ -385,12 +385,13 @@ def write__init__():
     # @TODO : then check OCE version
 
 
-def need_handle():
+def need_handle(name):
     """ Returns True if the current parsed class needs an
     Handle to be defined. This is useful when headers define
     handles but no header """
     # @TODO what about DEFINE_RTTI ?
-    if 'DEFINE_STANDARD_HANDLE' in CURRENT_HEADER_CONTENT:
+    global classes_with_handle
+    if name in classes_with_handle:
         return True
     else:
         return False
@@ -403,7 +404,7 @@ def adapt_header_file(header_content):
     otherwise CppHeaderParser is confused ;
     * all define RTTI moved
     """
-    global CURRENT_HEADER_CONTENT
+    global classes_with_handle
     outer = re.compile("DEFINE_STANDARD_HANDLE[\s]*\([\w\s]+\,+[\w\s]+\)")
     matches = outer.findall(header_content)
     if matches:
@@ -411,6 +412,7 @@ def adapt_header_file(header_content):
             # @TODO find inheritance name
             header_content = header_content.replace('DEFINE_STANDARD_HANDLE',
                                                     '//DEFINE_STANDARD_HANDLE')
+            classes_with_handle.append(match.split('(')[1].split(',')[0])
     # then we look for Handle(Something) use
     # and replace with Handle_Something
     outer = re.compile("Handle[\s]*\([\w\s]*\)")
@@ -430,7 +432,6 @@ def adapt_header_file(header_content):
     header_content = header_content.replace("SMESHCONTROLS_EXPORT", "")
     header_content = header_content.replace("SMESHDS_EXPORT", "")
     header_content = header_content.replace("STDMESHERS_EXPORT", "")
-    CURRENT_HEADER_CONTENT = header_content
     return header_content
 
 
@@ -1189,7 +1190,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # TODO: check that the following is not restricted
         # to protected destructors !
         class_def_str += '\n'
-        if check_has_related_handle(class_name) or need_handle():
+        if check_has_related_handle(class_name):
             # Extend class by GetHandle method
             class_def_str += '%%extend %s {\n' % class_name
             class_def_str += '\t%' + 'pythoncode {\n'
