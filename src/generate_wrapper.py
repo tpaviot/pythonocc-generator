@@ -1226,6 +1226,14 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             class_def_str += '\t\tthe_shape.Location(location)\n'
             class_def_str += '\t\tself.this = the_shape.this\n'
             class_def_str += '\t}\n};\n'
+    	# for each class, overload the __repr__ method to avoid things like:
+    	# >>> print(box)
+        #<OCC.TopoDS.TopoDS_Shape; proxy of <Swig Object of type 'TopoDS_Shape *' at 0x02
+        #BCF770> >
+        class_def_str += '%%extend %s {\n' % class_name
+        class_def_str += '\t%' + 'pythoncode {\n'
+        class_def_str += '\t__repr__ = _dumps_object\n'
+        class_def_str += '\t}\n};\n'
     return class_def_str
 
 
