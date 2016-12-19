@@ -574,6 +574,9 @@ class Chicken_TestCase(unittest.TestCase):
         
     def test_num_protected_methods(self):
         self.assertEqual(len(self.cppHeader.classes["Chicken"]["methods"]["protected"]), 0)
+                        
+    def test_template(self):
+        self.assertEqual(self.cppHeader.classes["Chicken"]["methods"]["private"][0]['template'], "template <typename T>")
 
 
 
@@ -807,6 +810,9 @@ class CarrotClass_TestCase(unittest.TestCase):
         self.assertEqual(
             filter_pameters(self.cppHeader.classes["CarrotClass"]["methods"]["private"][0]["parameters"]),
             [])
+        
+    def test_class_template(self):
+        self.assertEqual(self.cppHeader.classes["CarrotClass"]["template"], "template<class T>")
 
 
 # Bug 3517289
@@ -1136,6 +1142,9 @@ class Onion_TestCase(unittest.TestCase):
 
     def test_num_public_properties_sweet(self):
         self.assertEqual(len(self.cppHeader.classes["Onion<Sweet,Plant>"]["properties"]["public"]), 1)
+
+    def test_class_template(self):
+        self.assertEqual(self.cppHeader.classes["Onion<Sweet,Plant>"]["template"], "template <typename Plant>")
     
 # Bug 3536067
 class BlueJay_TestCase(unittest.TestCase):
@@ -1547,6 +1556,13 @@ class Raddish_TestCase(unittest.TestCase):
         
     def test_Avacado_exists(self):
         self.assertEqual(self.cppHeader.classes["Raddish_SetIterator"]["properties"]["protected"][0]["name"], "_beg")
+        
+    def test_class_template(self):
+        template_str = \
+        "template<typename VALUE,\n" \
+        "         typename VALUE_SET_ITERATOR,\n" \
+        "         typename ACCESOR=Raddish::SimpleAccessor<VALUE,VALUE_SET_ITERATOR> >"
+        self.assertEqual(self.cppHeader.classes["Raddish_SetIterator"]["template"], template_str)
 
 
 # Bug bug 57
@@ -1564,6 +1580,7 @@ class Carambola_TestCase(unittest.TestCase):
      
     def test_typedef(self):
         self.assertEqual(self.cppHeader.enums[2]["typedef"], True)
+        
 
 # globals
 class Globals_TestCase(unittest.TestCase):
@@ -1686,6 +1703,62 @@ struct Lime final : Lemon
     def test_hasLemon(self):
         hasString = '        "Lemon": {' in self.jsonString
         self.assertEqual(hasString, True)
+    
+    def test_can_parse_complex_file(self):
+        self.cppHeader = CppHeaderParser.CppHeader("TestSampleClass.h")
+        j = self.cppHeader.toJSON()
+
+# BitBucket bug 24
+class Mouse_TestCase(unittest.TestCase):
+
+    def setUp(self):
+        self.cppHeader = CppHeaderParser.CppHeader("TestSampleClass.h")
+    
+    def test_MouseClass_exists(self):
+        self.assertEqual(self.cppHeader.classes.has_key("MouseClass"), True)
+        
+    def test_mouse_typedef_correct_value(self):
+        self.assertEqual(self.cppHeader.classes["MouseClass"]["methods"]["public"][0]["parameters"][0]['raw_type'],
+                         "MouseNS::MouseClass::mouse_typedef")
+
+# BitBucket bug 26
+class Fig_TestCase(unittest.TestCase):
+
+    def setUp(self):
+        self.cppHeader = CppHeaderParser.CppHeader("TestSampleClass.h")
+    
+    def test_Fig_exists(self):
+        self.assertEqual(self.cppHeader.classes.has_key("Fig"), True)
+        
+    def test_a_exists(self):
+        self.assertEqual(self.cppHeader.classes["Grape"]["properties"]["public"][0]["name"], "a")
+
+# BitBucket bug 27
+class Olive_TestCase(unittest.TestCase):
+
+    def setUp(self):
+        self.cppHeader = CppHeaderParser.CppHeader("TestSampleClass.h")
+    
+    def test_Olive_exists(self):
+        self.assertEqual(self.cppHeader.classes.has_key("union olive"), True)
+        
+    def test_union_member_x(self):
+        cmp_values = {'constant': 0, 'name': 'x', 'reference': 0, 'type': 'int', 'static': 0, 'pointer': 0}
+        self.assertEqual(filter_dict_keys(self.cppHeader.classes["union olive"]["members"][0], cmp_values.keys()), cmp_values)
+
+# BitBucket bug 61
+class Beet_TestCase(unittest.TestCase):
+
+    def setUp(self):
+        self.cppHeader = CppHeaderParser.CppHeader("TestSampleClass.h")
+    
+    def test_Beet_exists(self):
+        self.assertEqual(self.cppHeader.classes.has_key("BeetStruct"), True)
+        
+    def test_BeetEnum_exists(self):
+        self.assertEqual(self.cppHeader.classes["BeetStruct"]["enums"]["public"][0]["name"], "BeetEnum")
+    
+    
     
 if __name__ == '__main__':
     unittest.main()

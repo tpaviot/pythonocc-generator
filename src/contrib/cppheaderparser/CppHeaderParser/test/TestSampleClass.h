@@ -723,3 +723,34 @@ struct Lime final : Lemon
     void abc();
     void foo2() override;
 };
+
+// BitBucket bug 24
+namespace MouseNS
+{
+  class MouseClass
+  {
+   public:
+    typedef std::vector<int> mouse_typedef;
+    void meth(mouse_typedef *tptr) {};
+  };
+};
+
+// BitBucket bug 26
+typedef struct Fig {
+    int a;
+} Fig;
+
+// BitBucket bug 27
+union olive {
+    int x;
+};
+
+// Sourceforge bug 61
+typedef struct
+{ 
+    enum BeetEnum : int 
+    { 
+        FAIL = 0,
+        PASS = 1
+    }; 
+} BeetStruct;
