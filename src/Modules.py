@@ -85,7 +85,10 @@ TOOLKIT_Visualisation = {
             'TKV3d': ['V3d', 'Graphic3d', 'Visual3d', 'Select3D',
                       'Prs3d', 'StdPrs', 'SelectMgr', 'PrsMgr',
                       'AIS', 'DsgPrs', 'StdSelect'],
+    # Missing: TKOpenGl
             'TKMeshVS': ['MeshVS'],
+            'TKNIS': ['NIS'],
+            'TKVoxel': ['Voxel'],
             }
 
 TOOLKIT_DataExchange = {
@@ -94,27 +97,43 @@ TOOLKIT_DataExchange = {
                        'STEPConstruct', 'STEPEdit', 'GeomToStep', 'StepToGeom',
                        'StepToTopoDS', 'TopoDSToStep', 'STEPControl',
                        'STEPSelections', 'StepAP209'],
+            'TKSTEP209': ['RWStepElement', 'RWStepFEA', 'StepElement', 'StepFEA'],
+            'TKSTEPAttr': ['RWStepDimTol', 'RWStepVisual', 'StepDimTol', 'StepVisual'],
             'TKSTEPBase': ['StepBasic', 'RWStepBasic', 'StepRepr',
                            'RWStepRepr', 'StepGeom', 'RWStepGeom',
                            'StepShape', 'RWStepShape'],
             'TKIGES': ['IGESControl'],
             'TKXSBase': ['Interface', 'IFSelect', 'XSControl'],
+            'TKVRML': ['Vrml', 'VrmlAPI', 'VrmlConverter', 'VrmlData'],
             }
 
 TOOLKIT_OCAF = {
             'TKCAF': ['TDataXtd', 'TNaming', 'TPrsStd', 'AppStd'],
-            'TKCDF': [],
+            'TKCDF': ['CDF', 'CDM', 'LDOM', 'PCDM', 'UTL'],
             'PTKernel': [],
             'TKLCAF': ['TDF', 'TDataStd', 'TFunction', 'TDocStd', 'AppStdL'],
             'FWOSPlugin': [],
             'TKPShape': [],
-            'TKBinL': [],
-            'TKXmlL': [],
-            'TKPLCAF': [],
+            'TKBin': ['BinDrivers', 'BinMDataXtd', 'BinMNaming', 'BinMPrsStd'],
+            'TKBinL': ['BinLDrivers', 'BinMDF', 'BinMDataStd', 'BinMDocStd',
+                       'BinMFunction', 'BinObjMgt'],
+            'TKBinTObj': ['BinTObjDrivers'],
+            'TKBinXCAF': ['BinXCAFDrivers', 'BinMXCAFDoc'],
+            'TKXml': ['XmlDrivers', 'XmlMDataXtd', 'XmlMNaming', 'XmlMPrsStd'],
+            'TKXmlL': ['XmlLDrivers', 'XmlMDF', 'XmlMDataStd', 'XmlMDocStd',
+                       'XmlMFunction', 'XmlObjMgt'],
+            'TKXmlTObj': ['XmlTObjDrivers'],
+            'TKXmlXCAF': ['XmlXCAFDrivers', 'XmlMXCAFDoc'],
+            'TKPCAF': ['MDataXtd', 'MNaming', 'MPrsStd', 'PDataXtd', 'PNaming',
+                       'PPrsStd'],
+            'TKPLCAF': ['MDF', 'MDataStd', 'MDocStd', 'MFunction',
+                        'PDF', 'PDataStd', 'PDocStd', 'PFunction'],
             'TKTObj': [],
             'TKShapeSchema': [],
+    # TKStdSchema
             'TKStdLSchema': [],
             'TKXCAF': ['XCAFApp', 'XCAFDoc', 'XCAFPrs'],
+    # TKXCAFSchema
             'TKXDESTEP': ['STEPCAFControl'],
             'TKXDEIGES': ['IGESCAFControl'],
             }
@@ -320,18 +339,25 @@ OCE_MODULES = [
            ('BRepMAT2d', ['TopLoc'], []),
            ('BRepCheck', ['TopLoc', 'Message'], []),
            ('BRepBndLib', [], []),
-           ('BRepExtrema', [], []),
+           ('BRepExtrema', [], [],
+            # or...  #define OVERLAP_TOOL_OUTPUT_TRIANGLES
+            {'BRepExtrema_OverlapTool': ['OverlapTriangles1', 'OverlapTriangles2'],
+             'BRepExtrema_SelfIntersection': 'OverlapTriangles',
+            }),
            ('BRepClass', [], ['BRepClass_FaceClassifier']),
            ('BRepClass3d', ['TopLoc', 'GeomAdaptor', 'IntSurf',
                             'Adaptor3d', 'Geom', 'Geom2d', 'Adaptor2d',
                             'Geom2dAdaptor'], []),
            ('BRepLib', [], []),
            ('BRepGProp', ['Adaptor3d'], [],
-            {'BRepGProp_VinertGK': 'GetAbsolutError'}),
+            {'BRepGProp_VinertGK': 'GetAbsolutError',
+             # Confusion about Standard_Real and Standard_Real*
+             'BRepGProp_Gauss': 'Compute' }),
            ('BRepIntCurveSurface', [], []),
            ('BRepTopAdaptor', ['Geom', 'Geom2d', 'GeomAdaptor',
                                'TopLoc', 'Geom2dAdaptor'], []),
-           ('BRepBuilderAPI', ['BRep', 'TopLoc', 'TShort', 'Poly'], [], {}),
+           ('BRepBuilderAPI', ['BRep', 'TopLoc', 'TShort', 'Poly'], [],
+            { 'BRepBuilderAPI_FastSewing': 'GetStatuses'}),
 
            ('BRepApprox', ['TopLoc', 'TopoDS', 'FEmTool', 'GeomAdaptor',
                            'Geom2dAdaptor', 'Adaptor3d'], [],
@@ -358,7 +384,10 @@ OCE_MODULES = [
            ('BOPCol', [], ['BOPCol_Array1', 'BOPCol_MemBlock',
                            'BOPCol_NCVector', 'BOPCol_TBBCnt',
                            'BOPCol_TBBContextCnt', 'BOPCol_TBBContextFunctor',
-                           'BOPCol_TBBFunctor']),
+                           'BOPCol_TBBFunctor',
+                           # Problems parsing template parameters on classes
+                           'BOPCol_Functor', 'BOPCol_Cnt', 'BOPCol_Cnt_Perform',
+                           'BOPCol_ContextFunctor', 'BOPCol_ContextCnt']),
            ('BOPInt', ['AppParCurves', 'Handle_IntPatch',
                        'Adaptor3d', 'FEmTool', 'Extrema', 'IntAna',
                        'Intf', 'IntSurf', 'BRepAdaptor', 'Quantity',
@@ -396,9 +425,13 @@ OCE_MODULES = [
                          'Adaptor2d', 'GeomAdaptor', 'Geom', 'TopLoc',
                          'Geom2d'],
             ['BRepMesh_WireInterferenceChecker', 'BRepMesh_EdgeTessellator',
-             'BRepMesh_EdgeTessellationExtractor', 'BRepMesh_EdgeParameterProvider'],
+             'BRepMesh_EdgeTessellationExtractor', 'BRepMesh_EdgeParameterProvider' ],
             {'BRepMesh_Delaun': ['Frontier', 'InternalEdges', 'FreeEdges'],
-             'BRepMesh_GeomTool': ['IntLinLin', 'Normal', 'IntSegSeg'],},
+             'BRepMesh_GeomTool': ['IntLinLin', 'Normal', 'IntSegSeg'],
+             # Both failures caused by Precision::Confusion -> PrecisionConfusion
+             'BRepMesh_FastDiscret': 'BRepMesh_FastDiscret',
+             'BRepMesh_GeomTool': 'BRepMesh_GeomTool',
+            },
             ),
            ('IntPoly', ['TColStd', 'TopLoc'], []),
            ### TKShHealing
@@ -490,7 +523,9 @@ OCE_MODULES = [
                           'Geom2dAdaptor'], []),
            ('Blend', ['Geom2d'], []),
            ('BRepBlend', ['AppParCurves', 'TCollection', 'PLib', 'FEmTool',
-                          'Convert', 'Geom', 'Geom2d'], []),
+                          'Convert', 'Geom', 'Geom2d', 'Message',
+                          'BRepAdaptor', 'GeomAdaptor', 'Geom2dAdaptor',
+                          'TopLoc', 'TopoDS', 'TopTools'], []),
            ('BlendFunc', [], [],
             {'BlendFunc': ['Mults', 'Knots']}),
            ('BRepFilletAPI', [], []),
@@ -541,7 +576,7 @@ OCE_MODULES = [
            ###
            ### TKService
            ('Aspect', [], ['Aspect_DisplayConnection']),
-           ('SelectBasics', [], []),
+           ('SelectBasics', ['Bnd', 'Geom'], []),
            ('Image', [], ['*']),
            ('InterfaceGraphic', [], []),
            ('TColQuantity', [], []),
@@ -569,7 +604,7 @@ OCE_MODULES = [
             {'Visual3d_View': 'Print',
              'Visual3d_Layer': 'DrawText'}),
            ('Select3D', ['TShort', 'TColQuantity', 'Aspect', 'Visual3d',
-                         'Graphic3d', 'Quantity', 'Message'],
+                         'Graphic3d', 'Quantity', 'Message', 'TopLoc'],
             ['Select3D_SensitiveTriangulation']),
            ('Prs3d', ['TShort', 'TColQuantity', 'Message'],
             ['Prs3d_WFShape', 'Prs3d_Point']),
@@ -593,7 +628,21 @@ OCE_MODULES = [
            # MeshVS
            ('MeshVS', ['TopTools', 'Message', 'TShort',
                        'Geom', 'Visual3d', 'HLRAlgo', 'Poly',
-                       'TColQuantity', 'TopoDS', 'V3d'], []),
+                       'TColQuantity', 'TopoDS', 'V3d',
+                       'TopLoc_MapIteratorOfMapOfLocation'], []),
+           # NIS
+           ('NIS', ['NIS', 'TShort', 'Graphic3d', 'Visual3d', 'TopLoc'],
+            [
+                # Missing close braces?
+                'NIS_DrawList',
+                # Protected fields: myIniId, myLists, myTransparency, myObjPerDrawer
+                'NIS_Drawer',
+                # Problems with new(), delete(), and DEFINE_STANDARD_ALLOC
+                'NIS_Triangulated'],
+           ),
+           # Voxel
+           ('Voxel', ['Message', 'TShort', 'Graphic3d', 'TopLoc', 'TopTools',
+                      'Select3D', 'Geom', 'HLRAlgo', 'Visual3d', 'Prs3d'], []),
            ###
            ### DataExchange
            ###
@@ -617,7 +666,7 @@ OCE_MODULES = [
            ### TKSTEP
            ('StepAP214', ['Message', 'StepBasic'], []),
            ('RWStepAP214', ['Message', 'StepRepr', 'StepGeom', 'StepBasic',
-                            'StepShape'], []),
+                            'StepShape', 'StepVisual'], []),
            ('StepAP203', ['Message', 'StepBasic', 'Interface'], []),
            ('RWStepAP203', ['Message', 'StepBasic'], []),
            ('STEPConstruct', ['TopTools', 'IFSelect', 'Message', 'StepBasic',
@@ -633,13 +682,36 @@ OCE_MODULES = [
            ('STEPSelections', ['Message', 'StepBasic', 'TopoDS', 'StepGeom',
                                'TopTools', 'TopLoc', 'Dico'], [],
             {'STEPSelections_Counter': ['POP', 'POP2']}),
-           ('StepAP209', ['Message', 'StepBasic'], []),
+           ### TKSTEP209
+           ('RWStepElement', [], []),
+           ('RWStepFEA', [], []),
+           ('StepElement', ['Message', 'Interface', 'StepBasic'], []),
+           ('StepFEA', ['Message', 'Interface'], []),
+           ### TKSTEPAttr
+           ('RWStepDimTol', [], []),
+           ('RWStepVisual', [], []),
+           ('StepDimTol', ['Message', 'Interface', 'StepGeom'], []),
+           ('StepVisual', ['Message', 'Interface'], []),
+           ###
+           ('StepAP209', ['Message', 'StepBasic', 'gp_Pnt'], []),
            ('IGESControl', ['Message', 'TopLoc', 'Dico', 'TopTools'], []),
            ('Interface', [], []),
            ('IFSelect', [], [], {'IFSelect_EditForm': 'NbTouched',
                                  'IFSelect_IntParam': 'StaticName',
                                  'IFSelect_ContextModif': 'Search'}),
            ('XSControl', ['Message', 'TopLoc', 'Dico'], []),
+           ### TKVRML
+           ('Vrml', [], []),
+           ('VrmlAPI', [], []),
+           ('VrmlConverter', ['Message', 'Geom', 'GeomAdaptor', 'TShort',
+                              'Geom2d', 'Geom2dAdaptor', 'TopLoc'], []),
+           ('VrmlData', ['TopLoc'],
+            [
+                # Standard_IStream protected operator= problem
+                'VrmlData_InBuffer',
+                # new() allocation of abstract classes
+                'VrmlData_ArrayVec3d', 'VrmlData_Texture',
+                'VrmlData_TextureTransform', 'VrmlData_Faceted']),
            ###
            ### OCAF
            ###
@@ -648,10 +720,67 @@ OCE_MODULES = [
            ('TDataStd', [], []),
            ('TFunction', [], []),
            ('TDocStd', [], []),
-           ('AppStdL', ['TDF', 'Resource'], []),
+           ('AppStdL', ['Resource', 'CDF', 'PCDM', 'LDOM', 'TDF'], []),
+           ### TKBin
+           ('BinDrivers', ['Resource', 'PCDM', 'LDOM', 'TDF'], []),
+           ('BinMDataXtd', ['Resource'], []),
+           ('BinMNaming', ['Resource'], []),
+           ('BinMPrsStd', ['Resource'], []),
+           ### TKBinL
+           ('BinLDrivers', ['Resource', 'TDF'], []),
+           ('BinMDF', ['Resource'], []),
+           ('BinMDataStd', ['Resource'], []),
+           ('BinMDocStd', ['Resource'], []),
+           ('BinMFunction', ['Resource'], []),
+           ('BinObjMgt', [], []),
+           ### TKBinTObj
+           ('BinTObjDrivers', ['Resource', 'PCDM', 'LDOM'], []),
+           ### TKBinXCAF'
+           ('BinXCAFDrivers', ['Resource', 'PCDM', 'LDOM', 'TDF'], []),
+           ('BinMXCAFDoc', ['Resource'], []),
+           ### TKXml
+           ('XmlDrivers', ['Resource', 'PCDM', 'TDF'], []),
+           ('XmlMDataXtd', ['Resource'], []),
+           ('XmlMNaming', ['Message', 'Resource', 'TopLoc'], []),
+           ('XmlMPrsStd', ['Resource'], []),
+           ### TKXmlL
+           ('XmlLDrivers', ['Resource', 'TDF'], []),
+           ('XmlMDF', ['Resource'], []),
+           ('XmlMDataStd', ['Resource'], []),
+           ('XmlMDocStd', ['Resource'], []),
+           ('XmlMFunction', ['Resource'], []),
+           ('XmlObjMgt', [], []),
+           ### TKXmlTObj
+           ('XmlTObjDrivers', ['Resource', 'PCDM'], []),
+           ### TKXmlXCAF
+           ('XmlXCAFDrivers', ['Resource', 'PCDM', 'TDF'], []),
+           ('XmlMXCAFDoc', ['Message', 'Resource', 'TopoDS'], []),
+           ### TKCDF
+           ('CDF', ['Resource'], []),
+           ('CDM', [], []),
+           ('LDOM', [], ['LDOM_BasicNode']),
+           ('PCDM', ['Resource'], []),
+           ('UTL', [], []),
+           ### TKPCAF
+           ('MDataXtd', ['Message', 'Resource', 'TopTools', 'TopLoc',
+                         'TopoDS', 'TDataStd', 'TNaming'], []),
+           ('MNaming', ['Resource'], []),
+           ('MPrsStd', ['Resource'], []),
+           ('PDataXtd', [], []),
+           ('PNaming', [], []),
+           ('PPrsStd', [], []),
+           ### TKPLCAF
+           ('MDF', ['Resource'], []),
+           ('MDataStd', ['Resource'], []),
+           ('MDocStd', ['Resource', 'CDF'], []),
+           ('MFunction', ['Resource'], []),
+           ('PDF', [], []),
+           ('PDataStd', [], [],),
+           ('PDocStd', [], []),
+           ('PFunction', [], []),
            ### TKXCAF
-           ('XCAFApp', ['TDF', 'Resource'], []),
-           ('XCAFDoc', ['TDF', 'Resource', 'Message'], []),
+           ('XCAFApp', ['CDF', 'CDM', 'PCDM', 'LDOM', 'TDF', 'Resource'], []),
+           ('XCAFDoc', ['Resource', 'Message', 'CDF', 'CDM', 'PCDM', 'TDF'], []),
            ('XCAFPrs', ['TopTools', 'Message', 'TShort', 'Poly', 'Aspect',
                         'V3d', 'Select3D', 'Geom', 'HLRAlgo', 'Bnd',
                         'SelectBasics', 'Visual3d', 'Prs3d',
@@ -664,11 +793,11 @@ OCE_MODULES = [
                          'TDataStd', 'Aspect', 'Visual3d', 'TNaming', 'Select3D',
                          'TColQuantity', 'Message', 'Poly', 'Prs3d', 'Bnd',
                          'TopLoc', 'TShort', 'SelectBasics', 'TopoDS'], []),
-           ('AppStd', ['TDF', 'Resource'], []),
+           ('AppStd', ['Resource', 'CDF', 'PCDM', 'TDF'], []),
            ### TKXDESTEP
-           ('STEPCAFControl', ['Interface', 'TopLoc', 'TopTools',
-                               'Message', 'Dico', 'Quantity', 'StepGeom',
-                               'StepAP203', 'Resource'], []),
+           ('STEPCAFControl', ['Interface', 'TopLoc', 'TopTools', 'CDF', 'PCDM',
+                               'Message', 'Dico', 'Quantity', 'StepGeom', 'CDM',
+                               'StepAP203', 'Resource', 'StepVisual'], []),
            ### TKXDEIGES
            ('IGESCAFControl', [], []),
 
