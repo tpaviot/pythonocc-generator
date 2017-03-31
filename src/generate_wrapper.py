@@ -1,3 +1,4 @@
+#!/usr/bin/python
 ##Copyright 2008-2015 Thomas Paviot (tpaviot@gmail.com)
 
 # This program is free software: you can redistribute it and/or modify
@@ -37,7 +38,7 @@ all_toolkits = [TOOLKIT_Foundation,
                 TOOLKIT_Visualisation,
                 TOOLKIT_DataExchange,
                 TOOLKIT_OCAF,
-                #TOOLKIT_SMesh,
+                TOOLKIT_SMesh,
                 TOOLKIT_VTK]
 TOOLKITS = {}
 for tk in all_toolkits:
@@ -184,6 +185,17 @@ TYPEDEF_TO_EXCLUDE = ['NCollection_DelMapNode',
                       'IntWalk_VectorOfInteger'
                       ]
 
+def downcast_decl(class_name):
+    handle_type = "Handle_Standard_Transient"
+    for module in ['PFunction', 'PDataStd', 'PPrsStd', 'PDF',
+                   'PDocStd', 'PDataXtd', 'PNaming', 'PCDM_Document']:
+        if class_name.startswith(module):
+            handle_type = "Handle_Standard_Persistent"
+
+    downcast_decl = "        static const Handle_%s DownCast(const "
+    downcast_decl += handle_type
+    downcast_decl += " &AnObject);\n"
+    return downcast_decl
 
 def process_handle(class_name, inherits_from_class_name):
     """ Given a class name that inherits from Standard_Transient,
@@ -217,8 +229,10 @@ class Handle_%s : public Handle_%s {
         Handle_%s(const %s *anItem);
         void Nullify();
         Standard_Boolean IsNull() const;
-        static const Handle_%s DownCast(const Handle_Standard_Transient &AnObject);
 """
+
+    handle_body_template += downcast_decl(class_name)
+
     if class_name == "Standard_Transient":
         handle_body_template += """
         %%extend{
@@ -501,6 +515,7 @@ def process_enums(enums_list):
 
 def adapt_param_type(param_type):
     param_type = param_type.replace("Standard_CString", "const char *")
+    param_type = param_type.replace("DrawType", "NIS_Drawer::DrawType")
     # for SMESH
     param_type = param_type.replace("TDefaults", "SMESH_0D_Algo::TDefaults")
     param_type = param_type.replace("DistrType", "StdMeshers_NumberOfSegments::DistrType")
@@ -632,6 +647,7 @@ def process_docstring(f):
     then add the doxygen value
     """
     function_name = f["name"]
+    function_name = adapt_function_name(function_name)
     string_to_return = '\t\t%feature("autodoc", "'
     # first process parameters
     parameters_string = ''
@@ -1058,7 +1074,7 @@ def build_inheritance_tree(classes_dict):
         else:
             # prevent multiple inheritance: OCE only has single
             # inheritance
-            print("\nWARNING : NOT SINGLE INHERITANCE")
+            #print("\nWARNING : NOT SINGLE INHERITANCE")
             print("CLASS %s has %i ancestors" % (class_name, nbr_upper_classes))
     # then, after that, we process both dictionaries, list so
     # that we reorder class.
@@ -1255,7 +1271,7 @@ def test_is_module():
 
 
 def parse_module(module_name):
-    """ A modume is defined by a set of headers. For instance AIS,
+    """ A module is defined by a set of headers. For instance AIS,
     gp, BRepAlgoAPI etc. For each module, generate three or more
     SWIG files. This parser returns :
     module_enums, module_typedefs, module_classes
@@ -1294,26 +1310,26 @@ class ModuleWrapper(object):
         reset_header_depency()
         print("=== generating SWIG files for module %s ===" % module_name)
         self._module_name = module_name
-        print("\t parsing %s related headers ..." % module_name, end="")
+        #print("\t parsing %s related headers ..." % module_name, end="")
         typedefs, enums, classes, free_functions = parse_module(module_name)
-        print("done.")
-        print("\t processing typedefs ...", end="")
+        #print("done.")
+        #print("\t processing typedefs ...", end="")
         self._typedefs_str = process_typedefs(typedefs)
-        print("done.")
-        print("\t processing enums ...", end="")
+        #print("done.")
+        #print("\t processing enums ...", end="")
         self._enums_str = process_enums(enums)
-        print("done")
-        print("\t processing classes ...", end="")
+        #print("done")
+        #print("\t processing classes ...", end="")
         self._classes_str = process_classes(classes, exclude_classes,
                                             exclude_member_functions)
-        print("done")
-        print("\t processing free functions ...", end="")
+        #print("done")
+        #print("\t processing free functions ...", end="")
         self._free_functions_str = process_free_functions(free_functions)
-        print("done")
+        #print("done")
         self._additional_dependencies = additional_dependencies + HEADER_DEPENDENCY
-        print("generating SWIG file")
+        #print("generating SWIG file")
         self.generate_SWIG_files()
-        print("SWIG file generated")
+        #print("SWIG file generated")
 
     def generate_SWIG_files(self):
         #
@@ -1397,7 +1413,9 @@ def register_handle(handle, base_object):
             for header_basename in get_all_module_headers(dep):
                 h.write("#include<%s>\n" % header_basename)
         for add_dep in self._additional_dependencies:
+            #print("Processing additional header requirement: %s" % add_dep)
             for header_basename in get_all_module_headers(add_dep):
+                #print("Adding header: %s" % header_basename)
                 h.write("#include<%s>\n" % header_basename)
         h.write("%};\n")
         for dep in PYTHON_MODULE_DEPENDENCY:
@@ -1417,7 +1435,7 @@ def process_module(module_name):
                 modules_exclude_member_functions = module[3]
             else:
                 modules_exclude_member_functions = {}
-            print("Next to be processed : %s " % module_name)
+            #print("Next to be processed : %s " % module_name)
             ModuleWrapper(module_name,
                           module_additionnal_dependencies,
                           module_exclude_classes,
@@ -1431,7 +1449,8 @@ def process_toolkit(toolkit_name):
     For instance : TKernel, TKMath etc.
     """
     modules_list = TOOLKITS[toolkit_name]
-    for module in modules_list:
+    print("=== processing toolkit %s ===" % toolkit_name)
+    for module in sorted(modules_list):
         process_module(module)
 
 
@@ -1451,7 +1470,7 @@ def process_all_toolkits():
             pool.close()
             pool.join()
     else:  # single task
-        for toolkit in TOOLKITS:
+        for toolkit in sorted(TOOLKITS):
             process_toolkit(toolkit)
 
 
