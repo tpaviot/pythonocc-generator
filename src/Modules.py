@@ -339,10 +339,9 @@ OCE_MODULES = [
            ('BRepMAT2d', ['TopLoc'], []),
            ('BRepCheck', ['TopLoc', 'Message'], []),
            ('BRepBndLib', [], []),
-           ('BRepExtrema', [], [],
+           ('BRepExtrema', [], ['BRepExtrema_OverlapTool'],
             # or...  #define OVERLAP_TOOL_OUTPUT_TRIANGLES
-            {'BRepExtrema_OverlapTool': ['OverlapTriangles1', 'OverlapTriangles2'],
-             'BRepExtrema_SelfIntersection': 'OverlapTriangles',
+            {'BRepExtrema_SelfIntersection': 'OverlapTriangles',
             }),
            ('BRepClass', [], ['BRepClass_FaceClassifier']),
            ('BRepClass3d', ['TopLoc', 'GeomAdaptor', 'IntSurf',
@@ -576,7 +575,7 @@ OCE_MODULES = [
            ###
            ### TKService
            ('Aspect', [], ['Aspect_DisplayConnection']),
-           ('SelectBasics', ['Bnd', 'Geom'], []),
+           ('SelectBasics', ['Bnd', 'Geom', 'Select3D'], []),
            ('Image', [], ['*']),
            ('InterfaceGraphic', [], []),
            ('TColQuantity', [], []),
@@ -605,7 +604,8 @@ OCE_MODULES = [
              'Visual3d_Layer': 'DrawText'}),
            ('Select3D', ['TShort', 'TColQuantity', 'Aspect', 'Visual3d',
                          'Graphic3d', 'Quantity', 'Message', 'TopLoc'],
-            ['Select3D_SensitiveTriangulation']),
+            ['Select3D_SensitiveTriangulation'],
+            {'Select3D_SensitiveBox': 'Box'}),
            ('Prs3d', ['TShort', 'TColQuantity', 'Message'],
             ['Prs3d_WFShape', 'Prs3d_Point']),
            ('StdPrs', ['Adaptor3d', 'GeomAdaptor'], ['StdPrs_DeflectionCurve']),
@@ -808,6 +808,10 @@ OCE_MODULES = [
            ('IVtkVTK', [], []),
            ('IVtkTools', [], []),
            ]
+
+SALOME_SPLITTER_MODUlES = [
+          ('GEOMAlgo', [], []),
+          ]
 
 SMESH_MODULES = [
            ('SMDSAbs', [], []),
