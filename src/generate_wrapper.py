@@ -1,5 +1,5 @@
 #!/usr/bin/python
-##Copyright 2008-2015 Thomas Paviot (tpaviot@gmail.com)
+##Copyright 2008-2017 Thomas Paviot (tpaviot@gmail.com)
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -47,7 +47,7 @@ for tk in all_toolkits:
 #
 # Load configuration file and setup settings
 #
-header_year = "2008-2016"
+header_year = "2008-2017"
 author = "Thomas Paviot"
 author_email = "tpaviot@gmail.com"
 license_header = """
@@ -84,6 +84,8 @@ if not os.path.isdir(SMESH_INCLUDE_DIR):
     print("SMESH include dir %s not found. SMESH wrapper not generated." % SMESH_INCLUDE_DIR)
 # swig output path
 SWIG_OUTPUT_PATH = config.get('pythonocc-core', 'generated_swig_files')
+# GEOMAlgo Salome splitter source location
+SPLITTER_PATH = config.get('pythonocc-core', 'splitter_path')
 # cmake output path, i.e. the location where the __init__.py file is created
 CMAKE_PATH = config.get('pythonocc-core', 'init_path')
 
@@ -158,7 +160,7 @@ HXX_TO_EXCLUDE = ['TCollection_AVLNode.hxx',
                   'StepToTopoDS_DataMapOfTRI.hxx',
                   'StepToTopoDS_DataMapOfRINames.hxx',
                   'StepToTopoDS_PointEdgeMap.hxx',
-                  'StepToTopoDS_PointVertexMap.hxx'
+                  'StepToTopoDS_PointVertexMap.hxx',
                   # New excludes for 0.17
                   #'BOPAlgo_MakerVolume.hxx',
                   'BOPTools_CoupleOfShape.hxx',
@@ -172,7 +174,7 @@ HXX_TO_EXCLUDE = ['TCollection_AVLNode.hxx',
                   'ChFiKPart_ComputeData_Rotule.hxx',
                   'PrsMgr_ListOfPresentableObjects.hxx',
                   'PrsMgr_PresentableObject.hxx',
-                  'TDF_LabelMapHasher.hxx'
+                  'TDF_LabelMapHasher.hxx',
                   ]
 
 
@@ -355,6 +357,8 @@ def get_all_module_headers(module_name):
     mh += case_sensitive_glob(os.path.join(SMESH_INCLUDE_DIR, '%s_*.hxx' % module_name))
     mh += case_sensitive_glob(os.path.join(SMESH_INCLUDE_DIR, '%s*.h' % module_name))
     mh += case_sensitive_glob(os.path.join(SMESH_INCLUDE_DIR, 'Handle_%s.hxx*' % module_name))
+    # GEOMAlgo splitter
+    mh += case_sensitive_glob(os.path.join(SPLITTER_PATH, '%s_*.hxx' % module_name))
     mh = filter_header_list(mh)
     return map(os.path.basename, mh)
 
@@ -1259,7 +1263,7 @@ def is_module(module_name):
     'Standard' should return True
     'inj' should return False
     """
-    for mod in OCE_MODULES + SMESH_MODULES:
+    for mod in OCE_MODULES + SALOME_SPLITTER_MODUlES + SMESH_MODULES:
         if mod[0] == module_name:
             return True
     return False
@@ -1278,9 +1282,10 @@ def parse_module(module_name):
     """
     module_headers = glob.glob('%s/%s_*.hxx' % (OCE_INCLUDE_DIR, module_name))
     module_headers += glob.glob('%s/%s.hxx' % (OCE_INCLUDE_DIR, module_name))
-    if not module_headers:  # this can be smesh modules
+    if not module_headers:  # this can be smesh modules or the splitter
         module_headers = glob.glob('%s/%s_*.hxx' % (SMESH_INCLUDE_DIR, module_name))
         module_headers += glob.glob('%s/%s.hxx' % (SMESH_INCLUDE_DIR, module_name))
+        module_headers += glob.glob('%s/*.hxx' % (SPLITTER_PATH))
     # filter those headers
     module_headers = filter_header_list(module_headers)
     cpp_headers = map(parse_header, module_headers)
@@ -1424,7 +1429,7 @@ def register_handle(handle, base_object):
 
 
 def process_module(module_name):
-    all_modules = OCE_MODULES + SMESH_MODULES
+    all_modules = OCE_MODULES + SALOME_SPLITTER_MODUlES + SMESH_MODULES
     module_exist = False
     for module in all_modules:
         if module[0] == module_name:
