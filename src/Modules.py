@@ -602,13 +602,18 @@ OCE_MODULES = [
              'Visual3d_Layer': 'DrawText'}),
            ('Select3D', ['TShort', 'TColQuantity', 'Aspect', 'Visual3d',
                          'Graphic3d', 'Quantity', 'Message', 'TopLoc'],
-            ['Select3D_SensitiveTriangulation'],
+            ['Select3D_SensitiveTriangulation', 'Select3D_SensitiveEntity',
+             'Handle_Select3D_SensitiveEntity'],
             {'Select3D_SensitiveBox': 'Box'}),
            ('Prs3d', ['TShort', 'TColQuantity', 'Message'],
             ['Prs3d_WFShape', 'Prs3d_Point']),
            ('StdPrs', ['Adaptor3d', 'GeomAdaptor'], ['StdPrs_DeflectionCurve']),
-           ('SelectMgr', [], ['*']),
-           
+           ('SelectMgr', ['TopTools', 'Message', 'TShort', 'SelectBasics',
+                    'Visual3d', 'HLRAlgo', 'TColQuantity', 'Geom', 'Aspect',
+                    'Poly', 'TopoDS', 'V3d'],
+            ['SelectMgr_Frustum', 'SelectMgr_BaseFrustum', 'SelectMgr_FrustumBuilder',
+             'SelectMgr_TriangularFrustum', 'SelectMgr_RectangularFrustum',
+             'SelectMgr_TriangularFrustumSet', 'SelectMgr_ToleranceMap']),
            ('PrsMgr', 
               ['HLRAlgo', 'TopoDS', 'Aspect', 'Visual3d', 'TShort', 
                'Message', 'Bnd', 'TopTools', 'TColQuantity', 'Poly',
@@ -640,7 +645,8 @@ OCE_MODULES = [
            ),
            # Voxel
            ('Voxel', ['Message', 'TShort', 'Graphic3d', 'TopLoc', 'TopTools',
-                      'Select3D', 'Geom', 'HLRAlgo', 'Visual3d', 'Prs3d'], []),
+                      'Select3D', 'Geom', 'HLRAlgo', 'Visual3d', 'Prs3d',
+                      'SelectMgr'], []),
            ###
            ### DataExchange
            ###
@@ -682,9 +688,10 @@ OCE_MODULES = [
             {'STEPSelections_Counter': ['POP', 'POP2']}),
            ### TKSTEP209
            ('RWStepElement', [], []),
-           ('RWStepFEA', [], []),
+           ('RWStepFEA', [], [],),
            ('StepElement', ['Message', 'Interface', 'StepBasic'], []),
-           ('StepFEA', ['Message', 'Interface'], []),
+           ('StepFEA', ['Message', 'Interface'], [],
+            {'StepFEA_SymmetricTensor43d': 'SetFeaIsotropicSymmetricTensor43d'}),
            ### TKSTEPAttr
            ('RWStepDimTol', [], []),
            ('RWStepVisual', [], []),
@@ -756,8 +763,8 @@ OCE_MODULES = [
            ### TKCDF
            ('CDF', ['Resource'], []),
            ('CDM', [], []),
-           ('LDOM', [], ['LDOM_BasicNode']),
-           ('PCDM', ['Resource'], []),
+           ('LDOM', ['*'], []),
+           ('PCDM', ['Resource'], ['PCDM_DOMHeaderParser']),
            ('UTL', [], []),
            ### TKPCAF
            ('MDataXtd', ['Message', 'Resource', 'TopTools', 'TopLoc',
@@ -783,14 +790,14 @@ OCE_MODULES = [
                         'V3d', 'Select3D', 'Geom', 'HLRAlgo', 'Bnd',
                         'SelectBasics', 'Visual3d', 'Prs3d',
                         'TColQuantity', 'TDF', 'TDataStd', 'TNaming',
-                        'TDataXtd', 'Graphic3d'], []),
+                        'TDataXtd', 'Graphic3d', 'SelectMgr'], []),
            ### TKCAF
            ('TDataXtd',  ['TopTools', 'TCollection', 'Message', 'TopLoc'], []),
            ('TNaming',  ['TCollection', 'Message'], []),
            ('TPrsStd',  ['TDF', 'HLRAlgo', 'TopTools', 'TCollection', 'Geom',
                          'TDataStd', 'Aspect', 'Visual3d', 'TNaming', 'Select3D',
                          'TColQuantity', 'Message', 'Poly', 'Prs3d', 'Bnd',
-                         'TopLoc', 'TShort', 'SelectBasics', 'TopoDS'], []),
+                         'TopLoc', 'TShort', 'SelectBasics', 'TopoDS', 'SelectMgr'], []),
            ('AppStd', ['Resource', 'CDF', 'PCDM', 'TDF'], []),
            ### TKXDESTEP
            ('STEPCAFControl', ['Interface', 'TopLoc', 'TopTools', 'CDF', 'PCDM',
