@@ -173,7 +173,6 @@ HXX_TO_EXCLUDE = ['TCollection_AVLNode.hxx',
                   'ChFiKPart_ComputeData_FilPlnCyl.hxx',
                   'ChFiKPart_ComputeData_Rotule.hxx',
                   'PrsMgr_ListOfPresentableObjects.hxx',
-                  'PrsMgr_PresentableObject.hxx',
                   'TDF_LabelMapHasher.hxx',
                   ]
 
@@ -403,13 +402,12 @@ def write__init__():
     # @TODO : then check OCE version
 
 
-def need_handle(name):
+def need_handle(class_name):
     """ Returns True if the current parsed class needs an
     Handle to be defined. This is useful when headers define
     handles but no header """
     # @TODO what about DEFINE_RTTI ?
-    global classes_with_handle
-    if name in classes_with_handle:
+    if class_name in classes_with_handle:
         return True
     else:
         return False
