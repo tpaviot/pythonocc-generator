@@ -77,6 +77,15 @@ except ConfigParser.NoOptionError:
     OCE_INCLUDE_DIR = config.get('OCE', 'include_dir')
 if not os.path.isdir(OCE_INCLUDE_DIR):
     raise AssertionError("OCE include dir %s not found." % OCE_INCLUDE_DIR)
+# oce source location
+# useful to find for cdl files
+try:
+    OCE_SRC_DIR = config.get('OCE', 'src_dir')
+except ConfigParser.NoOptionError:
+    OCE_SRC_DIR = "NotSet"
+if not os.path.isdir(OCE_SRC_DIR):
+    print("Warning : OCE_SRC not set, you won't have module documentation")
+
 # smesh, if any
 smesh_base_dir = config.get('SMESH', 'base_dir')
 SMESH_INCLUDE_DIR = os.path.join(smesh_base_dir, 'include', 'smesh')
@@ -99,12 +108,6 @@ CURRENT_MODULE = None
 classes_with_handle = []
 PYTHON_MODULE_DEPENDENCY = []
 HEADER_DEPENDENCY = []
-
-
-def reset_header_depency():
-    global HEADER_DEPENDENCY
-    HEADER_DEPENDENCY = ['TColgp', 'TColStd', 'TCollection', 'Storage']
-
 # remove headers that can't be parse by CppHeaderParser
 HXX_TO_EXCLUDE = ['TCollection_AVLNode.hxx',
                   'AdvApp2Var_Data_f2c.hxx',
@@ -117,6 +120,8 @@ HXX_TO_EXCLUDE = ['TCollection_AVLNode.hxx',
                   'NCollection_BaseSequence.hxx',
                   'NCollection_Haft.h',
                   'NCollection_StlIterator.hxx',
+                  'NCollection_BaseCollection.hxx',
+                  'NCollection_DefineBaseCollection.hxx',
                   'Standard_StdAllocator.hxx',
                   'Standard_CLocaleSentry.hxx',
                   'BOPTools_DataMapOfShapeSet.hxx',
@@ -188,6 +193,11 @@ TYPEDEF_TO_EXCLUDE = ['NCollection_DelMapNode',
                       'IntWalk_VectorOfWalkingData',
                       'IntWalk_VectorOfInteger'
                       ]
+
+
+def reset_header_depency():
+    global HEADER_DEPENDENCY
+    HEADER_DEPENDENCY = ['TColgp', 'TColStd', 'TCollection', 'Storage']
 
 def downcast_decl(class_name):
     handle_type = "Handle_Standard_Transient"
@@ -645,8 +655,59 @@ def adapt_function_name(f_name):
 def test_adapt_function_name():
     assert adapt_function_name('operator*') == 'operator *'
 
+def get_module_docstring(module_name):
+    """ For each module (for example gp, BRepPrimAPI etc.),
+    occt defines a documentation string available in gp.cdl, BRepPrimAPI.cdl etc.
+    This docstring is at the beginning of the file, and follows the following template:
+    package BRepPrimAPI 
 
-def process_docstring(f):
+    ---Purpose: The  BRepBuilderAPI  package   provides  an   Application
+    --          Programming Interface  for the BRep  topology data
+    --          structure.
+    --          
+    --          The API is a set of classes aiming to provide :
+    --          
+    --          * High level and simple calls  for the most common
+    --          operations. 
+    
+    Thus, the algorithm to check the module documentation is the following:
+    1. find a file module.cdl
+    2. parse the file, and look for strings that starts with --
+    3. return those lines as a single string.
+
+    Note that the cdl file is available in the /src directory. That is to say
+    this file is not available in the oce binary distribution, one have to have
+    the oce source code to perform the parsing."""
+    if OCE_SRC_DIR is None:
+      print("Waring : OCE_SRC_DIR not set, no docstring for module %s" % module_name)
+      return "No docstring provided."
+    cdl_module_filename = os.path.join(OCE_SRC_DIR, "%s" % module_name, "%s.cdl" % module_name)
+    if not os.path.isfile(cdl_module_filename):
+      return "No docstring provided."
+    # parse the file
+    docstr_l = []
+    with open(cdl_module_filename, "r") as cdl_file:
+        store = False
+        for line in cdl_file:
+          if line.lstrip().startswith("uses") or line.lstrip().startswith("is"):
+              break
+          if line.startswith("package "):
+              store = True
+          if store:
+              line_to_append = line.lstrip()
+              # a few modificztion is required
+              line_to_append = line_to_append.replace("---Purpose: ", "")
+              line_to_append = line_to_append.replace("--", "")
+              line_to_append = line_to_append.replace("  ", " ")
+              line_to_append = line_to_append.replace(" ", " ")
+              line_to_append = line_to_append.replace('"', "'")
+              line_to_append = line_to_append.lstrip()
+              line_to_append = line_to_append.rstrip()
+              docstr_l.append(line_to_append)
+    docstr = ''.join(docstr_l[2:])
+    return docstr
+
+def process_function_docstring(f):
     """ Create the docstring, for the function f,
     that will be used by the wrapper.
     For that, first check the function parameters and type
@@ -892,7 +953,7 @@ def process_function(f):
         return ""
     # enable autocompactargs feature to enable compilation with swig>3.0.3
     str_function = '\t\t%%feature("compactdefaultargs") %s;\n' % function_name
-    str_function += process_docstring(f)
+    str_function += process_function_docstring(f)
     str_function += "\t\t"
     # return type
     # in the return type, we remove the Standard_EXPORT macro
@@ -1331,26 +1392,22 @@ class ModuleWrapper(object):
         reset_header_depency()
         print("=== generating SWIG files for module %s ===" % module_name)
         self._module_name = module_name
-        #print("\t parsing %s related headers ..." % module_name, end="")
+        self._module_docstring = get_module_docstring(module_name)
+        # parse
         typedefs, enums, classes, free_functions = parse_module(module_name)
-        #print("done.")
-        #print("\t processing typedefs ...", end="")
+        # typedefs
         self._typedefs_str = process_typedefs(typedefs)
-        #print("done.")
-        #print("\t processing enums ...", end="")
+        #enums
         self._enums_str = process_enums(enums)
-        #print("done")
-        #print("\t processing classes ...", end="")
+        #classes
         self._classes_str = process_classes(classes, exclude_classes,
                                             exclude_member_functions)
-        #print("done")
-        #print("\t processing free functions ...", end="")
+        # free functions
         self._free_functions_str = process_free_functions(free_functions)
-        #print("done")
+        # other dependencies
         self._additional_dependencies = additional_dependencies + HEADER_DEPENDENCY
-        #print("generating SWIG file")
+        # generate swig file
         self.generate_SWIG_files()
-        #print("SWIG file generated")
 
     def generate_SWIG_files(self):
         #
@@ -1359,8 +1416,14 @@ class ModuleWrapper(object):
         f = open(os.path.join(SWIG_OUTPUT_PATH, "%s.i" % self._module_name), "w")
         # write header
         f.write(get_license_header())
+        # write module docstring
+        # for instante define GPDOCSTRING
+        docstring_macro = "%sDOCSTRING" % self._module_name.upper()
+        f.write('%%define %s\n' % docstring_macro)
+        f.write('"%s"\n' % self._module_docstring)
+        f.write('%enddef\n')
         # module name
-        f.write('%%module (package="OCC") %s\n\n' % self._module_name)
+        f.write('%%module (package="OCC", docstring=%s) %s\n\n' % (docstring_macro, self._module_name))
         # remove warnings
         # warning 504 because void suppression
         # 325 : nested class unsupported
@@ -1492,7 +1555,7 @@ def process_toolkit(toolkit_name):
 def process_all_toolkits():
     parallel_build = config.get('build', 'parallel_build')
     if parallel_build == "True":  # multitask
-    	print("parallel")
+        print("multiprocessed generator")
         from multiprocessing import Pool
         pool = Pool()
         try:
@@ -1505,6 +1568,7 @@ def process_all_toolkits():
             pool.close()
             pool.join()
     else:  # single task
+        print("single processed generator")
         for toolkit in sorted(TOOLKITS):
             process_toolkit(toolkit)
 
