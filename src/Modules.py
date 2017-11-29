@@ -820,7 +820,7 @@ SALOME_SPLITTER_MODUlES = [
 
 SMESH_MODULES = [
            ('SMDSAbs', [], []),
-           ('SMDS', [], ['SMDS_EXPORT', 'SMDS_Iterator'],
+           ('SMDS', [], ['SMDS_EXPORT'],
              {'SMDS_Mesh': ['ChangeElementNodes', 'boundaryEdges', 'boundaryFaces'],
               'SMDS_FaceOfNodes': 'ChangeNodes',
               'SMDS_PolygonalFaceOfNodes': 'ChangeNodes',
@@ -835,24 +835,19 @@ SMESH_MODULES = [
                       'Message', 'TCollection', 'Graphic3d', 'AIS', 'Aspect',
                       'HLRAlgo', 'Poly', 'V3d', 'Select3D', 'Geom', 'TopTools',
                       'SelectBasics', 'Visual3d', 'Prs3d', 'Quantity',
-                      'TColQuantity', 'TopLoc', 'Bnd'],
-                     ['SMESH_Comment', 'SMESH_Octree',
+                      'TColQuantity', 'TopLoc', 'Bnd', 'SelectMgr'],
+                     ['SMESH_Comment', 'SMESH_Octree', 'SMESH_OctreeNode',
                       'SMESH_Array1', 'SMESH_Array2',
-                      'SMESH_MeshEditor'],
+                      'SMESH_ComputeError'],
             {'SMESH_Hypothesis': 'IsStatusFatal', 'SMESH_Mesh': 'GetGroups',
-             'SMESH_MesherHelper': 'IsQuadraticMesh'},),
-           ('StdMeshers', ['TopTools', 'Adaptor3d'], ['StdMeshers_CompositeSegment_1D'],
-            {'StdMeshers_Arithmetic1D': 'SetParametersByDefaults',
-             'StdMeshers_CompositeHexa_3D': 'CheckHypothesis',
-             'StdMeshers_Hexa_3D': 'OppositeVertex',
-             'StdMeshers_NumberOfSegments': 'SetDistrType',
+             'SMESH_MesherHelper': 'IsQuadraticMesh',
+             'SMESH_MeshEditor' : ['RotationSweep', 'ExtrusionSweep', 'Transform']},),
+           ('StdMeshers', ['TopTools', 'Adaptor3d'], ['StdMeshers_CompositeSegment_1D', 'StdMeshers_ProjectionUtils'],
+            {'StdMeshers_CompositeHexa_3D': 'CheckHypothesis',
              'StdMeshers_ProjectionUtils': 'FindFaceAssociation'
              }),
-           ('NETGENPlugin', [], [],
-            {'NETGENPlugin_NETGEN_2D': 'CheckHypothesis',
-            'NETGENPlugin_NETGEN_2D3D': 'CheckHypothesis',
-            'NETGENPlugin_NETGEN_3D': 'CheckHypothesis',
-            'NETGENPlugin_NETGEN_2D_ONLY': 'CheckHypothesis'}),
+           ('NETGENPlugin', [], ['NETGENPlugin_NETGEN_2D_ONLY'],
+            {'NETGENPlugin_Mesher': ['PrepareOCCgeometry', 'RemoveTmpFiles']}),
            ]
 
 if __name__ == '__main__':

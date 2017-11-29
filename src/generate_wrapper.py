@@ -174,6 +174,9 @@ HXX_TO_EXCLUDE = ['TCollection_AVLNode.hxx',
                   'ChFiKPart_ComputeData_Rotule.hxx',
                   'PrsMgr_ListOfPresentableObjects.hxx',
                   'TDF_LabelMapHasher.hxx',
+                  ## SMESH
+                  'SMESH_DataMapOfElemPtrSequenceOfElemPtr.hxx',
+                  'SMESH_HypoFilter.hxx'
                   ]
 
 
@@ -448,6 +451,7 @@ def adapt_header_file(header_content):
     header_content = header_content.replace("SMESHCONTROLS_EXPORT", "")
     header_content = header_content.replace("SMESHDS_EXPORT", "")
     header_content = header_content.replace("STDMESHERS_EXPORT", "")
+    header_content = header_content.replace("NETGENPLUGIN_EXPORT", "")
     return header_content
 
 
@@ -1151,6 +1155,9 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         if must_ignore_default_destructor(klass):
         # check if the destructor is protected or private
             class_def_str += "%%ignore %s::~%s();\n" % (class_name, class_name)
+        # SMDS_ITerator is templated
+        if class_name == "SMDS_Iterator":
+          class_def_str += "template<typename VALUE> "
         # then defines the wrapper
         class_def_str += "class %s" % class_name
         # inheritance process
@@ -1176,6 +1183,9 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # process class properties here
         properties_str = ''
         for property_value in list(klass["properties"]['public']):
+            if 'std::map<' in property_value['type']:
+                print('Warning: wrong type in class property std::map')
+                continue  # TODO bug with SMESH_0D_Algo etc.
             if property_value['constant'] or 'virtual' in property_value['raw_type'] or 'Standard_EXPORT' in property_value['raw_type'] or 'allback' in property_value['raw_type']:
                 continue
             if 'array_size' in property_value:
@@ -1244,6 +1254,14 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             class_def_str += '\t\tthe_shape.Location(location)\n'
             class_def_str += '\t\tself.this = the_shape.this\n'
             class_def_str += '\t}\n};\n'
+        # add SMDS_ITerator template instanciation
+        if class_name == "SMDS_Iterator":
+           class_def_str += "%template(SMDS_ElemIteratorPtr) SMDS_Iterator<const SMDS_MeshElement *>;\n"
+           class_def_str += "%template(SMDS_NodeIteratorPtr) SMDS_Iterator<const SMDS_MeshNode *>;\n"
+           class_def_str += "%template(SMDS_0DElementIteratorPtr) SMDS_Iterator<const SMDS_Mesh0DElement *>;\n"
+           class_def_str += "%template(SMDS_EdgeIteratorPtr) SMDS_Iterator<const SMDS_MeshEdge *>;\n"
+           class_def_str += "%template(SMDS_FaceIteratorPtr) SMDS_Iterator<const SMDS_MeshFace *>;\n"
+           class_def_str += "%template(SMDS_VolumeIteratorPtr) SMDS_Iterator<const SMDS_MeshVolume *>;\n\n"
     	# for each class, overload the __repr__ method to avoid things like:
     	# >>> print(box)
         #<OCC.TopoDS.TopoDS_Shape; proxy of <Swig Object of type 'TopoDS_Shape *' at 0x02
@@ -1364,6 +1382,20 @@ class ModuleWrapper(object):
         for include in includes:
             f.write("%%include ../common/%s.i\n" % include)
         f.write("\n\n")
+        ## SMDS special process
+        # the following lines enable to wrap SMDS_Iterators
+        # that are boost_shared pointers
+        if self._module_name == "SMDS":
+            f.write("""%include <boost_shared_ptr.i>
+%shared_ptr(SMDS_Iterator<const SMDS_MeshElement *>)
+%shared_ptr(SMDS_Iterator<const SMDS_MeshNode *>)
+%shared_ptr(SMDS_Iterator<const SMDS_Mesh0DElement *>)
+%shared_ptr(SMDS_Iterator<const SMDS_MeshEdge *>)
+%shared_ptr(SMDS_Iterator<const SMDS_MeshFace *>)
+%shared_ptr(SMDS_Iterator<const SMDS_MeshVolume *>)
+%shared_ptr(SMDS_IteratorOfElements)
+
+""")
         # specific includes
         f.write("%%include %s_headers.i\n\n" % self._module_name)
         # write helper functions
