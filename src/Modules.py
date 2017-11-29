@@ -763,7 +763,7 @@ OCE_MODULES = [
            ### TKCDF
            ('CDF', ['Resource'], []),
            ('CDM', [], []),
-           ('LDOM', ['*'], []),
+           ('LDOM', [], ['*']),
            ('PCDM', ['Resource'], ['PCDM_DOMHeaderParser']),
            ('UTL', [], []),
            ### TKPCAF
