@@ -19,7 +19,10 @@ from __future__ import print_function
 import glob
 import os
 import os.path
-import ConfigParser
+try:  # Python2
+    import ConfigParser
+except:  # Python3
+    import configparser as ConfigParser
 import sys
 import re
 
@@ -77,17 +80,27 @@ except ConfigParser.NoOptionError:
     OCE_INCLUDE_DIR = config.get('OCE', 'include_dir')
 if not os.path.isdir(OCE_INCLUDE_DIR):
     raise AssertionError("OCE include dir %s not found." % OCE_INCLUDE_DIR)
+# oce source location
+# useful to find for cdl files
+try:
+    OCE_SRC_DIR = config.get('OCE', 'src_dir')
+except ConfigParser.NoOptionError:
+    OCE_SRC_DIR = "NotSet"
+if not os.path.isdir(OCE_SRC_DIR):
+    print("Warning : OCE_SRC not set, you won't have module documentation")
+
 # smesh, if any
 smesh_base_dir = config.get('SMESH', 'base_dir')
 SMESH_INCLUDE_DIR = os.path.join(smesh_base_dir, 'include', 'smesh')
 if not os.path.isdir(SMESH_INCLUDE_DIR):
     print("SMESH include dir %s not found. SMESH wrapper not generated." % SMESH_INCLUDE_DIR)
 # swig output path
-SWIG_OUTPUT_PATH = config.get('pythonocc-core', 'generated_swig_files')
+PYTHONOCC_CORE_PATH = config.get('pythonocc-core', 'path')
+SWIG_OUTPUT_PATH = os.path.join(PYTHONOCC_CORE_PATH, 'src', 'SWIG_files', 'wrapper')
 # GEOMAlgo Salome splitter source location
-SPLITTER_PATH = config.get('pythonocc-core', 'splitter_path')
+SPLITTER_PATH = os.path.join(PYTHONOCC_CORE_PATH, 'src', 'Splitter')
 # cmake output path, i.e. the location where the __init__.py file is created
-CMAKE_PATH = config.get('pythonocc-core', 'init_path')
+CMAKE_PATH = os.path.join(PYTHONOCC_CORE_PATH, 'cmake')
 
 # check if SWIG_OUTPUT_PATH exists, otherwise create it
 if not os.path.isdir(SWIG_OUTPUT_PATH):
@@ -99,12 +112,6 @@ CURRENT_MODULE = None
 classes_with_handle = []
 PYTHON_MODULE_DEPENDENCY = []
 HEADER_DEPENDENCY = []
-
-
-def reset_header_depency():
-    global HEADER_DEPENDENCY
-    HEADER_DEPENDENCY = ['TColgp', 'TColStd', 'TCollection', 'Storage']
-
 # remove headers that can't be parse by CppHeaderParser
 HXX_TO_EXCLUDE = ['TCollection_AVLNode.hxx',
                   'AdvApp2Var_Data_f2c.hxx',
@@ -117,6 +124,8 @@ HXX_TO_EXCLUDE = ['TCollection_AVLNode.hxx',
                   'NCollection_BaseSequence.hxx',
                   'NCollection_Haft.h',
                   'NCollection_StlIterator.hxx',
+                  'NCollection_BaseCollection.hxx',
+                  'NCollection_DefineBaseCollection.hxx',
                   'Standard_StdAllocator.hxx',
                   'Standard_CLocaleSentry.hxx',
                   'BOPTools_DataMapOfShapeSet.hxx',
@@ -177,7 +186,7 @@ HXX_TO_EXCLUDE = ['TCollection_AVLNode.hxx',
                   ## SMESH
                   'SMESH_DataMapOfElemPtrSequenceOfElemPtr.hxx',
                   'SMESH_HypoFilter.hxx'
-                  ]
+                 ]
 
 
 # some typedefs parsed by CppHeader can't be wrapped
@@ -187,7 +196,12 @@ TYPEDEF_TO_EXCLUDE = ['NCollection_DelMapNode',
                       'BOPDS_DataMapOfPaveBlockCommonBlock',
                       'IntWalk_VectorOfWalkingData',
                       'IntWalk_VectorOfInteger'
-                      ]
+                     ]
+
+
+def reset_header_depency():
+    global HEADER_DEPENDENCY
+    HEADER_DEPENDENCY = ['TColgp', 'TColStd', 'TCollection', 'Storage']
 
 def downcast_decl(class_name):
     handle_type = "Handle_Standard_Transient"
@@ -318,19 +332,19 @@ def filter_header_list(header_list):
     # remove platform dependent files
     # this is done to have the same SWIG files on every platform
     # wnt specific
-    header_list = [x for x in header_list if not ('WNT' in x.lower())]
-    header_list = [x for x in header_list if not ('wnt' in x.lower())]
+    header_list = [x for x in header_list if not 'WNT' in x.lower()]
+    header_list = [x for x in header_list if not 'wnt' in x.lower()]
     # linux
-    header_list = [x for x in header_list if not ('X11' in x)]
-    header_list = [x for x in header_list if not ('XWD' in x)]
+    header_list = [x for x in header_list if not 'X11' in x]
+    header_list = [x for x in header_list if not 'XWD' in x]
     # and osx
-    header_list = [x for x in header_list if not ('Cocoa' in x)]
+    header_list = [x for x in header_list if not 'Cocoa' in x]
     return header_list
 
 
 def test_filter_header_list():
     if sys.platform != 'win32':
-        assert(filter_header_list(['something', 'somethingWNT']) == ['something'])
+        assert filter_header_list(['something', 'somethingWNT']) == ['something']
 
 
 def case_sensitive_glob(wildcard):
@@ -342,9 +356,9 @@ def case_sensitive_glob(wildcard):
     flist = glob.glob(wildcard)
     pattern = wildcard.split('*')[0]
     f = []
-    for file in flist:
-        if pattern in file:
-            f.append(file)
+    for file_ in flist:
+        if pattern in file_:
+            f.append(file_)
     return f
 
 
@@ -369,10 +383,10 @@ def test_get_all_module_headers():
     # 'Standard' should return some files (at lease 10)
     # this number depends on the OCE version
     headers_list_1 = get_all_module_headers("Standard")
-    assert(len(headers_list_1) > 10)
+    assert len(headers_list_1) > 10
     # an empty list
     headers_list_2 = get_all_module_headers("something_else")
-    assert(not headers_list_2)
+    assert not headers_list_2
 
 
 def check_has_related_handle(class_name):
@@ -383,7 +397,7 @@ def check_has_related_handle(class_name):
     other_possible_filename = filename
     if class_name.startswith("Graphic3d"):
         other_possible_filename = os.path.join(OCE_INCLUDE_DIR, "%s_Handle.hxx" % class_name)
-    return (os.path.exists(filename) or os.path.exists(other_possible_filename) or need_handle(class_name))
+    return os.path.exists(filename) or os.path.exists(other_possible_filename) or need_handle(class_name)
 
 
 def get_license_header():
@@ -462,7 +476,7 @@ def parse_header(header_filename):
     adapted_header_content = adapt_header_file(header_content)
     try:
         cpp_header = CppHeaderParser.CppHeader(adapted_header_content, "string")
-    except CppHeaderParser.CppParseError, e:
+    except CppHeaderParser.CppParseError as e:
         print(e)
         print("Filename : %s" % header_filename)
         print("FileContent :\n", adapted_header_content)
@@ -539,18 +553,18 @@ def adapt_param_type_and_name(param_type_and_name):
     to properly deal with byref values
     """
     if (('Standard_Real &' in param_type_and_name) or
-        ('Quantity_Parameter &' in param_type_and_name) or
-        ('Quantity_Length &' in param_type_and_name) or
-        ('V3d_Coordinate &' in param_type_and_name) or
-        (param_type_and_name.startswith('double &'))) and not ('const' in param_type_and_name):
+            ('Quantity_Parameter &' in param_type_and_name) or
+            ('Quantity_Length &' in param_type_and_name) or
+            ('V3d_Coordinate &' in param_type_and_name) or
+            (param_type_and_name.startswith('double &'))) and not 'const' in param_type_and_name:
         adapted_param_type_and_name = "Standard_Real &OutValue"
     elif (('Standard_Integer &' in param_type_and_name) or
-          (param_type_and_name.startswith('int &'))) and not ('const' in param_type_and_name):
+          (param_type_and_name.startswith('int &'))) and not 'const' in param_type_and_name:
         adapted_param_type_and_name = "Standard_Integer &OutValue"
     elif (('Standard_Boolean &' in param_type_and_name) or
-         (param_type_and_name.startswith('bool &'))) and not ('const' in param_type_and_name):
+          (param_type_and_name.startswith('bool &'))) and not 'const' in param_type_and_name:
         adapted_param_type_and_name = "Standard_Boolean &OutValue"
-    elif ('FairCurve_AnalysisCode &' in param_type_and_name):
+    elif 'FairCurve_AnalysisCode &' in param_type_and_name:
         adapted_param_type_and_name = 'FairCurve_AnalysisCode &OutValue'
     else:
         adapted_param_type_and_name = param_type_and_name
@@ -560,16 +574,16 @@ def adapt_param_type_and_name(param_type_and_name):
 def test_adapt_param_type_and_name():
     p1 = "Standard_Real & Xp"
     ad_p1 = adapt_param_type_and_name(p1)
-    assert (ad_p1 == "Standard_Real &OutValue")
+    assert ad_p1 == "Standard_Real &OutValue"
     p2 = "Standard_Integer & I"
     ad_p2 = adapt_param_type_and_name(p2)
-    assert (ad_p2 == "Standard_Integer &OutValue")
+    assert ad_p2 == "Standard_Integer &OutValue"
     p3 = "int & j"
     ad_p3 = adapt_param_type_and_name(p3)
-    assert (ad_p3 == "Standard_Integer &OutValue")
+    assert ad_p3 == "Standard_Integer &OutValue"
     p4 = "double & x"
     ad_p4 = adapt_param_type_and_name(p4)
-    assert (ad_p4 == "Standard_Real &OutValue")
+    assert ad_p4 == "Standard_Real &OutValue"
 
 
 def check_dependency(item):
@@ -607,7 +621,7 @@ def adapt_return_type(return_type):
                 "DEFINE_STANDARD_ALLOC ",
                 "DEFINE_NCOLLECTION_ALLOC :",
                 "DEFINE_NCOLLECTION_ALLOC",
-                ]
+               ]
     for replace in replaces:
         return_type = return_type.replace(replace, "")
     # replace Standard_CString with char *
@@ -622,7 +636,7 @@ def adapt_return_type(return_type):
     return_type = return_type.replace("Fineness", "NETGENPlugin_Hypothesis::Fineness")
     #ex: Handle_WNT_GraphicDevice const &
     # for instance "const TopoDS_Shape & -> ["const", "TopoDS_Shape", "&"]
-    if (('gp' in return_type) and not ('TColgp' in return_type))or ('TopoDS' in return_type):
+    if (('gp' in return_type) and not 'TColgp' in return_type) or ('TopoDS' in return_type):
         return_type = return_type.replace('&', '')
     check_dependency(return_type)
     return return_type
@@ -645,8 +659,60 @@ def adapt_function_name(f_name):
 def test_adapt_function_name():
     assert adapt_function_name('operator*') == 'operator *'
 
+def get_module_docstring(module_name):
+    """ For each module (for example gp, BRepPrimAPI etc.),
+    occt defines a documentation string available in gp.cdl, BRepPrimAPI.cdl etc.
+    This docstring is at the beginning of the file, and follows the following template:
+    package BRepPrimAPI
 
-def process_docstring(f):
+    ---Purpose: The  BRepBuilderAPI  package   provides  an   Application
+    --          Programming Interface  for the BRep  topology data
+    --          structure.
+    --
+    --          The API is a set of classes aiming to provide :
+    --
+    --          * High level and simple calls  for the most common
+    --          operations.
+
+    Thus, the algorithm to check the module documentation is the following:
+    1. find a file module.cdl
+    2. parse the file, and look for strings that starts with --
+    3. return those lines as a single string.
+
+    Note that the cdl file is available in the /src directory. That is to say
+    this file is not available in the oce binary distribution, one have to have
+    the oce source code to perform the parsing."""
+    if OCE_SRC_DIR is None:
+        print("Waring : OCE_SRC_DIR not set, no docstring for module %s" % module_name)
+        return "No docstring provided."
+    cdl_module_filename = os.path.join(OCE_SRC_DIR, "%s" % module_name, "%s.cdl" % module_name)
+    if not os.path.isfile(cdl_module_filename):
+        return "No docstring provided."
+    # parse the file
+    docstr_l = []
+    with open(cdl_module_filename, "r") as cdl_file:
+        store = False
+        for line in cdl_file:
+            if line.lstrip().startswith("uses") or line.lstrip().startswith("is"):
+                break
+            if line.startswith("package "):
+                store = True
+            if store:
+                line_to_append = line.lstrip()
+                # a few modificztion is required
+                line_to_append = line_to_append.replace("---Purpose: ", "")
+                line_to_append = line_to_append.replace("--", "")
+                line_to_append = line_to_append.replace("  ", " ")
+                line_to_append = line_to_append.replace(" ", " ")
+                line_to_append = line_to_append.replace('"', "'")
+                line_to_append = line_to_append.lstrip()
+                line_to_append = line_to_append.rstrip()
+                docstr_l.append(line_to_append)
+    docstr = ''.join(docstr_l[2:])
+    return docstr
+
+
+def process_function_docstring(f):
     """ Create the docstring, for the function f,
     that will be used by the wrapper.
     For that, first check the function parameters and type
@@ -776,7 +842,7 @@ def test_filter_member_functions():
     class_public_methods = [{"name": "method_1"},
                             {"name": "method_2"},
                             {"name": "method_3"},
-                            ]
+                           ]
     member_functions_to_exclude = ["method_2"]
     result = filter_member_functions(class_public_methods,
                                      member_functions_to_exclude,
@@ -892,7 +958,7 @@ def process_function(f):
         return ""
     # enable autocompactargs feature to enable compilation with swig>3.0.3
     str_function = '\t\t%%feature("compactdefaultargs") %s;\n' % function_name
-    str_function += process_docstring(f)
+    str_function += process_function_docstring(f)
     str_function += "\t\t"
     # return type
     # in the return type, we remove the Standard_EXPORT macro
@@ -912,7 +978,8 @@ def process_function(f):
     # one function Set* that sets the object
     if (return_type in ['Standard_Integer &', 'Standard_Real &', 'Standard_Boolean &']):
         # we only wrap this way methods that does not have any parameter
-        if len(f["parameters"]) == 0:
+        #if len(f["parameters"]) == 0:
+        if not f["parameters"]:
             modified_return_type = return_type.split(" ")[0]
             str_function = """
             %%feature("autodoc","1");
@@ -1157,7 +1224,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             class_def_str += "%%ignore %s::~%s();\n" % (class_name, class_name)
         # SMDS_ITerator is templated
         if class_name == "SMDS_Iterator":
-          class_def_str += "template<typename VALUE> "
+            class_def_str += "template<typename VALUE> "
         # then defines the wrapper
         class_def_str += "class %s" % class_name
         # inheritance process
@@ -1256,14 +1323,14 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             class_def_str += '\t}\n};\n'
         # add SMDS_ITerator template instanciation
         if class_name == "SMDS_Iterator":
-           class_def_str += "%template(SMDS_ElemIteratorPtr) SMDS_Iterator<const SMDS_MeshElement *>;\n"
-           class_def_str += "%template(SMDS_NodeIteratorPtr) SMDS_Iterator<const SMDS_MeshNode *>;\n"
-           class_def_str += "%template(SMDS_0DElementIteratorPtr) SMDS_Iterator<const SMDS_Mesh0DElement *>;\n"
-           class_def_str += "%template(SMDS_EdgeIteratorPtr) SMDS_Iterator<const SMDS_MeshEdge *>;\n"
-           class_def_str += "%template(SMDS_FaceIteratorPtr) SMDS_Iterator<const SMDS_MeshFace *>;\n"
-           class_def_str += "%template(SMDS_VolumeIteratorPtr) SMDS_Iterator<const SMDS_MeshVolume *>;\n\n"
-    	# for each class, overload the __repr__ method to avoid things like:
-    	# >>> print(box)
+            class_def_str += "%template(SMDS_ElemIteratorPtr) SMDS_Iterator<const SMDS_MeshElement *>;\n"
+            class_def_str += "%template(SMDS_NodeIteratorPtr) SMDS_Iterator<const SMDS_MeshNode *>;\n"
+            class_def_str += "%template(SMDS_0DElementIteratorPtr) SMDS_Iterator<const SMDS_Mesh0DElement *>;\n"
+            class_def_str += "%template(SMDS_EdgeIteratorPtr) SMDS_Iterator<const SMDS_MeshEdge *>;\n"
+            class_def_str += "%template(SMDS_FaceIteratorPtr) SMDS_Iterator<const SMDS_MeshFace *>;\n"
+            class_def_str += "%template(SMDS_VolumeIteratorPtr) SMDS_Iterator<const SMDS_MeshVolume *>;\n\n"
+        # for each class, overload the __repr__ method to avoid things like:
+        # >>> print(box)
         #<OCC.TopoDS.TopoDS_Shape; proxy of <Swig Object of type 'TopoDS_Shape *' at 0x02
         #BCF770> >
         class_def_str += '%%extend %s {\n' % class_name
@@ -1331,26 +1398,22 @@ class ModuleWrapper(object):
         reset_header_depency()
         print("=== generating SWIG files for module %s ===" % module_name)
         self._module_name = module_name
-        #print("\t parsing %s related headers ..." % module_name, end="")
+        self._module_docstring = get_module_docstring(module_name)
+        # parse
         typedefs, enums, classes, free_functions = parse_module(module_name)
-        #print("done.")
-        #print("\t processing typedefs ...", end="")
+        # typedefs
         self._typedefs_str = process_typedefs(typedefs)
-        #print("done.")
-        #print("\t processing enums ...", end="")
+        #enums
         self._enums_str = process_enums(enums)
-        #print("done")
-        #print("\t processing classes ...", end="")
+        #classes
         self._classes_str = process_classes(classes, exclude_classes,
                                             exclude_member_functions)
-        #print("done")
-        #print("\t processing free functions ...", end="")
+        # free functions
         self._free_functions_str = process_free_functions(free_functions)
-        #print("done")
+        # other dependencies
         self._additional_dependencies = additional_dependencies + HEADER_DEPENDENCY
-        #print("generating SWIG file")
+        # generate swig file
         self.generate_SWIG_files()
-        #print("SWIG file generated")
 
     def generate_SWIG_files(self):
         #
@@ -1359,8 +1422,14 @@ class ModuleWrapper(object):
         f = open(os.path.join(SWIG_OUTPUT_PATH, "%s.i" % self._module_name), "w")
         # write header
         f.write(get_license_header())
+        # write module docstring
+        # for instante define GPDOCSTRING
+        docstring_macro = "%sDOCSTRING" % self._module_name.upper()
+        f.write('%%define %s\n' % docstring_macro)
+        f.write('"%s"\n' % self._module_docstring)
+        f.write('%enddef\n')
         # module name
-        f.write('%%module (package="OCC") %s\n\n' % self._module_name)
+        f.write('%%module (package="OCC", docstring=%s) %s\n\n' % (docstring_macro, self._module_name))
         # remove warnings
         # warning 504 because void suppression
         # 325 : nested class unsupported
@@ -1492,7 +1561,7 @@ def process_toolkit(toolkit_name):
 def process_all_toolkits():
     parallel_build = config.get('build', 'parallel_build')
     if parallel_build == "True":  # multitask
-    	print("parallel")
+        print("multiprocessed generator")
         from multiprocessing import Pool
         pool = Pool()
         try:
@@ -1505,6 +1574,7 @@ def process_all_toolkits():
             pool.close()
             pool.join()
     else:  # single task
+        print("single processed generator")
         for toolkit in sorted(TOOLKITS):
             process_toolkit(toolkit)
 
