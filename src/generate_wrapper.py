@@ -185,7 +185,8 @@ HXX_TO_EXCLUDE = ['TCollection_AVLNode.hxx',
                   'TDF_LabelMapHasher.hxx',
                   ## SMESH
                   'SMESH_DataMapOfElemPtrSequenceOfElemPtr.hxx',
-                  'SMESH_HypoFilter.hxx'
+                  'SMESH_HypoFilter.hxx',
+                  'Quantity_Color_1.hxx'
                  ]
 
 
@@ -198,6 +199,9 @@ TYPEDEF_TO_EXCLUDE = ['NCollection_DelMapNode',
                       'IntWalk_VectorOfInteger'
                      ]
 
+
+# The list of all enums defined in oce
+ALL_ENUMS = []
 
 def reset_header_depency():
     global HEADER_DEPENDENCY
@@ -525,12 +529,24 @@ def process_enums(enums_list):
             enum_name = ""
         else:
             enum_name = enum["name"]
+            ALL_ENUMS.append(enum_name)
         enum_str += "enum %s {\n" % enum_name
         for enum_value in enum["values"]:
             enum_str += "\t%s = %s,\n" % (enum_value["name"], enum_value["value"])
         enum_str += "};\n\n"
     enum_str += "/* end public enums declaration */\n\n"
     return enum_str
+
+
+def is_return_type_enum(return_type):
+  """ This method returns True is an enum is returned. For instance:
+  BRepCheck_Status &
+  BRepCheck_Status 
+  """
+  for r in return_type.split():
+    if r in ALL_ENUMS:
+      return True
+  return False
 
 
 def adapt_param_type(param_type):
@@ -639,6 +655,10 @@ def adapt_return_type(return_type):
     if (('gp' in return_type) and not 'TColgp' in return_type) or ('TopoDS' in return_type):
         return_type = return_type.replace('&', '')
     check_dependency(return_type)
+    # check is it is an enum
+    if is_return_type_enum(return_type) and "&" in return_type:
+      # remove the reference
+      return_type = return_type.replace("&", "")
     return return_type
 
 
