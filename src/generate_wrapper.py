@@ -529,7 +529,8 @@ def process_enums(enums_list):
             enum_name = ""
         else:
             enum_name = enum["name"]
-            ALL_ENUMS.append(enum_name)
+            if not enum_name in ALL_ENUMS:
+                ALL_ENUMS.append(enum_name)
         enum_str += "enum %s {\n" % enum_name
         for enum_value in enum["values"]:
             enum_str += "\t%s = %s,\n" % (enum_value["name"], enum_value["value"])
@@ -544,8 +545,8 @@ def is_return_type_enum(return_type):
   BRepCheck_Status 
   """
   for r in return_type.split():
-    if r in ALL_ENUMS:
-      return True
+      if r in ALL_ENUMS:
+          return True
   return False
 
 
@@ -1193,7 +1194,7 @@ def build_inheritance_tree(classes_dict):
     # of ordered classes.
     class_list = []
     for class_name, depth_value in sorted(inheritance_depth.iteritems(),
-                                          key=lambda (k, v): (v, k)):
+                                          key=lambda kv: (kv[1], kv[0])):
         if class_name in classes_dict:  # TODO: should always be the case!
             class_list.append(classes_dict[class_name])
     return class_list
@@ -1449,7 +1450,7 @@ class ModuleWrapper(object):
         f.write('"%s"\n' % self._module_docstring)
         f.write('%enddef\n')
         # module name
-        f.write('%%module (package="OCC", docstring=%s) %s\n\n' % (docstring_macro, self._module_name))
+        f.write('%%module (package="OCC.Core", docstring=%s) %s\n\n' % (docstring_macro, self._module_name))
         # remove warnings
         # warning 504 because void suppression
         # 325 : nested class unsupported
@@ -1612,6 +1613,7 @@ def run_unit_tests():
     test_adapt_default_value()
     print("done.")
 
+
 if __name__ == '__main__':
     run_unit_tests()
     if len(sys.argv) > 1:
@@ -1620,5 +1622,6 @@ if __name__ == '__main__':
     else:
         write__init__()
         process_all_toolkits()
+
     # to process only one toolkit, uncomment the following line and change the toolkit name
     #process_toolkit("TKernel")
