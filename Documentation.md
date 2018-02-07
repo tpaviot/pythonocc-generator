@@ -64,22 +64,26 @@ The python wrapper for OCE is a python package composed of several python module
 
 ------> __init__.py
 
-------> Module1.py
+------> Core/
 
-------> Module2.py
+------------> __init__.py
 
-------> etc.
+------------> Module1.py
+
+------------> Module2.py
+
+------------> etc.
 
 Each OCE module is wrapped to a python module. As a consequence, the python wrapper for OCE is a python package including about 200 different modules. Each module can be imported using its name. For instance, to use the BRepPrimAPI module, just:
 
 ```
->>> import OCC.BRepPrimAPI
+>>> import OCC.Core.BRepPrimAPI
 ```
 
 All OCE classes of the BRepPrimAPI OCE module can be accessed using python:
 
 ```
->>> dir(OCC.BRepPrimAPI)
+>>> dir(OCC.Core.BRepPrimAPI)
 ['BRepPrimAPI_MakeBox', 'BRepPrimAPI_MakeBox_swigregister', 'BRepPrimAPI_MakeCone',
 'BRepPrimAPI_MakeCone_swigregister',
 'BRepPrimAPI_MakeCylinder', 'BRepPrimAPI_MakeCylinder_swigregister', 'BRepPrimAPI_MakeHalfSpace',
@@ -95,12 +99,12 @@ All OCE classes of the BRepPrimAPI OCE module can be accessed using python:
 'new_instancemethod']
 ```
 
-In your OCC package path, you can see that each python module (eg Adaptor2d.py) comes with a dynamic library (_Adaptor2d.so).
+In your OCC package path, you can see that each python module (eg Adaptor2d.py) comes with a dynamic library (*_Adaptor2d.so*).
 
 On linux:
 
 ```
-$ cd /usr/lib/python2.7/dist-packages/OCC
+$ cd /usr/lib/python2.7/dist-packages/OCC/Core
 $ ls -l
 total 166376
 -rw-r--r-- 1 root root   32058 juil. 15 18:47 Adaptor2d.py
@@ -116,7 +120,7 @@ total 166376
 [...]
 ```
 
-The directory structure is the same on windwos (.so is replaced with .pyd) and OSX (.so is replaced with .dyld).
+The directory structure is the same on windows (.so is replaced with .pyd) and OSX (.so is replaced with .dyld).
 
 Each of this library is dynamically linked to the OCE libraries on which it depends:
 
@@ -149,10 +153,9 @@ $
 
 ### 2.1.3. From OCE to pythonOCC
 
-The 2 files (the python module Module.py and the dynamic library _Module.so) are generated from a SWIG file Module.i
+The 2 files (the python module Module.py and the dynamic library *_Module.so*) are generated from a SWIG file Module.i
 
-For instance, the SWIG file AIS.i, when compiled using the couple SWIG/gcc, results in AIS.py and _AIS.so that are copied to the
-/OCC dist-packages folder.
+For instance, the SWIG file AIS.i, when compiled using the couple SWIG/gcc, results in AIS.py and *_AIS.so* that are copied to the /OCC/Core dist-packages folder.
 
 The .i files are created automaticallyt using 2 python modules and a configuration file :
 
@@ -184,35 +187,34 @@ TOOLKIT_Foundation = {
                            'GraphDS', 'GraphTools']}
 ```
 
-The TOOLIT_Foundation is a dictionnary for which keys are toolkits and values are modules.
+The TOOLKIT_Foundation is a dictionary for which keys are toolkits and values are modules.
 
-The most important part of Modules.py is the OCE_MODULES list. It is a list of tuples, one tuple for each modules. Each
-tuple is structured as followed:
+The most important part of Modules.py is the OCE_MODULES list. It is a list of tuples, one tuple for each modules. Each tuple is structured as followed:
 
 (module_name, headers_to_add, classes_to_exlude, member_functions_to_exclude).
 
 * module_name is a string, for instance 'Dico', 'BRepPrimAPI' etc.
 
 * headers_to_add is a list of strings (OCE modules names). For instance ['TopTools', 'Standard']. It is used to tell the wrapper to include, at the
-top of the enerated SWIG file, a list of headers that are required so that the compilation succeeds. If 'TopTools' is in the list, then, in the SWIG file generated, all TopTools_.hxx headers will be added. Indeed, it is sometimes required to add these headers to prevent a compilation failure
+top of the generated SWIG file, a list of headers that are required so that the compilation succeeds. If 'TopTools' is in the list, then, in the SWIG file generated, all TopTools_.hxx headers will be added. Indeed, it is sometimes required to add these headers to prevent a compilation failure
 
-* classes_to_exclude is a list of strings (OCE class names). For instance ['Message_Msg']. This means that this class is exluced from the wrapper. As a consequence, it won't be available from python. This is useful to exclude classes that cause compilation failure.
+* classes_to_exclude is a list of strings (OCE class names). For instance ['Message_Msg']. This means that this class is exluced from the wrapper. As a consequence, it won't be available from python. This is useful to exclude classes that cause compilation failure. Some classes has to be excluded because they cause compilation failure, some of the on Linux or Windows only, others on both systems. Note that, if the wrapper was perfect, *all* classes should be wrapped, excluding is just a pragmatic way to get the wrapper compile.
 
-* member_function_to_exclude is an optional dict which contains member functions of certain classes to be excluded from the wrapper. For
+* member_function_to_exclude is an optional dictionary which contains member functions of certain classes to be excluded from the wrapper. For
 instance, {'Standard_MMgrOpt': 'SetCallBackFunction', 'Standard': 'Free'}). This means that the method SetCallBackFunction of the
-Standard_MMgrOpt won't be available from the wrapper, but all the other methods will be available
+Standard_MMgrOpt won't be available from the wrapper, but all the other methods will be available. These methods are
+excluded for the same reason as the previous classes.
 
+Remember that all classes and methods should be wrapped. There's not reason to exlude a priori one class or one member function. The exclusion mechanism has been developped to fix compilation issues.
 
 ### 2.2.2. Examples
 
-Let's take the simplest: the wrapper definition for the 'gp' module. It is defined on line 169 with:
+Let's take the simplest example: the wrapper definition for the 'gp' module. It is defined on line 203 with:
 
 ``` python
-('Convert', [], []),
+('gp', [], []),
 ```
-This means that all classes, and all member functions, will be made available for the wrapper. This is how *all* modules
-should be wrapped. Actually, there's not reason to exlude a priori one class or one member function. The exlcusion mechanism
-has been developped to fix compilation issues.
+This means that all classes, and all member functions, will be made available for the wrapper. 
 
 For instance, let's go on with the 'gp' module definition:
 ````python
@@ -220,20 +222,24 @@ For instance, let's go on with the 'gp' module definition:
             {'gp_Torus': 'Coefficients'}),
 ```
 
-The 'Cofficients' method of the gp_Torus class is excluded from the wrapper. Why ? because if included, it causes a compilation error.
-
-Finallly, another example, the 'Poly' spec:
-``` python
- ('Poly', ['NCollection'],
-            ['Poly_CoherentTriPtr', 'Poly_CoherentTriangulation',
-             'Poly_MakeLoops', 'Poly_MakeLoops3D', 'Poly_MakeLoops2D']),
+Ano-ther example is the math module:
 ```
-5 classes are excluded from the wrapper. The 'NCollection' headers will be added at the top of the Poly.i SWIG file (necessary for compilation to succeed).
+('math', ['Adaptor3d'], ['math_SingleTab'],
+            {'math_NewtonMinimum': 'IsConvex',
+             'math_NewtonFunctionSetRoot': 'StateNumber',
+             'math_GlobOptMin': 'isDone'}),
+```
 
-**Note**: try to remove one of the class from the exlusion list. You might see the compilation fail (according to the OS you're
-running, the compilation may be different).
+The ['Adaptor3d'] list means that all Adaptor3d_*.hxx headers will be added to the SWIG file. These headers are required in order to compile the generated C++ file from the SWIG file.
 
-**Note**: it would obviously be better to *understand* the compilation error, and to fix it, rather than excluding a class. Hopefully, only a few classes need to be exluded and, so far, I guess that no one ever noticed that some of these methods are unavailable. Please report any success in understanding the compilation issues (dont' report the compilation issues themselves).
+The ['math_SingleTab'] list excludes the 'math_SingleTab' class from the wrapper.
+
+The 'IsConvex' method of the math_NewtonMinimum class is excluded from the wrapper. Why ? because if included, it will cause a compilation error. The same for the 'StateNumber' method for 'math_NewtonFunctionSetRoot' and the 'IsDone' method of 'math_GlobOptMin'.
+
+
+**Note 1**: try to remove one of the class from the exlusion list. You might see the compilation fail (according to the OS you're running, the compilation may be different).
+
+**Note 2**: it would obviously be better to *understand* the compilation error, and to fix it, rather than excluding a class. Hopefully, only a few classes need to be exluded and, so far, I guess that no one ever noticed that some of these methods are unavailable. Please report any success in understanding the compilation issues (dont' report the compilation issues themselves).
 
 ## 2.3. Configuration file: where to create files
 
