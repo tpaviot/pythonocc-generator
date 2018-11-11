@@ -101,7 +101,7 @@ TOOLKIT_DataExchange = {
                            'RWStepRepr', 'StepGeom', 'RWStepGeom',
                            'StepShape', 'RWStepShape'],
             'TKIGES': ['IGESControl'],
-            'TKXSBase': ['Interface', 'IFSelect', 'XSControl'],
+            'TKXSBase': ['Interface', 'IFSelect', 'XSControl', 'Transfer', 'TransferBRep'],
             'TKVRML': ['Vrml', 'VrmlAPI', 'VrmlConverter', 'VrmlData'],
             }
 
@@ -700,11 +700,14 @@ OCE_MODULES = [
            ###
            ('StepAP209', ['Message', 'StepBasic', 'gp_Pnt'], []),
            ('IGESControl', ['Message', 'TopLoc', 'Dico', 'TopTools'], []),
+           ### TKXSBase
            ('Interface', [], []),
            ('IFSelect', [], [], {'IFSelect_EditForm': 'NbTouched',
                                  'IFSelect_IntParam': 'StaticName',
                                  'IFSelect_ContextModif': 'Search'}),
            ('XSControl', ['Message', 'TopLoc', 'Dico'], []),
+           ('Transfer', ['TopLoc', 'Dico'], []),
+           ('TransferBRep', ['TopLoc', 'Dico'], []),
            ### TKVRML
            ('Vrml', [], []),
            ('VrmlAPI', [], []),
