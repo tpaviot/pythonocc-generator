@@ -109,7 +109,7 @@ if not os.path.isdir(SWIG_OUTPUT_PATH):
 # the following var is set when the module
 # is created
 CURRENT_MODULE = None
-classes_with_handle = []
+classes_with_handle = ['SMESH_MeshVSLink']
 PYTHON_MODULE_DEPENDENCY = []
 HEADER_DEPENDENCY = []
 # remove headers that can't be parse by CppHeaderParser
