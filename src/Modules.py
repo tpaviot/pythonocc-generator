@@ -707,7 +707,8 @@ OCE_MODULES = [
                                  'IFSelect_ContextModif': 'Search'}),
            ('XSControl', ['Message', 'TopLoc', 'Dico'], []),
            ('Transfer', ['TopLoc', 'Dico'], []),
-           ('TransferBRep', ['TopLoc', 'Dico'], []),
+           ('TransferBRep', ['TopLoc', 'Dico'], [],
+            {'TransferBRep': 'BRepCheck'}),
            ### TKVRML
            ('Vrml', [], []),
            ('VrmlAPI', [], []),
