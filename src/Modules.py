@@ -271,7 +271,8 @@ OCE_MODULES = [
            ('TopExp', ['Message', 'TopLoc'], []),
            ('TopTools', [], []),
            ('BRep', ['TShort'], []),
-           ('BRepLProp', ['GeomAdaptor',  'Geom2dAdaptor', 'Geom', 'Geom2d', 'TopoDS', 'Adaptor3d', 'Adaptor2d', 'TopLoc'], []),
+           ('BRepLProp', ['GeomAdaptor',  'Geom2dAdaptor', 'Geom', 'Geom2d',
+                          'TopoDS', 'Adaptor3d', 'Adaptor2d', 'TopLoc'], []),
            ('BRepAdaptor', ['TopLoc', 'Geom2d'], []),
            ('BRepTools', ['TShort', 'Poly'], []),
            ### TKGeomAlgo
@@ -337,7 +338,8 @@ OCE_MODULES = [
            ('BRepMAT2d', ['TopLoc'], []),
            ('BRepCheck', ['TopLoc', 'Message'], []),
            ('BRepBndLib', ['TopLoc'], []),
-           ('BRepExtrema', ['Geom', 'Geom2d', 'TopLoc', 'Adaptor2d', 'Adaptor3d'], ['BRepExtrema_OverlapTool'],
+           ('BRepExtrema', ['Geom', 'Geom2d', 'TopLoc', 'Adaptor2d', 'Adaptor3d'],
+            ['BRepExtrema_OverlapTool'],
             # or...  #define OVERLAP_TOOL_OUTPUT_TRIANGLES
             {'BRepExtrema_SelfIntersection': 'OverlapTriangles',
             }),

@@ -740,7 +740,7 @@ def get_module_docstring(module_name):
                 line_to_append = line_to_append.lstrip()
                 line_to_append = line_to_append.rstrip()
                 docstr_l.append(line_to_append)
-    docstr = ''.join(docstr_l[2:])
+    docstr = '\n'.join(docstr_l[2:])
     return docstr
 
 
