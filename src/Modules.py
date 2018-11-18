@@ -435,9 +435,7 @@ OCE_MODULES = [
                          'Adaptor2d', 'GeomAdaptor', 'Geom', 'TopLoc',
                          'Geom2d'],
             ['BRepMesh_WireInterferenceChecker', 'BRepMesh_EdgeTessellator',
-             'BRepMesh_EdgeTessellationExtractor', 'BRepMesh_EdgeParameterProvider',
-             'BRepMesh_DataStructureOfDelaun', 'BRepMesh_DiscretRoot',
-             'BRepMesh_FastDiscret', 'BRepMesh_FastDiscretFace', 'BRepMesh_IEdgeTool'],
+             'BRepMesh_EdgeTessellationExtractor', 'BRepMesh_EdgeParameterProvider'],
             {'BRepMesh_Delaun': ['Frontier', 'InternalEdges', 'FreeEdges'],
              'BRepMesh_GeomTool': ['IntLinLin', 'Normal', 'IntSegSeg'],
              # Both failures caused by Precision::Confusion -> PrecisionConfusion
@@ -485,7 +483,7 @@ OCE_MODULES = [
            ### TKXMesh
            ('XBRepMesh', ['Geom', 'GeomAdaptor', 'Geom2d', 'Bnd', 'TShort',
                           'BRepAdaptor', 'Adaptor2d', 'Geom2dAdaptor', 'TopLoc',
-                          'Poly', 'Adaptor3d'], []),
+                          'Poly', 'Adaptor3d', 'Message', 'TopTools'], []),
            ### TKBool
            ('TopOpeBRep', ['TColStd', 'TCollection', 'TopLoc', 'TColgp',
                            'Adaptor3d', 'IntAna', 'Message', 'IntSurf',
