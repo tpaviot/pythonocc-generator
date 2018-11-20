@@ -109,7 +109,7 @@ if not os.path.isdir(SWIG_OUTPUT_PATH):
 # the following var is set when the module
 # is created
 CURRENT_MODULE = None
-classes_with_handle = []
+classes_with_handle = ['SMESH_MeshVSLink']
 PYTHON_MODULE_DEPENDENCY = []
 HEADER_DEPENDENCY = []
 # remove headers that can't be parse by CppHeaderParser
@@ -207,12 +207,21 @@ def reset_header_depency():
     global HEADER_DEPENDENCY
     HEADER_DEPENDENCY = ['TColgp', 'TColStd', 'TCollection', 'Storage']
 
+
+def check_is_persistent(class_name):
+    """
+    Checks, whether a class belongs to the persistent classes (and not to the transient ones)
+    """
+    for occ_module in ['PFunction', 'PDataStd', 'PPrsStd', 'PDF',
+                       'PDocStd', 'PDataXtd', 'PNaming', 'PCDM_Document']:
+        if class_name.startswith(occ_module):
+            return True
+    return False
+
 def downcast_decl(class_name):
     handle_type = "Handle_Standard_Transient"
-    for module in ['PFunction', 'PDataStd', 'PPrsStd', 'PDF',
-                   'PDocStd', 'PDataXtd', 'PNaming', 'PCDM_Document']:
-        if class_name.startswith(module):
-            handle_type = "Handle_Standard_Persistent"
+    if check_is_persistent(class_name):
+        handle_type = "Handle_Standard_Persistent"
 
     downcast_decl = "        static const Handle_%s DownCast(const "
     downcast_decl += handle_type
@@ -397,12 +406,14 @@ def check_has_related_handle(class_name):
     """ For a given class :
     Check if a header exists.
     """
+    if check_is_persistent(class_name):
+        return False
+
     filename = os.path.join(OCE_INCLUDE_DIR, "Handle_%s.hxx" % class_name)
     other_possible_filename = filename
     if class_name.startswith("Graphic3d"):
         other_possible_filename = os.path.join(OCE_INCLUDE_DIR, "%s_Handle.hxx" % class_name)
     return os.path.exists(filename) or os.path.exists(other_possible_filename) or need_handle(class_name)
-
 
 def get_license_header():
     """ Write the header to the different SWIG files
@@ -729,7 +740,7 @@ def get_module_docstring(module_name):
                 line_to_append = line_to_append.lstrip()
                 line_to_append = line_to_append.rstrip()
                 docstr_l.append(line_to_append)
-    docstr = ''.join(docstr_l[2:])
+    docstr = '\n'.join(docstr_l[2:])
     return docstr
 
 
@@ -1228,6 +1239,20 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             # if the class has to be excluded,
             # we go on with the next one to be processed
             continue
+
+        if check_has_related_handle(class_name):
+            class_def_str += "%%wrap_handle(%s)\n" % class_name
+
+    class_def_str += '\n'
+
+    for klass in inheritance_tree_list:
+        # class name
+        class_name = klass["name"]
+        #print("class name : %s" % class_name)
+        if class_name in exclude_classes:
+            # if the class has to be excluded,
+            # we go on with the next one to be processed
+            continue
         # ensure the class returned by CppHeader is defined in this module
         # otherwise we go on with the next class
         if not class_name.startswith(CURRENT_MODULE):
@@ -1308,20 +1333,8 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         class_def_str += '\n'
         if check_has_related_handle(class_name):
             # Extend class by GetHandle method
-            class_def_str += '%%extend %s {\n' % class_name
-            class_def_str += '\t%' + 'pythoncode {\n'
-            class_def_str += '\t\tdef GetHandle(self):\n'
-            class_def_str += '\t\t    try:\n'
-            class_def_str += '\t\t        return self.thisHandle\n'
-            class_def_str += '\t\t    except:\n'
-            class_def_str += '\t\t        self.thisHandle = Handle_%s(self)\n' % class_name
-            class_def_str += '\t\t        self.thisown = False\n'
-            class_def_str += '\t\t        return self.thisHandle\n'
-            class_def_str += '\t}\n};\n'
-            if class_name == "Standard_Transient":
-                class_def_str += process_handle(class_name, None)
-            else:
-                class_def_str += process_handle(class_name, inheritance_name)
+            class_def_str += '%%make_alias(%s)\n\n' % class_name
+
         # We add pickling for TopoDS_Shapes
         if class_name == 'TopoDS_Shape':
             class_def_str += '%extend TopoDS_Shape {\n%pythoncode {\n'
@@ -1468,7 +1481,7 @@ class ModuleWrapper(object):
         f.write(win_pragmas)
         # common includes
         includes = ["CommonIncludes", "ExceptionCatcher",
-                    "FunctionTransformers", "Operators"]
+                    "FunctionTransformers", "Operators", "OccHandle"]
         for include in includes:
             f.write("%%include ../common/%s.i\n" % include)
         f.write("\n\n")
@@ -1488,24 +1501,6 @@ class ModuleWrapper(object):
 """)
         # specific includes
         f.write("%%include %s_headers.i\n\n" % self._module_name)
-        # write helper functions
-        helper_functions = """
-%pythoncode {
-def register_handle(handle, base_object):
-    \"\"\"
-    Inserts the handle into the base object to
-    prevent memory corruption in certain cases
-    \"\"\"
-    try:
-        if base_object.IsKind("Standard_Transient"):
-            base_object.thisHandle = handle
-            base_object.thisown = False
-    except:
-        pass
-};
-
-"""
-        f.write(helper_functions)
         # write type_defs
         f.write(self._typedefs_str)
         # write public enums
