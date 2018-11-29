@@ -1335,6 +1335,44 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             # Extend class by GetHandle method
             class_def_str += '%%make_alias(%s)\n\n' % class_name
 
+        # All "Array1" classes are considered as python arrays
+        if 'Array1' in class_name:
+            class_def_str += """
+%%extend %s {
+    %%pythoncode {
+    def __getitem__(self, index):
+        if index + self.Lower() > self.Upper():
+            raise IndexError("index out of range")
+        else:
+            return self.Value(index + self.Lower())
+
+    def __setitem__(self, index, value):
+        if index + self.Lower() > self.Upper():
+            raise IndexError("index out of range")
+        else:
+            self.SetValue(index + self.Lower(), value)
+
+    def __len__(self):
+        return self.Length()
+
+    def __iter__(self):
+        self.low = self.Lower()
+        self.up = self.Upper()
+        self.current = self.Lower() - 1
+        return self
+
+    def next(self):
+        if self.current >= self.Upper():
+            raise StopIteration
+        else:
+            self.current +=1
+        return self.Value(self.current)
+
+    __next__ = next
+
+    }
+};
+""" % class_name
         # We add pickling for TopoDS_Shapes
         if class_name == 'TopoDS_Shape':
             class_def_str += '%extend TopoDS_Shape {\n%pythoncode {\n'
