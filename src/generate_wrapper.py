@@ -920,6 +920,8 @@ def process_function(f):
         return ""  # impossible to wrap in python
     if "operator <<" in function_name:
         return ""
+    if "operator ^" in function_name:
+        return ""
     # special process for operator ==
     if "operator ==" in function_name:
         param = f["parameters"][0]
@@ -932,7 +934,7 @@ def process_function(f):
             }
         }
         %%pythoncode {
-        def __eq__(self,right):
+        def __eq__(self, right):
             try:
                 return self.__eq_wrapper__(right)
             except:
@@ -951,11 +953,75 @@ def process_function(f):
             }
         }
         %%pythoncode {
-        def __ne__(self,right):
+        def __ne__(self, right):
             try:
                 return self.__ne_wrapper__(right)
             except:
                 return True
+        }
+        """ % param_type
+    # special process for operator +=
+    if "operator +=" in function_name:
+        param = f["parameters"][0]
+        param_type = param["type"].replace("&", "")
+        return """
+        %%extend{
+            void __iadd_wrapper__(%s other) {
+            *self += other;
+            }
+        }
+        %%pythoncode {
+        def __iadd__(self, right):
+            self.__iadd_wrapper__(right)
+            return self
+        }
+        """ % param_type
+    # special process for operator *=
+    if "operator *=" in function_name:
+        param = f["parameters"][0]
+        param_type = param["type"].replace("&", "")
+        return """
+        %%extend{
+            void __imul_wrapper__(%s other) {
+            *self *= other;
+            }
+        }
+        %%pythoncode {
+        def __imul__(self, right):
+            self.__imul_wrapper__(right)
+            return self
+        }
+        """ % param_type
+    # special process for operator -=
+    if "operator -=" in function_name:
+        param = f["parameters"][0]
+        param_type = param["type"].replace("&", "")
+        return """
+        %%extend{
+            void __isub_wrapper__(%s other) {
+            *self -= other;
+            }
+        }
+        %%pythoncode {
+        def __isub__(self, right):
+            self.__isub_wrapper__(right)
+            return self
+        }
+        """ % param_type
+    # special process for operator -=
+    if "operator /=" in function_name:
+        param = f["parameters"][0]
+        param_type = param["type"].replace("&", "")
+        return """
+        %%extend{
+            void __itruediv_wrapper__(%s other) {
+            *self /= other;
+            }
+        }
+        %%pythoncode {
+        def __itruediv__(self, right):
+            self.__itruediv_wrapper__(right)
+            return self
         }
         """ % param_type
     # special case : Standard_OStream or Standard_IStream is the only parameter
