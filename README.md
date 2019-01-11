@@ -12,6 +12,8 @@ pythonocc-generator is the pythonocc subproject dedicated to automatic
 SWIG '.i' files generator from OCE C++ header files. It relies on CppHeaderParser
 (https://bitbucket.org/senex/cppheaderparser) to perform code generation.
 
+Note : a cppheaderparser fork is available at https://github.com/robotpy/robotpy-cppheaderparser
+
 How to create a local copy of the repository?
 ---------------------------------------------
 
@@ -33,7 +35,7 @@ Edit/Modify the wrapper-generator.conf file then
 
 Requirements
 ------------
-You need OCE (http://github.com/tpaviot/oce) release 0.16.0 or 0.16.1 headers.
+You need OCE (http://github.com/tpaviot/oce) release 0.18.x headers.
 
 All .i SWIG files are created and copied to the generated_swig_files path
 defined in the wrapper-generator.conf
