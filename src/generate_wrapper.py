@@ -397,9 +397,9 @@ def test_get_all_module_headers():
     # 'Standard' should return some files (at lease 10)
     # this number depends on the OCE version
     headers_list_1 = get_all_module_headers("Standard")
-    assert len(headers_list_1) > 10
+    assert len(list(headers_list_1)) > 10
     # an empty list
-    headers_list_2 = get_all_module_headers("something_else")
+    headers_list_2 = list(get_all_module_headers("something_else"))
     assert not headers_list_2
 
 
@@ -488,7 +488,7 @@ def adapt_header_file(header_content):
 def parse_header(header_filename):
     """ Use CppHeaderParser module to parse header_filename
     """
-    header_content = open(header_filename, 'r').read()
+    header_content = open(header_filename, 'r', encoding='ISO-8859-1').read()
     adapted_header_content = adapt_header_file(header_content)
     try:
         cpp_header = CppHeaderParser.CppHeader(adapted_header_content, "string")
@@ -508,7 +508,7 @@ def filter_typedefs(typedef_dict):
         del typedef_dict['{']
     if ':' in typedef_dict:
         del typedef_dict[':']
-    for key in typedef_dict.keys():
+    for key in list(typedef_dict):
         if key in TYPEDEF_TO_EXCLUDE:
             del typedef_dict[key]
     return typedef_dict
@@ -1271,7 +1271,7 @@ def build_inheritance_tree(classes_dict):
     # at last, we return the class_list containing a list
     # of ordered classes.
     class_list = []
-    for class_name, depth_value in sorted(inheritance_depth.iteritems(),
+    for class_name, depth_value in sorted(inheritance_depth.items(),
                                           key=lambda kv: (kv[1], kv[0])):
         if class_name in classes_dict:  # TODO: should always be the case!
             class_list.append(classes_dict[class_name])
@@ -1517,11 +1517,11 @@ def parse_module(module_name):
     module_free_functions = []
     for header in cpp_headers:
         # build the typedef dictionary
-        module_typedefs = dict(module_typedefs.items() + header.typedefs.items())
+        module_typedefs.update(header.typedefs)
         # build the enum list
         module_enums += header.enums
         # build the class dictionary
-        module_classes = dict(module_classes.items() + header.classes.items())
+        module_classes.update(header.classes.items())
         # build the free functions list
         module_free_functions += header.functions
     return module_typedefs, module_enums, module_classes, module_free_functions
