@@ -187,7 +187,9 @@ HXX_TO_EXCLUDE = ['TCollection_AVLNode.hxx',
                   ## SMESH
                   'SMESH_DataMapOfElemPtrSequenceOfElemPtr.hxx',
                   'SMESH_HypoFilter.hxx',
-                  'Quantity_Color_1.hxx'
+                  'Quantity_Color_1.hxx',
+                  ## New excludes for occt7x
+                  'Graphic3d_TextureSet.hxx'
                  ]
 
 
@@ -1051,6 +1053,11 @@ def process_function(f):
         """ % (function_name, function_name)
     if "TYPENAME" in f["rtnType"]:
         return ""  # something in NCollection
+    if function_name == "DEFINE_STANDARD_RTTIEXT":
+      return ""
+    if function_name == "Standard_DEPRECATED":
+      print("TODO : Warning : function marked as DEPRECATED. Should find a way to bring this information sto pyocc users")
+      return ""
     if function_name == "Handle":  # TODO: make it possible!
     # this is because Handle (something) some function can not be
     # handled by swig
@@ -1284,6 +1291,7 @@ def fix_type(type_str):
     type_str = type_str.replace("Standard_Real", "float")
     type_str = type_str.replace("Standard_Integer", "int")
     type_str = type_str.replace("const", "")
+    type_str = type_str.replace("DEFINE_STANDARD_ALLOC", "")    
     return type_str
 
 
