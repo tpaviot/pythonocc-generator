@@ -1,0 +1,3 @@
+[submodule "src/robotpy-cppheaderparser"]
+	path = src/robotpy-cppheaderparser
+	url = https://github.com/robotpy/robotpy-cppheaderparser.git

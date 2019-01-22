@@ -1,5 +1,0 @@
-include README.txt
-include README.html
-include CppHeaderParser/doc/CppHeaderParser.html
-include CppHeaderParser/examples/readSampleClass.py
-include CppHeaderParser/examples/SampleClass.h
