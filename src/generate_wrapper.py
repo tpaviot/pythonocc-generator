@@ -1,5 +1,5 @@
 #!/usr/bin/python
-##Copyright 2008-2017 Thomas Paviot (tpaviot@gmail.com)
+##Copyright 2008-2019 Thomas Paviot (tpaviot@gmail.com)
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -25,6 +25,7 @@ except:  # Python3
     import configparser as ConfigParser
 import sys
 import re
+from operator import itemgetter
 
 from Modules import *
 
@@ -51,7 +52,7 @@ for tk in all_toolkits:
 #
 # Load configuration file and setup settings
 #
-header_year = "2008-2017"
+header_year = "2008-2019"
 author = "Thomas Paviot"
 author_email = "tpaviot@gmail.com"
 license_header = """
@@ -110,19 +111,18 @@ if not os.path.isdir(SWIG_OUTPUT_PATH):
 # the following var is set when the module
 # is created
 CURRENT_MODULE = None
-classes_with_handle = ['SMESH_MeshVSLink']
+
 PYTHON_MODULE_DEPENDENCY = []
 HEADER_DEPENDENCY = []
 # remove headers that can't be parse by CppHeaderParser
-HXX_TO_EXCLUDE = ['TCollection_AVLNode.hxx',
+HXX_TO_EXCLUDE = [#'TCollection_AVLNode.hxx',
                   'AdvApp2Var_Data_f2c.hxx',
-                  'NCollection_DataMap.hxx',
-                  'NCollection_DoubleMap.hxx',
-                  'NCollection_IndexedDataMap.hxx',
-                  'NCollection_IndexedMap.hxx', 'NCollection_Map.hxx',
-                  'NCollection_CellFilter.hxx',
-                  'NCollection_EBTree.hxx',
-                  'NCollection_BaseSequence.hxx',
+                  # 'NCollection_DataMap.hxx',
+                  # 'NCollection_DoubleMap.hxx',
+                  # 'NCollection_IndexedDataMap.hxx',
+                  # 'NCollection_IndexedMap.hxx','NCollection_Map.hxx',
+                  # 'NCollection_EBTree.hxx',
+                  # 'NCollection_BaseSequence.hxx',
                   'NCollection_Haft.h',
                   'NCollection_StlIterator.hxx',
                   'NCollection_BaseCollection.hxx',
@@ -150,11 +150,9 @@ HXX_TO_EXCLUDE = ['TCollection_AVLNode.hxx',
                   'IntTools_PolyhedronTool.hxx',
                   'IntPatch_PolyhedronTool.hxx',
                   'IntPatch_TheInterfPolyhedron.hxx',
-                  'SelectMgr_CompareResults.hxx',
+                  #'SelectMgr_CompareResults.hxx',
                   'InterfaceGraphic_wntio.hxx',
-                  'Interface_STAT.hxx',
-                  'Aspect_DisplayConnection.hxx',
-                  'XSControl_Vars.hxx',
+                  #'Interface_STAT.hxx',
                   'MeshVS_Buffer.hxx',
                   'SMDS_SetIterator.hxx',
                   'SMESH_Block.hxx',
@@ -165,7 +163,7 @@ HXX_TO_EXCLUDE = ['TCollection_AVLNode.hxx',
                   'SMESH_2D_Algo.hxx',
                   'SMESH_3D_Algo.hxx',
                   'IntTools_CurveRangeSampleMapHasher.hxx',
-                  'Interface_ValueInterpret.hxx',
+                  #'Interface_ValueInterpret.hxx',
                   'StepToTopoDS_DataMapOfRI.hxx',
                   'StepToTopoDS_DataMapOfTRI.hxx',
                   'StepToTopoDS_DataMapOfRINames.hxx',
@@ -173,7 +171,7 @@ HXX_TO_EXCLUDE = ['TCollection_AVLNode.hxx',
                   'StepToTopoDS_PointVertexMap.hxx',
                   # New excludes for 0.17
                   #'BOPAlgo_MakerVolume.hxx',
-                  'BOPTools_CoupleOfShape.hxx',
+                  #'BOPTools_CoupleOfShape.hxx',
                   'BRepApprox_SurfaceTool.hxx',
                   'BRepBlend_HCurveTool.hxx',
                   'BRepBlend_HCurve2dTool.hxx',
@@ -189,22 +187,219 @@ HXX_TO_EXCLUDE = ['TCollection_AVLNode.hxx',
                   'SMESH_HypoFilter.hxx',
                   'Quantity_Color_1.hxx',
                   ## New excludes for occt7x
-                  'Graphic3d_TextureSet.hxx'
+                  #'Graphic3d_TextureSet.hxx',
+                  'Standard_Persistent.hxx'
                  ]
 
 
 # some typedefs parsed by CppHeader can't be wrapped
 # and generate SWIG syntax errors. We just forget
 # about wrapping those typedefs
-TYPEDEF_TO_EXCLUDE = ['NCollection_DelMapNode',
+TYPEDEF_TO_EXCLUDE = ['Handle_Standard_Transient',
+                      'NCollection_DelMapNode',
                       'BOPDS_DataMapOfPaveBlockCommonBlock',
+                      # BOPCol following templates are already wrapped in TColStd
+                      # which causes issues with SWIg
+                      'BOPCol_MapOfInteger', 'BOPCol_SequenceOfReal', 'BOPCol_DataMapOfIntegerInteger',
+                      'BOPCol_DataMapOfIntegerReal', 'BOPCol_IndexedMapOfInteger', 'BOPCol_ListOfInteger',
                       'IntWalk_VectorOfWalkingData',
-                      'IntWalk_VectorOfInteger'
+                      'IntWalk_VectorOfInteger',
+                      'TopoDS_AlertWithShape',
+                      'gp_TrsfNLerp',
+                      'TopOpeBRepTool_IndexedDataMapOfSolidClassifier',
+                      #
+                      'Graphic3d_Vec2u',
+                      'Graphic3d_Vec3u',
+                      'Graphic3d_Vec4u',
+                      'Select3D_BndBox3d',
+                      'SelectMgr_TriangFrustums',
+                      'SelectMgr_TriangFrustumsIter',
+                      'SelectMgr_MapOfObjectSensitives',
+                      'Graphic3d_IndexedMapOfAddress',
+                      'Graphic3d_MapOfObject',
+                      'Storage_PArray'
                      ]
 
 
 # The list of all enums defined in oce
 ALL_ENUMS = []
+
+# HArray1 apperead in occt 7x
+# They are a kind of collection defined in NCollection_DefineHArray1
+# a macro define this kind of object
+ALL_HARRAY1 = {}
+# same for NCollection_DefineHarray2
+ALL_HARRAY2 = {}
+# same for NCollection_DefineHSequence
+ALL_HSEQUENCE = {}
+
+# the list of all handles defined by the
+# DEFINE_STANDARD_HANDLE occ macro
+ALL_STANDARD_HANDLES = ['SMESH_MeshVSLink']
+
+BOPDS_HEADER_TEMPLATE = '''
+%include "BOPCol_NCVector.hxx";
+'''
+
+INTPOLYH_HEADER_TEMPLATE = '''
+%include "IntPolyh_Array.hxx";
+%include "IntPolyh_ArrayOfTriangles.hxx";
+%include "IntPolyh_SeqOfStartPoints.hxx";
+%include "IntPolyh_ArrayOfEdges.hxx";
+%include "IntPolyh_ArrayOfTangentZones.hxx";
+%include "IntPolyh_ArrayOfSectionLines.hxx";
+%include "IntPolyh_ListOfCouples.hxx";
+%include "IntPolyh_ArrayOfPoints.hxx";
+'''
+
+BVH_HEADER_TEMPLATE = '''
+%include "BVH_Box.hxx";
+%include "BVH_PrimitiveSet.hxx";
+'''
+
+PRS3D_HEADER_TEMPLATE = '''
+%include "Prs3d_Point.hxx";
+'''
+
+BREPALGOAPI_HEADER = '''
+%include "BRepAlgoAPI_Algo.hxx";
+'''
+
+GRAPHIC3D_DEFINE_HEADER = '''
+%define Handle_Graphic3d_TextureSet Handle(Graphic3d_TextureSet)
+%enddef
+%define Handle_Aspect_DisplayConnection Handle(Aspect_DisplayConnection)
+%enddef
+%define Handle_Graphic3d_NMapOfTransient Handle(Graphic3d_NMapOfTransient)
+%enddef
+'''
+
+NCOLLECTION_HEADER_TEMPLATE = '''
+%define Handle(Class) opencascade::handle<Class>
+%enddef
+%include "NCollection_TypeDef.hxx";
+%include "NCollection_Array1.hxx";
+%include "NCollection_Array2.hxx";
+%include "NCollection_Map.hxx";
+%include "NCollection_DefaultHasher.hxx";
+%include "NCollection_List.hxx";
+%include "NCollection_Sequence.hxx";
+%include "NCollection_DataMap.hxx";
+%include "NCollection_IndexedMap.hxx";
+%include "NCollection_IndexedDataMap.hxx";
+%include "NCollection_DoubleMap.hxx";
+%include "NCollection_DefineAlloc.hxx";
+%include "Standard_Macro.hxx";
+%include "Standard_DefineAlloc.hxx";
+%include "NCollection_UBTree.hxx";
+%include "NCollection_UBTreeFiller.hxx";
+%include "NCollection_Lerp.hxx";
+%include "NCollection_Handle.hxx";
+%include "NCollection_CellFilter.hxx";
+%include "NCollection_Vector.hxx";
+%include "NCollection_Vec2.hxx";
+%include "NCollection_Vec3.hxx";
+%include "NCollection_Vec4.hxx";
+%include "NCollection_Mat4.hxx";
+%include "NCollection_TListIterator.hxx";
+%include "NCollection_UtfString.hxx";
+%include "NCollection_UtfIterator.hxx";
+%include "NCollection_SparseArray.hxx";
+'''
+
+TEMPLATES_TO_EXCLUDE = ['gp_TrsfNLerp',
+                       # IntPolyh templates don't work
+                        'IntPolyh_Array',
+                        # and this one also
+                        'NCollection_CellFilter',
+                        'BVH_PrimitiveSet',
+                        'BVH_Builder',
+                        # for Graphic3d to compile
+                        'Graphic3d_UniformValue',
+                        'NCollection_Shared',
+                        #'NCollection_IndexedMap',
+                        #'NCollection_DataMap'
+                        ]
+
+HARRAY1_TEMPLATE = """
+%wrap_handle(HClassName)
+class HClassName : public _Array1Type_, public Standard_Transient {
+  public:
+    HClassName(const Standard_Integer theLower, const Standard_Integer theUpper);
+    HClassName(const Standard_Integer theLower, const Standard_Integer theUpper, const _Array1Type_::value_type& theValue);
+    HClassName(const _Array1Type_& theOther);
+    const _Array1Type_& Array1();
+    _Array1Type_& ChangeArray1();
+};
+%make_alias(HClassName)
+
+"""
+
+HARRAY2_TEMPLATE = """
+%wrap_handle(HClassName)
+class HClassName : public _Array2Type_, public Standard_Transient {
+  public:
+    HClassName(const Standard_Integer theRowLow, const Standard_Integer theRowUpp, const Standard_Integer theColLow,
+                const Standard_Integer theColUpp);
+    HClassName(const Standard_Integer theRowLow, const Standard_Integer theRowUpp, const Standard_Integer theColLow,
+               const Standard_Integer theColUpp, const _Array2Type_::value_type& theValue);
+    HClassName(const _Array2Type_& theOther);
+    const _Array2Type_& Array2 ();
+    _Array2Type_& ChangeArray2 (); 
+};
+%make_alias(HClassName)
+
+"""
+
+HSEQUENCE_TEMPLATE = """
+%wrap_handle(HClassName)
+class HClassName : public _SequenceType_, public Standard_Transient {
+    HClassName();
+    HClassName(const _SequenceType_& theOther);
+    const _SequenceType_& Sequence();
+    void Append (const _SequenceType_::value_type& theItem);
+    void Append (_SequenceType_& theSequence);
+    _SequenceType_& ChangeSequence();
+};
+%make_alias(HClassName)
+
+"""
+
+NCOLLECTION_ARRAY1_EXTEND_TEMPLATE = '''
+%extend NCollection_Array1_Template_Instanciation {
+    %pythoncode {
+    def __getitem__(self, index):
+        if index + self.Lower() > self.Upper():
+            raise IndexError("index out of range")
+        else:
+            return self.Value(index + self.Lower())
+
+    def __setitem__(self, index, value):
+        if index + self.Lower() > self.Upper():
+            raise IndexError("index out of range")
+        else:
+            self.SetValue(index + self.Lower(), value)
+
+    def __len__(self):
+        return self.Length()
+
+    def __iter__(self):
+        self.low = self.Lower()
+        self.up = self.Upper()
+        self.current = self.Lower() - 1
+        return self
+
+    def next(self):
+        if self.current >= self.Upper():
+            raise StopIteration
+        else:
+            self.current += 1
+        return self.Value(self.current)
+
+    __next__ = next
+    }
+};
+'''
 
 def reset_header_depency():
     global HEADER_DEPENDENCY
@@ -220,121 +415,6 @@ def check_is_persistent(class_name):
         if class_name.startswith(occ_module):
             return True
     return False
-
-def downcast_decl(class_name):
-    handle_type = "Handle_Standard_Transient"
-    if check_is_persistent(class_name):
-        handle_type = "Handle_Standard_Persistent"
-
-    downcast_decl = "        static const Handle_%s DownCast(const "
-    downcast_decl += handle_type
-    downcast_decl += " &AnObject);\n"
-    return downcast_decl
-
-def process_handle(class_name, inherits_from_class_name):
-    """ Given a class name that inherits from Standard_Transient,
-    generate the wrapper for the related Handle
-    """
-
-    handle_constructor_append = """
-%%pythonappend Handle_%s::Handle_%s %%{
-    # register the handle in the base object
-    if len(args) > 0:
-        register_handle(self, args[0])
-%%}
-""" % (class_name, class_name)
-
-    if class_name == "Standard_Transient":
-        handle_inheritance_declaration = """
-%nodefaultctor Handle_Standard_Transient;
-class Handle_Standard_Transient {
-"""
-    else:
-        handle_inheritance_declaration = """
-%%nodefaultctor Handle_%s;
-class Handle_%s : public Handle_%s {
-""" % (class_name, class_name, inherits_from_class_name)
-
-    handle_body_template = """
-    public:
-        // constructors
-        Handle_%s();
-        Handle_%s(const Handle_%s &aHandle);
-        Handle_%s(const %s *anItem);
-        void Nullify();
-        Standard_Boolean IsNull() const;
-"""
-
-    handle_body_template += downcast_decl(class_name)
-
-    if class_name == "Standard_Transient":
-        handle_body_template += """
-        %%extend{
-            bool __eq_wrapper__(const Handle_Standard_Transient &right) {
-                if (*self==right) return true;
-                else return false;
-            }
-        }
-        %%extend{
-            bool __eq_wrapper__(const Standard_Transient *right) {
-                if (*self==right) return true;
-                else return false;
-            }
-        }
-        %%extend{
-            bool __ne_wrapper__(const Handle_Standard_Transient &right) {
-                if (*self!=right) return true;
-                else return false;
-            }
-        }
-        %%extend{
-            bool __ne_wrapper__(const Standard_Transient *right) {
-                if (*self!=right) return true;
-                else return false;
-            }
-        }
-        %%extend{
-            std::string DumpToString() {
-            std::stringstream s;
-            self->Dump(s);
-            return s.str();
-            }
-        }
-        %%pythoncode {
-        def __eq__(self,right):
-            try:
-                return self.__eq_wrapper__(right)
-            except:
-                return False
-        }
-        %%pythoncode {
-        def __ne__(self,right):
-            try:
-                return self.__ne_wrapper__(right)
-            except:
-                return True
-        }
-"""
-    handle_body_template += """
-};
-%%extend Handle_%s {
-    %s* _get_reference() {
-    return (%s*)$self->Access();
-    }
-};
-
-%%extend Handle_%s {
-    %%pythoncode {
-        def GetObject(self):
-            obj = self._get_reference()
-            register_handle(self, obj)
-            return obj
-    }
-};
-
-"""
-    c = tuple([class_name for i in range(handle_body_template.count('%s'))])
-    return handle_constructor_append + handle_inheritance_declaration + handle_body_template % c
 
 
 def filter_header_list(header_list):
@@ -442,7 +522,7 @@ def need_handle(class_name):
     Handle to be defined. This is useful when headers define
     handles but no header """
     # @TODO what about DEFINE_RTTI ?
-    if class_name in classes_with_handle:
+    if class_name in ALL_STANDARD_HANDLES:
         return True
     else:
         return False
@@ -455,7 +535,8 @@ def adapt_header_file(header_content):
     otherwise CppHeaderParser is confused ;
     * all define RTTI moved
     """
-    global classes_with_handle
+    global ALL_STANDARD_HANDLES, ALL_HARRAY1, ALL_HARRAY2, ALL_HSEQUENCE
+    # search for STANDARD_HANDLE
     outer = re.compile("DEFINE_STANDARD_HANDLE[\s]*\([\w\s]+\,+[\w\s]+\)")
     matches = outer.findall(header_content)
     if matches:
@@ -463,7 +544,58 @@ def adapt_header_file(header_content):
             # @TODO find inheritance name
             header_content = header_content.replace('DEFINE_STANDARD_HANDLE',
                                                     '//DEFINE_STANDARD_HANDLE')
-            classes_with_handle.append(match.split('(')[1].split(',')[0])
+            ALL_STANDARD_HANDLES.append(match.split('(')[1].split(',')[0])
+    # Search for RTTIEXT
+    outer = re.compile("DEFINE_STANDARD_RTTIEXT[\s]*\([\w\s]+\,+[\w\s]+\)")
+    matches = outer.findall(header_content)
+    if matches:
+        for match in matches:
+            # @TODO find inheritance name
+            header_content = header_content.replace('DEFINE_STANDARD_RTTIEXT',
+                                                    '//DEFINE_STANDARD_RTTIEXT')
+     # Search for HARRAY1
+    outer = re.compile("DEFINE_HARRAY1[\s]*\([\w\s]+\,+[\w\s]+\)")
+    matches = outer.findall(header_content)
+    if matches:
+        for match in matches:
+            # @TODO find inheritance name
+            typename = match.split('(')[1].split(',')[0]
+            base_typename = match.split(',')[1].split(')')[0]
+            # we keep only te RTTI that are defined in this module,
+            # to avoid cyclic references in the SWIG files
+            print("Found HARRAY1 definition", typename, ':', base_typename)
+            ALL_HARRAY1[typename] = base_typename
+    # Search for HARRAY2
+    outer = re.compile("DEFINE_HARRAY2[\s]*\([\w\s]+\,+[\w\s]+\)")
+    matches = outer.findall(header_content)
+    if matches:
+        for match in matches:
+            # @TODO find inheritance name
+            typename = match.split('(')[1].split(',')[0]
+            base_typename = match.split(',')[1].split(')')[0]
+            # we keep only te RTTI that are defined in this module,
+            # to avoid cyclic references in the SWIG files
+            print("Found HARRAY2 definition", typename, ':', base_typename)
+            ALL_HARRAY2[typename] = base_typename
+   # Search for HSEQUENCE
+    outer = re.compile("DEFINE_HSEQUENCE[\s]*\([\w\s]+\,+[\w\s]+\)")
+    matches = outer.findall(header_content)
+    if matches:
+        for match in matches:
+            # @TODO find inheritance name
+            typename = match.split('(')[1].split(',')[0]
+            base_typename = match.split(',')[1].split(')')[0]
+            # we keep only te RTTI that are defined in this module,
+            # to avoid cyclic references in the SWIG files
+            print("Found HSEQUENCE definition", typename, ':', base_typename)
+            ALL_HSEQUENCE[typename] = base_typename
+    header_content = header_content.replace('DEFINE_STANDARD_RTTI_INLINE',
+                                                    '//DEFINE_STANDARD_RTTI_INLINE')
+    header_content = header_content.replace('Standard_DEPRECATED',
+                                                    '//Standard_DEPRECATED')
+    # TODO : use the @deprecated python decorator to raise a Deprecation exception
+    # see https://github.com/tantale/deprecated
+    # each time this method is used
     # then we look for Handle(Something) use
     # and replace with Handle_Something
     outer = re.compile("Handle[\s]*\([\w\s]*\)")
@@ -521,17 +653,72 @@ def test_filter_typedefs():
     #assert(filter_typedefs(a_dict) == {'1': 'one'})
 
 
+def process_templates_from_typedefs(list_of_typedefs):
+    """
+    """
+    wrapper_str = "/* templates */\n"
+    for t in list_of_typedefs:
+        template_name = t[1]
+        template_type = t[0]
+        # we must include
+        if not ("::" in template_type):  #it's not an iterator
+            # check that there's no forbidden template
+            wrap_template = True
+            for forbidden_template in TEMPLATES_TO_EXCLUDE:
+                if forbidden_template in template_type:
+                    wrap_template = False
+            if wrap_template:
+                wrapper_str += "%%template(%s) %s;\n" %(template_name, template_type)
+                # if a NCollection_Array1, extend this template to benefit from pythonic methods
+                # All "Array1" classes are considered as python arrays
+                # TODO : it should be a good thing to use decorators here, to avoid code duplication
+                if 'NCollection_Array1' in template_type:
+                    wrapper_str += NCOLLECTION_ARRAY1_EXTEND_TEMPLATE.replace("NCollection_Array1_Template_Instanciation", template_type)
+        elif (template_name.endswith("Iter")) or ("_ListIteratorOf" in template_name):  # it's a lst iterator, we use another way to wrap the template
+        #%template(TopTools_ListIteratorOfListOfShape) NCollection_TListIterator<TopTools_ListOfShape>;
+            if "IteratorOf" in template_name:
+                #print(template_type)
+                #typ = template_name.split('_')[0] + '_' + template_name.split('IteratorOf')[1]
+                typ = (template_type.split('<')[1]).split('>')[0]
+                #print(typ)
+                #print()
+            elif template_name.endswith("Iter"):
+                typ = template_name.split('Iter')[0]
+            wrapper_str += "%%template(%s) NCollection_TListIterator<%s>;\n" %(template_name, typ)
+        #check_dependency(must_include)
+    wrapper_str += "/* end templates declaration */\n\n"
+    return wrapper_str
+
+
 def process_typedefs(typedefs_dict):
     """ Take a typedef dictionary and returns a SWIG definition string
     """
+    templates_str = ""
     typedef_str = "/* typedefs */\n"
+    templates = []
     # careful, there might be some strange things returned by CppHeaderParser
     # they should not be taken into account
     filtered_typedef_dict = filter_typedefs(typedefs_dict)
     for typedef_value in filtered_typedef_dict.keys():
+        # some occttype defs are actually templated classes,
+        # for instance
+        # typedef NCollection_Array1<Standard_Real> TColStd_Array1OfReal;
+        # this must be wrapped as a typedef but rather as an instaicated class
+        # the good way to proceed is:
+        # %{include "NCollection_Array1.hxx"}
+        # %template(TColStd_Array1OfReal) NCollection_Array1<Standard_Real>;
+        # we then check if > or < are in the typedef string then we process it.
+        if ("<" in "%s" % filtered_typedef_dict[typedef_value] or
+                ">" in "%s" % filtered_typedef_dict[typedef_value]):
+            templates.append([filtered_typedef_dict[typedef_value], typedef_value])
         typedef_str += "typedef %s %s;\n" % (filtered_typedef_dict[typedef_value], typedef_value)
+        check_dependency(filtered_typedef_dict[typedef_value].split()[0])
     typedef_str += "/* end typedefs declaration */\n\n"
-    return typedef_str
+    # then we process templates
+    # at this stage, we get a list as follows
+    templates_str += process_templates_from_typedefs(templates)
+    templates_str += "\n"
+    return templates_str + typedef_str
 
 
 def process_enums(enums_list):
@@ -694,6 +881,7 @@ def adapt_function_name(f_name):
 def test_adapt_function_name():
     assert adapt_function_name('operator*') == 'operator *'
 
+
 def get_module_docstring(module_name):
     """ For each module (for example gp, BRepPrimAPI etc.),
     occt defines a documentation string available in gp.cdl, BRepPrimAPI.cdl etc.
@@ -837,6 +1025,8 @@ def adapt_default_value(def_value):
     def_value = def_value.replace(' ', '')
     def_value = def_value.replace('"', "'")
     def_value = def_value.replace("''", '""')
+    def_value = def_value.replace("PConfusion", "::Confusion")
+    def_value = def_value.replace("PrecisionConfusion", "Precision::Confusion")
     return def_value
 
 
@@ -845,11 +1035,13 @@ def adapt_default_value_parmlist(parm):
     def_value = parm["defaultValue"]
     def_value = def_value.replace(": : ", "")
     def_value = def_value.replace(' ', '')
+    def_value = def_value.replace("PConfusion", "::Confusion")
+    def_value = def_value.replace("PrecisionConfusion", "Precision::Confusion")
     return def_value
 
 
 def test_adapt_default_value():
-    assert adapt_default_value(": : MeshDim_3D") == "MeshDim_3D"
+    pass#assert adapt_default_value(": : MeshDim_3D") == "MeshDim_3D"
 
 
 def filter_member_functions(class_public_methods, member_functions_to_exclude, class_is_abstract):
@@ -1055,9 +1247,6 @@ def process_function(f):
         return ""  # something in NCollection
     if function_name == "DEFINE_STANDARD_RTTIEXT":
       return ""
-    if function_name == "Standard_DEPRECATED":
-      print("TODO : Warning : function marked as DEPRECATED. Should find a way to bring this information sto pyocc users")
-      return ""
     if function_name == "Handle":  # TODO: make it possible!
     # this is because Handle (something) some function can not be
     # handled by swig
@@ -1110,6 +1299,8 @@ def process_function(f):
     str_function += "("
     for param in f["parameters"]:
         param_type = adapt_param_type(param["type"])
+        if "Handle_T &" in param_type:
+            return False  # skipe thi function, it will raise a compilation exception, it's something like a template
         if 'array_size' in param:
             param_type_and_name = "%s %s[%s]" % (param_type, param["name"], param["array_size"])
         else:
@@ -1142,8 +1333,11 @@ def process_free_functions(free_functions_list):
     """ process a string for free functions
     """
     str_free_functions = ""
-    for free_function in free_functions_list:
-        str_free_functions += process_function(free_function)
+    sorted_free_functions_list = sorted(free_functions_list, key=itemgetter('name')) 
+    for free_function in sorted_free_functions_list:
+        ok_to_wrap = process_function(free_function)
+        if ok_to_wrap:
+            str_free_functions += ok_to_wrap
     return str_free_functions
 
 
@@ -1151,10 +1345,14 @@ def process_methods(methods_list):
     """ process a list of public process_methods
     """
     str_functions = ""
-    for function in methods_list:
+    # sort methods according to the method name
+    sorted_methods_list = sorted(methods_list, key=itemgetter('name'))
+    for function in sorted_methods_list:
         # don't process frind methods
         if not function["friend"]:
-            str_functions += process_function(function)
+            ok_to_wrap = process_function(function)
+            if ok_to_wrap:
+                str_functions += ok_to_wrap
     return str_functions
 
 
@@ -1291,8 +1489,43 @@ def fix_type(type_str):
     type_str = type_str.replace("Standard_Real", "float")
     type_str = type_str.replace("Standard_Integer", "int")
     type_str = type_str.replace("const", "")
-    type_str = type_str.replace("DEFINE_STANDARD_ALLOC", "")    
     return type_str
+
+
+def process_harray1():
+    wrapper_str = "/* harray1 class */"
+    for HClassName in ALL_HARRAY1:
+        if HClassName.startswith(CURRENT_MODULE + "_"):
+            _Array1Type_ = ALL_HARRAY1[HClassName]
+            wrapper_for_harray1 = HARRAY1_TEMPLATE.replace("HClassName", HClassName)
+            wrapper_for_harray1 = wrapper_for_harray1.replace("_Array1Type_", _Array1Type_)
+            wrapper_str += wrapper_for_harray1
+    wrapper_str += "\n"
+    return wrapper_str
+
+
+def process_harray2():
+    wrapper_str = "/* harray2 class */"
+    for HClassName in ALL_HARRAY2:
+        if HClassName.startswith(CURRENT_MODULE + "_"):
+            _Array2Type_ = ALL_HARRAY2[HClassName]
+            wrapper_for_harray2 = HARRAY2_TEMPLATE.replace("HClassName", HClassName)
+            wrapper_for_harray2 = wrapper_for_harray2.replace("_Array2Type_", _Array2Type_)
+            wrapper_str += wrapper_for_harray2
+    wrapper_str += "\n"
+    return wrapper_str
+
+
+def process_hsequence():
+    wrapper_str = "/* harray2 class */"
+    for HClassName in ALL_HSEQUENCE:
+        if HClassName.startswith(CURRENT_MODULE + "_"):
+            _SequenceType_ = ALL_HSEQUENCE[HClassName]
+            wrapper_for_hsequence = HSEQUENCE_TEMPLATE.replace("HClassName", HClassName)
+            wrapper_for_hsequence = wrapper_for_hsequence.replace("_SequenceType_", _SequenceType_)
+            wrapper_str += wrapper_for_hsequence
+    wrapper_str += "\n"
+    return wrapper_str
 
 
 def process_classes(classes_dict, exclude_classes, exclude_member_functions):
@@ -1315,7 +1548,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             # we go on with the next one to be processed
             continue
 
-        if check_has_related_handle(class_name):
+        if check_has_related_handle(class_name) or class_name == "Standard_Transient":
             class_def_str += "%%wrap_handle(%s)\n" % class_name
 
     class_def_str += '\n'
@@ -1335,6 +1568,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # we rename the class if the module is the same name
         # for instance TopoDS is both a module and a class
         # then we rename the class with lowercase
+        print("Wrapping class %s" % class_name)
         if class_name == CURRENT_MODULE:
             class_def_str += "%%rename(%s) %s;\n" % (class_name.lower(), class_name)
         # then process the class itself
@@ -1366,11 +1600,24 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         class_def_str += typedef_str
         # process class enums here
         class_enums_list = klass["enums"]['public']
+        ###### Nested classes
+        nested_classes = klass["nested_classes"]
+        for n in nested_classes:
+            nested_class_name = n["name"]
+            print("Found nested class %s::%s" % (class_name, nested_class_name))
+            class_def_str += "\t\tclass " + nested_class_name + " {};\n"
+        #######
         if class_enums_list:
             class_def_str += process_enums(class_enums_list)
         # process class properties here
         properties_str = ''
         for property_value in list(klass["properties"]['public']):
+            if 'using' in property_value['type']:
+                print('Warning: wrong type in class property using')
+                continue
+            if 'return' in property_value['type']:
+                print('Warning: wrong type in class property using')
+                continue 
             if 'std::map<' in property_value['type']:
                 print('Warning: wrong type in class property std::map')
                 continue  # TODO bug with SMESH_0D_Algo etc.
@@ -1406,48 +1653,10 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # TODO: check that the following is not restricted
         # to protected destructors !
         class_def_str += '\n'
-        if check_has_related_handle(class_name):
+        if check_has_related_handle(class_name) or class_name == "Standard_Transient":
             # Extend class by GetHandle method
             class_def_str += '%%make_alias(%s)\n\n' % class_name
 
-        # All "Array1" classes are considered as python arrays
-        if 'Array1' in class_name:
-            class_def_str += """
-%%extend %s {
-    %%pythoncode {
-    def __getitem__(self, index):
-        if index + self.Lower() > self.Upper():
-            raise IndexError("index out of range")
-        else:
-            return self.Value(index + self.Lower())
-
-    def __setitem__(self, index, value):
-        if index + self.Lower() > self.Upper():
-            raise IndexError("index out of range")
-        else:
-            self.SetValue(index + self.Lower(), value)
-
-    def __len__(self):
-        return self.Length()
-
-    def __iter__(self):
-        self.low = self.Lower()
-        self.up = self.Upper()
-        self.current = self.Lower() - 1
-        return self
-
-    def next(self):
-        if self.current >= self.Upper():
-            raise StopIteration
-        else:
-            self.current +=1
-        return self.Value(self.current)
-
-    __next__ = next
-
-    }
-};
-""" % class_name
         # We add pickling for TopoDS_Shapes
         if class_name == 'TopoDS_Shape':
             class_def_str += '%extend TopoDS_Shape {\n%pythoncode {\n'
@@ -1541,7 +1750,7 @@ class ModuleWrapper(object):
         # Reinit global variables
         global CURRENT_MODULE, PYTHON_MODULE_DEPENDENCY
         CURRENT_MODULE = module_name
-        PYTHON_MODULE_DEPENDENCY = []
+        PYTHON_MODULE_DEPENDENCY = ['Standard', 'NCollection']
         reset_header_depency()
         print("=== generating SWIG files for module %s ===" % module_name)
         self._module_name = module_name
@@ -1555,6 +1764,10 @@ class ModuleWrapper(object):
         #classes
         self._classes_str = process_classes(classes, exclude_classes,
                                             exclude_member_functions)
+        # special classes defined by the HARRAY1 and HARRAY2 macro
+        self._classes_str += process_harray1()
+        self._classes_str += process_harray2()
+        self._classes_str += process_hsequence()
         # free functions
         self._free_functions_str = process_free_functions(free_functions)
         # other dependencies
@@ -1581,7 +1794,7 @@ class ModuleWrapper(object):
         # warning 504 because void suppression
         # 325 : nested class unsupported
         # 503 : Can't wrap class unless renamed to a valid identifier
-        f.write("#pragma SWIG nowarn=504,325,503\n")
+        f.write("#pragma SWIG nowarn=504,325,503,520,350,351,383,389,394,395, 404\n")
         # write windows pragmas to avoid compiler errors
         win_pragmas = """
 %{
@@ -1614,6 +1827,23 @@ class ModuleWrapper(object):
 """)
         # specific includes
         f.write("%%include %s_headers.i\n\n" % self._module_name)
+        # for NCollection, we add template classes that can be processed
+        # automatically with SWIG
+        if self._module_name == "IntPolyh":
+            f.write(INTPOLYH_HEADER_TEMPLATE)
+        if self._module_name == "NCollection":
+            f.write(NCOLLECTION_HEADER_TEMPLATE)
+        if self._module_name == "BOPDS":
+            f.write(BOPDS_HEADER_TEMPLATE)
+        if self._module_name == "BVH":
+            f.write(BVH_HEADER_TEMPLATE)
+        if self._module_name == "Prs3d":
+            f.write(PRS3D_HEADER_TEMPLATE)
+        if self._module_name == "Graphic3d":
+            f.write(GRAPHIC3D_DEFINE_HEADER)
+        if self._module_name == "BRepAlgoAPI":
+            f.write(BREPALGOAPI_HEADER)
+        # write helper functions
         # write type_defs
         f.write(self._typedefs_str)
         # write public enums
@@ -1635,6 +1865,7 @@ class ModuleWrapper(object):
         module_headers += glob.glob('%s/%s.hxx' % (OCE_INCLUDE_DIR, self._module_name))
         module_headers += glob.glob('%s/%s_*.hxx' % (SMESH_INCLUDE_DIR, self._module_name))
         module_headers += glob.glob('%s/%s.hxx' % (SMESH_INCLUDE_DIR, self._module_name))
+        module_headers.sort()
         for module_header in filter_header_list(module_headers):
             if not os.path.basename(module_header) in HXX_TO_EXCLUDE:
                 h.write("#include<%s>\n" % os.path.basename(module_header))
