@@ -345,7 +345,7 @@ OCE_MODULES = [
             {'BRepExtrema_SelfIntersection': 'OverlapTriangles',
             }),
            ('BRepClass', ['Geom', 'Geom2d', 'Extrema', 'Bnd', 'Intf', 'Adaptor3d',
-                          'TopLoc'], ['BRepClass_FaceClassifier']),
+                          'TopLoc'], []),
            ('BRepClass3d', ['TopLoc', 'GeomAdaptor', 'IntSurf',
                             'Adaptor3d', 'Geom', 'Geom2d', 'Adaptor2d',
                             'Geom2dAdaptor'], []),
