@@ -114,83 +114,61 @@ CURRENT_MODULE = None
 
 PYTHON_MODULE_DEPENDENCY = []
 HEADER_DEPENDENCY = []
-# remove headers that can't be parse by CppHeaderParser
-HXX_TO_EXCLUDE = [#'TCollection_AVLNode.hxx',
-                  'AdvApp2Var_Data_f2c.hxx',
-                  # 'NCollection_DataMap.hxx',
-                  # 'NCollection_DoubleMap.hxx',
-                  # 'NCollection_IndexedDataMap.hxx',
-                  # 'NCollection_IndexedMap.hxx','NCollection_Map.hxx',
-                  # 'NCollection_EBTree.hxx',
-                  # 'NCollection_BaseSequence.hxx',
-                  'NCollection_Haft.h',
-                  'NCollection_StlIterator.hxx',
-                  'NCollection_BaseCollection.hxx',
-                  'NCollection_DefineBaseCollection.hxx',
-                  'Standard_StdAllocator.hxx',
-                  'Standard_CLocaleSentry.hxx',
-                  'BOPTools_DataMapOfShapeSet.hxx',
-                  'Resource_gb2312.h', 'Resource_Shiftjis.h',
-                  'TopOpeBRepBuild_SplitShapes.hxx',
-                  'TopOpeBRepBuild_SplitSolid.hxx',
-                  'TopOpeBRepBuild_Builder.hxx',
-                  'TopOpeBRepBuild_SplitEdge.hxx',
-                  'TopOpeBRepBuild_Fill.hxx',
-                  'TopOpeBRepBuild_SplitFace.hxx',
-                  'TopOpeBRepDS_traceDSX.hxx',
-                  'ChFiKPart_ComputeData_ChAsymPlnCon.hxx',
-                  'ChFiKPart_ComputeData_ChAsymPlnCyl.hxx',
-                  'ChFiKPart_ComputeData_ChAsymPlnPln.hxx',
-                  'ChFiKPart_ComputeData_ChPlnCon.hxx',
-                  'ChFiKPart_ComputeData_ChPlnCyl.hxx',
-                  'ChFiKPart_ComputeData_ChPlnPln.hxx',
-                  'ChFiKPart_ComputeData_Sphere.hxx',
-                  'Font_FTFont.hxx', 'Font_FTLibrary.hxx',
-                  'IntTools_LineConstructor.hxx',
-                  'IntTools_PolyhedronTool.hxx',
-                  'IntPatch_PolyhedronTool.hxx',
-                  'IntPatch_TheInterfPolyhedron.hxx',
-                  #'SelectMgr_CompareResults.hxx',
-                  'InterfaceGraphic_wntio.hxx',
-                  #'Interface_STAT.hxx',
-                  'MeshVS_Buffer.hxx',
-                  'SMDS_SetIterator.hxx',
-                  'SMESH_Block.hxx',
-                  'SMESH_ExceptHandlers.hxx', 'StdMeshers_Penta_3D.hxx',
-                  'SMESH_ControlsDef.hxx',
-                  'SMESH_Algo.hxx',
-                  'SMESH_0D_Algo.hxx', 'SMESH_1D_Algo.hxx',
-                  'SMESH_2D_Algo.hxx',
-                  'SMESH_3D_Algo.hxx',
-                  'IntTools_CurveRangeSampleMapHasher.hxx',
-                  #'Interface_ValueInterpret.hxx',
-                  'StepToTopoDS_DataMapOfRI.hxx',
-                  'StepToTopoDS_DataMapOfTRI.hxx',
-                  'StepToTopoDS_DataMapOfRINames.hxx',
-                  'StepToTopoDS_PointEdgeMap.hxx',
-                  'StepToTopoDS_PointVertexMap.hxx',
-                  # New excludes for 0.17
-                  #'BOPAlgo_MakerVolume.hxx',
-                  #'BOPTools_CoupleOfShape.hxx',
-                  'BRepApprox_SurfaceTool.hxx',
-                  'BRepBlend_HCurveTool.hxx',
-                  'BRepBlend_HCurve2dTool.hxx',
-                  'BRepMesh_FaceAttribute.hxx',
-                  'ChFiKPart_ComputeData_FilPlnCon.hxx',
-                  'ChFiKPart_ComputeData_FilPlnPln.hxx',
-                  'ChFiKPart_ComputeData_FilPlnCyl.hxx',
-                  'ChFiKPart_ComputeData_Rotule.hxx',
-                  'PrsMgr_ListOfPresentableObjects.hxx',
-                  'TDF_LabelMapHasher.hxx',
-                  ## SMESH
-                  'SMESH_DataMapOfElemPtrSequenceOfElemPtr.hxx',
-                  'SMESH_HypoFilter.hxx',
-                  'Quantity_Color_1.hxx',
-                  ## New excludes for occt7x
-                  #'Graphic3d_TextureSet.hxx',
-                  'Standard_Persistent.hxx'
-                 ]
 
+# remove headers that can't be parse by CppHeaderParser
+HXX_TO_EXCLUDE_FROM_CPPPARSER = ['NCollection_StlIterator.hxx',
+                                 'NCollection_CellFilter.hxx',
+                                 'Standard_CLocaleSentry.hxx',
+                                 'TColStd_PackedMapOfInteger.hxx',
+                                 # this file has to be fixed
+                                 # there's a missing include
+                                 'Aspect_VKeySet.hxx',
+                                 'TPrsStd_AISPresentation.hxx',
+                                 'TPrsStd_AISViewer.hxx',
+                                 'StepToTopoDS_Tool.hxx',
+                                 'AIS_DataMapOfSelStat.hxx',
+                                 'BVH_IndexedBoxSet.hxx',
+                                 'AIS_Axis.hxx',
+                                 'BRepApprox_SurfaceTool.hxx',
+                                 'BRepBlend_BlendTool.hxx',
+                                 'BRepBlend_HCurveTool.hxx',
+                                 'BRepBlend_HCurve2dTool.hxx',
+                                 'IntWalk_PWalking.hxx',
+                                 'HLRAlgo_PolyHidingData.hxx',
+                                 'HLRAlgo_Array1OfPHDat.hxx',
+                                 'ShapeUpgrade_UnifySameDomain.hxx']
+
+# some includes fail at being compiled
+HXX_TO_EXCLUDE_FROM_BEING_INCLUDED = [# following file includes a AIS_LocalStatus.hxx
+                                      # which does not exist in occt7.4.0
+                                      # TODO : report the bug upstream
+                                      'AIS_DataMapOfSelStat.hxx',
+                                      # same for the following
+                                      'AIS_DataMapIteratorOfDataMapOfSelStat.hxx',
+                                      # file has to be fixed, missing include
+                                      'NCollection_CellFilter.hxx',
+                                      'Aspect_VKeySet.hxx',
+                                      'TPrsStd_AISPresentation.hxx',
+                                      'Interface_ValueInterpret.hxx',
+                                      'TPrsStd_AISViewer.hxx',
+                                      'StepToTopoDS_Tool.hxx',
+                                      'BVH_IndexedBoxSet.hxx',
+                                      'AIS_Axis.hxx',
+                                      # report the 3 following to upstream, buggy
+                                      # error: ‘ChFiDS_ChamfMode’ does not name a type;
+                                      'ChFiKPart_ComputeData_ChPlnPln.hxx',
+                                      'ChFiKPart_ComputeData_ChPlnCyl.hxx',
+                                      'ChFiKPart_ComputeData_ChPlnCon.hxx',
+                                      # others
+                                      'BRepApprox_SurfaceTool.hxx',
+                                      'BRepBlend_BlendTool.hxx',
+                                      'BRepBlend_HCurveTool.hxx',
+                                      'BRepBlend_HCurve2dTool.hxx',
+                                      'IntWalk_PWalking.hxx',
+                                      'HLRAlgo_PolyHidingData.hxx',
+                                      'HLRAlgo_Array1OfPHDat.hxx',
+                                      'ShapeUpgrade_UnifySameDomain.hxx'
+                                      ]
 
 # some typedefs parsed by CppHeader can't be wrapped
 # and generate SWIG syntax errors. We just forget
@@ -217,7 +195,8 @@ TYPEDEF_TO_EXCLUDE = ['Handle_Standard_Transient',
                       'SelectMgr_MapOfObjectSensitives',
                       'Graphic3d_IndexedMapOfAddress',
                       'Graphic3d_MapOfObject',
-                      'Storage_PArray'
+                      'Storage_PArray',
+                      'Interface_StaticSatisfies'
                      ]
 
 
@@ -275,8 +254,6 @@ GRAPHIC3D_DEFINE_HEADER = '''
 '''
 
 NCOLLECTION_HEADER_TEMPLATE = '''
-%define Handle(Class) opencascade::handle<Class>
-%enddef
 %include "NCollection_TypeDef.hxx";
 %include "NCollection_Array1.hxx";
 %include "NCollection_Array2.hxx";
@@ -294,8 +271,6 @@ NCOLLECTION_HEADER_TEMPLATE = '''
 %include "NCollection_UBTree.hxx";
 %include "NCollection_UBTreeFiller.hxx";
 %include "NCollection_Lerp.hxx";
-%include "NCollection_Handle.hxx";
-%include "NCollection_CellFilter.hxx";
 %include "NCollection_Vector.hxx";
 %include "NCollection_Vec2.hxx";
 %include "NCollection_Vec3.hxx";
@@ -314,11 +289,19 @@ TEMPLATES_TO_EXCLUDE = ['gp_TrsfNLerp',
                         'NCollection_CellFilter',
                         'BVH_PrimitiveSet',
                         'BVH_Builder',
+                        'std::pair',
                         # for Graphic3d to compile
                         'Graphic3d_UniformValue',
                         'NCollection_Shared',
+                        'NCollection_Handle',
+                        'NCollection_DelMapNode'
                         #'NCollection_IndexedMap',
                         #'NCollection_DataMap'
+                        'BOPTools_BoxSet',
+                        'BOPTools_PairSelector',
+                        'BOPTools_BoxSet',
+                        'BOPTools_BoxSelector',
+                        'BOPTools_PairSelector'
                         ]
 
 HARRAY1_TEMPLATE = """
@@ -417,10 +400,11 @@ def check_is_persistent(class_name):
     return False
 
 
-def filter_header_list(header_list):
+def filter_header_list(header_list, exclusion_list):
     """ From a header list, remove hxx to HXX_TO_EXCLUDE
+    The files to be excluded is specificed in the exlusion list
     """
-    for header_to_remove in HXX_TO_EXCLUDE:
+    for header_to_remove in exclusion_list:
         if os.path.join(OCE_INCLUDE_DIR, header_to_remove) in header_list:
             header_list.remove(os.path.join(OCE_INCLUDE_DIR, header_to_remove))
         elif os.path.join(SMESH_INCLUDE_DIR, header_to_remove) in header_list:
@@ -440,7 +424,7 @@ def filter_header_list(header_list):
 
 def test_filter_header_list():
     if sys.platform != 'win32':
-        assert filter_header_list(['something', 'somethingWNT']) == ['something']
+        assert filter_header_list(['something', 'somethingWNT'], HXX_TO_EXCLUDE_FROM_CPPPARSER) == ['something']
 
 
 def case_sensitive_glob(wildcard):
@@ -463,16 +447,16 @@ def get_all_module_headers(module_name):
     """
     mh = case_sensitive_glob(os.path.join(OCE_INCLUDE_DIR, '%s.hxx' % module_name))
     mh += case_sensitive_glob(os.path.join(OCE_INCLUDE_DIR, '%s_*.hxx' % module_name))
-    mh += case_sensitive_glob(os.path.join(OCE_INCLUDE_DIR, '%s*.h' % module_name))
-    mh += case_sensitive_glob(os.path.join(OCE_INCLUDE_DIR, 'Handle_%s.hxx*' % module_name))
     mh += case_sensitive_glob(os.path.join(SMESH_INCLUDE_DIR, '%s.hxx' % module_name))
     mh += case_sensitive_glob(os.path.join(SMESH_INCLUDE_DIR, '%s_*.hxx' % module_name))
-    mh += case_sensitive_glob(os.path.join(SMESH_INCLUDE_DIR, '%s*.h' % module_name))
     mh += case_sensitive_glob(os.path.join(SMESH_INCLUDE_DIR, 'Handle_%s.hxx*' % module_name))
     # GEOMAlgo splitter
     mh += case_sensitive_glob(os.path.join(SPLITTER_PATH, '%s_*.hxx' % module_name))
-    mh = filter_header_list(mh)
-    return map(os.path.basename, mh)
+    mh = filter_header_list(mh, HXX_TO_EXCLUDE_FROM_BEING_INCLUDED)
+    headers_list = list(map(os.path.basename, mh))
+    # sort alphabetical order
+    headers_list.sort()
+    return headers_list
 
 
 def test_get_all_module_headers():
@@ -608,8 +592,11 @@ def adapt_header_file(header_content):
             # 'Handle(Graphic3d_DataStructureManager)']
             match = match.replace(" ", "")
             match = (match.split('Handle(')[1]).split(')')[0]
+            #header_content = header_content.replace(orig_match,
+            #                                        'Handle_%s' % match)
             header_content = header_content.replace(orig_match,
-                                                    'Handle_%s' % match)
+                                                    'opencascade::handle<%s>' % match)
+
     # for smesh, remove EXPORTS that cause parser errors
     header_content = header_content.replace("SMESH_EXPORT", "")
     header_content = header_content.replace("SMESHCONTROLS_EXPORT", "")
@@ -661,12 +648,17 @@ def process_templates_from_typedefs(list_of_typedefs):
         template_name = t[1]
         template_type = t[0]
         # we must include
-        if not ("::" in template_type):  #it's not an iterator
+        if not (template_type.endswith("::Iterator") or template_type.endswith("::Type")):  #it's not an iterator
             # check that there's no forbidden template
             wrap_template = True
             for forbidden_template in TEMPLATES_TO_EXCLUDE:
                 if forbidden_template in template_type:
                     wrap_template = False
+            # sometimes the template name is weird (parenthesis, commma etc.)
+            # don't consider this
+            if not "_" in template_name:
+                wrap_template = False
+                print("Template: ", template_name, "skipped because name does'nt contain _.")
             if wrap_template:
                 wrapper_str += "%%template(%s) %s;\n" %(template_name, template_type)
                 # if a NCollection_Array1, extend this template to benefit from pythonic methods
@@ -674,19 +666,23 @@ def process_templates_from_typedefs(list_of_typedefs):
                 # TODO : it should be a good thing to use decorators here, to avoid code duplication
                 if 'NCollection_Array1' in template_type:
                     wrapper_str += NCOLLECTION_ARRAY1_EXTEND_TEMPLATE.replace("NCollection_Array1_Template_Instanciation", template_type)
-        elif (template_name.endswith("Iter")) or ("_ListIteratorOf" in template_name):  # it's a lst iterator, we use another way to wrap the template
-        #%template(TopTools_ListIteratorOfListOfShape) NCollection_TListIterator<TopTools_ListOfShape>;
+        elif template_name.endswith("Iter") or "_ListIteratorOf" in template_name:  # it's a lst iterator, we use another way to wrap the template
+        # #%template(TopTools_ListIteratorOfListOfShape) NCollection_TListIterator<TopTools_ListOfShape>;
+            print(template_type)
             if "IteratorOf" in template_name:
-                #print(template_type)
-                #typ = template_name.split('_')[0] + '_' + template_name.split('IteratorOf')[1]
-                typ = (template_type.split('<')[1]).split('>')[0]
-                #print(typ)
-                #print()
+                if not "opencascade::handle" in template_type:
+                    typ = (template_type.split('<')[1]).split('>')[0]
+                    print("Le type est:", typ)
+        #         #print()
+                else:
+                    h_typ = (template_type.split('<')[2]).split('>')[0]
+                    typ = "opencascade::handle<%s>" % h_typ
+                    print("Le type est:", typ)
             elif template_name.endswith("Iter"):
                 typ = template_name.split('Iter')[0]
             wrapper_str += "%%template(%s) NCollection_TListIterator<%s>;\n" %(template_name, typ)
         #check_dependency(must_include)
-    wrapper_str += "/* end templates declaration */\n\n"
+    wrapper_str += "/* end templates declaration */\n"
     return wrapper_str
 
 
@@ -786,6 +782,8 @@ def adapt_param_type_and_name(param_type_and_name):
         adapted_param_type_and_name = 'FairCurve_AnalysisCode &OutValue'
     else:
         adapted_param_type_and_name = param_type_and_name
+    if "& &" in adapted_param_type_and_name:
+      adapted_param_type_and_name = adapted_param_type_and_name.replace("& &", "&")
     return adapted_param_type_and_name
 
 
@@ -816,11 +814,10 @@ def check_dependency(item):
         item = item.replace(f, '')
     if len(item) == 0:
         return False
-    tmp = item.split('_')
-    if tmp[0] == 'Handle':
-        module = tmp[1]
-    else:
-        module = tmp[0]
+    # the element can be either a template ie Handle(Something) else Something_
+    if item.startswith("Handle ("):
+      item = item.split("Handle ( ")[1].split(")")[0].strip()
+    module = item.split('_')[0]
     if module == 'Font':  # forget about Font dependencies, issues with FreeType
         return True
     if module != CURRENT_MODULE:
@@ -845,6 +842,8 @@ def adapt_return_type(return_type):
     # replace Standard_CString with char *
     return_type = return_type.replace("Standard_CString", "const char *")
     # remove const if const virtual double *  # SMESH only
+    return_type = return_type.replace(": static", "static")
+    return_type = return_type.replace(": const", "const")
     return_type = return_type.replace("const virtual double *", "virtual double *")
     return_type = return_type.replace("DistrType", "StdMeshers_NumberOfSegments::DistrType")
     return_type = return_type.replace("TWireVector", "StdMeshers_MEFISTO_2D::TWireVector")
@@ -969,6 +968,7 @@ def process_function_docstring(f):
         ret = ret.replace("&", "")
         ret = ret.replace("virtual", "")
         ret = fix_type(ret)
+        ret = ret.replace(": static ", "")
         ret = ret.replace("static ", "")
         ret = ret.strip()
         returns_string += " %s\n" % ret
@@ -1021,22 +1021,24 @@ def process_function_docstring(f):
 
 def adapt_default_value(def_value):
     """ adapt default value """
-    def_value = def_value.replace(": : ", "")
+    #def_value = def_value.replace(": : ", "")
     def_value = def_value.replace(' ', '')
     def_value = def_value.replace('"', "'")
     def_value = def_value.replace("''", '""')
     def_value = def_value.replace("PConfusion", "::Confusion")
     def_value = def_value.replace("PrecisionConfusion", "Precision::Confusion")
+    def_value = def_value.replace("Precision::::Confusion", "Precision::Confusion")
     return def_value
 
 
 def adapt_default_value_parmlist(parm):
     """ adapts default value to be used in swig parameter list """
     def_value = parm["defaultValue"]
-    def_value = def_value.replace(": : ", "")
+    #def_value = def_value.replace(": : ", "")
     def_value = def_value.replace(' ', '')
     def_value = def_value.replace("PConfusion", "::Confusion")
     def_value = def_value.replace("PrecisionConfusion", "Precision::Confusion")
+    def_value = def_value.replace("Precision::::Confusion", "Precision::Confusion")
     return def_value
 
 
@@ -1059,6 +1061,8 @@ def filter_member_functions(class_public_methods, member_functions_to_exclude, c
             print("Constructor skipped for abstract class")
             continue
         elif method_name == "ShallowCopy":  # specific to 0.17.1 and Mingw
+            continue
+        elif "<" in method_name:
             continue
         else:  # finally, we add this method to process
             member_functions_to_process.append(public_method)
@@ -1116,6 +1120,8 @@ def process_function(f):
     if "operator <<" in function_name:
         return ""
     if "operator ^" in function_name:
+        return ""
+    if "operator !" in function_name:
         return ""
     # special process for operator ==
     if "operator ==" in function_name:
@@ -1267,6 +1273,8 @@ def process_function(f):
         return_type = ""
     else:
         return_type = adapt_return_type(f["rtnType"])
+    if f['static'] and not 'static' in return_type:
+      return_type = 'static ' + return_type
     # First case we handle : byref Standard_Integer and Standard_Real
     # this is wrapped the followind way:
     # one function Get* that returns the object
@@ -1348,7 +1356,7 @@ def process_methods(methods_list):
     # sort methods according to the method name
     sorted_methods_list = sorted(methods_list, key=itemgetter('name'))
     for function in sorted_methods_list:
-        # don't process frind methods
+        # don't process friend methods
         if not function["friend"]:
             ok_to_wrap = process_function(function)
             if ok_to_wrap:
@@ -1489,6 +1497,7 @@ def fix_type(type_str):
     type_str = type_str.replace("Standard_Real", "float")
     type_str = type_str.replace("Standard_Integer", "int")
     type_str = type_str.replace("const", "")
+    type_str = type_str.replace("& &", "&")
     return type_str
 
 
@@ -1527,6 +1536,28 @@ def process_hsequence():
     wrapper_str += "\n"
     return wrapper_str
 
+def process_handles(classes_dict, exclude_classes, exclude_member_functions):
+  """ Check wether a class has to be wrapped as a handle
+  using the wrap_handle swig macro.
+  This code is a bit redundant with process_classes, but this step
+  appeared to be placed before typedef ans templates definition
+  """
+  wrap_handle_str = "/* handles */\n"
+  if exclude_classes == ['*']:  # don't wrap any class
+      return ""
+  inheritance_tree_list = build_inheritance_tree(classes_dict)
+  for klass in inheritance_tree_list:
+      # class name
+      class_name = klass["name"]
+      if class_name in exclude_classes:
+          # if the class has to be excluded,
+          # we go on with the next one to be processed
+          continue
+
+      if check_has_related_handle(class_name) or class_name == "Standard_Transient":
+          wrap_handle_str += "%%wrap_handle(%s)\n" % class_name
+  wrap_handle_str += "/* end handles declaration */\n\n"
+  return wrap_handle_str
 
 def process_classes(classes_dict, exclude_classes, exclude_member_functions):
     """ Generate the SWIG string for the class wrapper.
@@ -1540,18 +1571,6 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         return ""
     class_def_str = ""
     inheritance_tree_list = build_inheritance_tree(classes_dict)
-    for klass in inheritance_tree_list:
-        # class name
-        class_name = klass["name"]
-        if class_name in exclude_classes:
-            # if the class has to be excluded,
-            # we go on with the next one to be processed
-            continue
-
-        if check_has_related_handle(class_name) or class_name == "Standard_Transient":
-            class_def_str += "%%wrap_handle(%s)\n" % class_name
-
-    class_def_str += '\n'
 
     for klass in inheritance_tree_list:
         # class name
@@ -1606,17 +1625,20 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             nested_class_name = n["name"]
             print("Found nested class %s::%s" % (class_name, nested_class_name))
             class_def_str += "\t\tclass " + nested_class_name + " {};\n"
-        #######
+        ####### class enums
         if class_enums_list:
             class_def_str += process_enums(class_enums_list)
         # process class properties here
         properties_str = ''
         for property_value in list(klass["properties"]['public']):
+            if 'NCollection_Vec2' in property_value['type']: # issue in Aspect_Touch
+                print('Warning: wrong type in class property : NCollection_Vec2')
+                continue
             if 'using' in property_value['type']:
-                print('Warning: wrong type in class property using')
+                print('Warning: wrong type in class property : using')
                 continue
             if 'return' in property_value['type']:
-                print('Warning: wrong type in class property using')
+                print('Warning: wrong type in class property : return')
                 continue 
             if 'std::map<' in property_value['type']:
                 print('Warning: wrong type in class property std::map')
@@ -1628,6 +1650,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             else:
                 temp = "\t\t%s %s;\n" % (fix_type(property_value['type']), property_value['name'])
             properties_str += temp
+        # @TODO : classe typedefs (for instance BRepGProp_MeshProps)
         class_def_str += properties_str
         # process methods here
         class_public_methods = klass['methods']['public']
@@ -1726,7 +1749,7 @@ def parse_module(module_name):
         module_headers += glob.glob('%s/%s.hxx' % (SMESH_INCLUDE_DIR, module_name))
         module_headers += glob.glob('%s/*.hxx' % (SPLITTER_PATH))
     # filter those headers
-    module_headers = filter_header_list(module_headers)
+    module_headers = filter_header_list(module_headers, HXX_TO_EXCLUDE_FROM_CPPPARSER)
     cpp_headers = map(parse_header, module_headers)
     module_typedefs = {}
     module_enums = []
@@ -1750,17 +1773,25 @@ class ModuleWrapper(object):
         # Reinit global variables
         global CURRENT_MODULE, PYTHON_MODULE_DEPENDENCY
         CURRENT_MODULE = module_name
-        PYTHON_MODULE_DEPENDENCY = ['Standard', 'NCollection']
-        reset_header_depency()
+        # all modules depend, by default, upon Standard, NCollection and others
+        if module_name != 'Standard':
+            PYTHON_MODULE_DEPENDENCY = ['Standard', 'NCollection']
+            reset_header_depency()
+        else:
+            PYTHON_MODULE_DEPENDENCY = []
+        
         print("=== generating SWIG files for module %s ===" % module_name)
         self._module_name = module_name
         self._module_docstring = get_module_docstring(module_name)
         # parse
         typedefs, enums, classes, free_functions = parse_module(module_name)
-        # typedefs
-        self._typedefs_str = process_typedefs(typedefs)
         #enums
         self._enums_str = process_enums(enums)
+        # handles
+        self._wrap_handle_str = process_handles(classes, exclude_classes,
+                                            exclude_member_functions)
+        # templates and typedefs
+        self._typedefs_str = process_typedefs(typedefs)
         #classes
         self._classes_str = process_classes(classes, exclude_classes,
                                             exclude_member_functions)
@@ -1829,12 +1860,8 @@ class ModuleWrapper(object):
         f.write("%%include %s_headers.i\n\n" % self._module_name)
         # for NCollection, we add template classes that can be processed
         # automatically with SWIG
-        if self._module_name == "IntPolyh":
-            f.write(INTPOLYH_HEADER_TEMPLATE)
         if self._module_name == "NCollection":
             f.write(NCOLLECTION_HEADER_TEMPLATE)
-        if self._module_name == "BOPDS":
-            f.write(BOPDS_HEADER_TEMPLATE)
         if self._module_name == "BVH":
             f.write(BVH_HEADER_TEMPLATE)
         if self._module_name == "Prs3d":
@@ -1843,11 +1870,12 @@ class ModuleWrapper(object):
             f.write(GRAPHIC3D_DEFINE_HEADER)
         if self._module_name == "BRepAlgoAPI":
             f.write(BREPALGOAPI_HEADER)
-        # write helper functions
-        # write type_defs
-        f.write(self._typedefs_str)
         # write public enums
         f.write(self._enums_str)
+        # write type_defs
+        f.write(self._typedefs_str)
+        # write wrap_handles
+        f.write(self._wrap_handle_str)
         # write classes_definition
         f.write(self._classes_str)
         # write free_functions definition
@@ -1861,13 +1889,15 @@ class ModuleWrapper(object):
         h = open(os.path.join(SWIG_OUTPUT_PATH, "%s_headers.i" % self._module_name), "w")
         h.write(get_license_header())
         h.write("%{\n")
+        if self._module_name == "Adaptor3d":
+            h.write("#include<Adaptor2d_HCurve2d.hxx>\n")
         module_headers = glob.glob('%s/%s_*.hxx' % (OCE_INCLUDE_DIR, self._module_name))
         module_headers += glob.glob('%s/%s.hxx' % (OCE_INCLUDE_DIR, self._module_name))
         module_headers += glob.glob('%s/%s_*.hxx' % (SMESH_INCLUDE_DIR, self._module_name))
         module_headers += glob.glob('%s/%s.hxx' % (SMESH_INCLUDE_DIR, self._module_name))
         module_headers.sort()
-        for module_header in filter_header_list(module_headers):
-            if not os.path.basename(module_header) in HXX_TO_EXCLUDE:
+        for module_header in filter_header_list(module_headers, HXX_TO_EXCLUDE_FROM_BEING_INCLUDED):
+            if not os.path.basename(module_header) in HXX_TO_EXCLUDE_FROM_BEING_INCLUDED:
                 h.write("#include<%s>\n" % os.path.basename(module_header))
         # then we add *all* the headers
         # that come with a dependency.
@@ -1926,7 +1956,7 @@ def process_all_toolkits():
         pool = Pool()
         try:
             # the timeout is required for proper handling when exciting the parallel build
-            pool.map_async(process_toolkit, TOOLKITS).get(9999999999)
+            pool.map_async(process_toolkit, TOOLKITS).get(timeout=1000)
         except KeyboardInterrupt:
             pool.terminate()
             pool.join()
