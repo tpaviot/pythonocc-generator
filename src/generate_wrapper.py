@@ -857,17 +857,13 @@ def check_dependency(item):
     if item.startswith("Handle ("):
         item = item.split("Handle ( ")[1].split(")")[0].strip()
         module = item.split('_')[0]
-        case = 1
     elif item.startswith("Handle_"):
         module = item.split('_')[1]
-        case = 1
     elif item.startswith("opencascade::handle<"):
         item = item.split("<")[1].split(">")[0]
         module = item.split('_')[0]
-        case = 1
     elif item.count('_') > 0:  # Standard_Integer or NCollection_CellFilter_InspectorXYZ
         module = item.split('_')[0]
-        case = 2
     else:  # do nothing, it's a trap
         return False
     # we strip the module, who knows, there maybe trailing spaces
@@ -876,11 +872,6 @@ def check_dependency(item):
     if module == 'Font':  # forget about Font dependencies, issues with FreeType
         return True
     if module != CURRENT_MODULE:
-      if case == 1 :
-          # need to be added to the list of headers
-          if (not module in HEADER_DEPENDENCY) and (is_module(module)):
-              HEADER_DEPENDENCY.append(module)
-      elif case == 2 :
           # need to be added to the list of dependend object
           if (not module in PYTHON_MODULE_DEPENDENCY) and (is_module(module)):
               PYTHON_MODULE_DEPENDENCY.append(module)
