@@ -119,7 +119,8 @@ TOOLKIT_OCAF = {
             'TKPLCAF': ['MDF', 'MDataStd', 'MDocStd', 'MFunction',
                         'PDF', 'PDataStd', 'PDocStd', 'PFunction'],
             'TKTObj': ['TObj'],
-            'TKXCAF': ['XCAFApp', 'XCAFDimTolObjects', 'XCAFDoc', 'XCAFPrs', 'XCAFView'],
+            'TKXCAF': ['XCAFApp', 'XCAFDimTolObjects', 'XCAFDoc', 'XCAFPrs', 'XCAFView',
+                       'XCAFNoteObjects'],
             'TKXDESTEP': ['STEPCAFControl'],
             'TKXDEIGES': ['IGESCAFControl'],
             }
@@ -907,6 +908,7 @@ OCE_MODULES = [
                                   'Resource', 'TopLoc'],[],
             {'XCAFDimTolObjects_DimensionObject' : ['GetPoints']}),
            ('XCAFView', [], []),
+           ('XCAFNoteObjects', [], []),
            ### TKCAF
            ('TDataXtd',  ['TopTools', 'TCollection', 'Message', 'TopLoc', 'TShort'], []),
            ('TNaming',  ['TCollection', 'Message'], []),
