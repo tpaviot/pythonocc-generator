@@ -14,21 +14,20 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import print_function
-
+###########
+# imports #
+###########
+import configparser
+import datetime
 import glob
+from operator import itemgetter
 import os
 import os.path
-try:  # Python2
-    import ConfigParser
-except:  # Python3
-    import configparser as ConfigParser
-import sys
+import platform
 import re
-from operator import itemgetter
+import sys
 
 from Modules import *
-
 
 # import CppHeaderParser
 def path_from_root(*pathelems):
@@ -38,7 +37,11 @@ sys.path.append(path_from_root('src', 'robotpy-cppheaderparser'))
 
 import CppHeaderParser
 
-all_toolkits = [TOOLKIT_Foundation,
+####################
+# Global variables #
+####################
+
+ALL_TOOLKITS = [TOOLKIT_Foundation,
                 TOOLKIT_Modeling,
                 TOOLKIT_Visualisation,
                 TOOLKIT_DataExchange,
@@ -46,16 +49,12 @@ all_toolkits = [TOOLKIT_Foundation,
                 TOOLKIT_SMesh,
                 TOOLKIT_VTK]
 TOOLKITS = {}
-for tk in all_toolkits:
+for tk in ALL_TOOLKITS:
     TOOLKITS.update(tk)
 
-#
-# Load configuration file and setup settings
-#
-header_year = "2008-2019"
-author = "Thomas Paviot"
-author_email = "tpaviot@gmail.com"
-license_header = """
+LICENSE_HEADER = """/*
+Copyright 2008-2019 Thomas Paviot (tpaviot@gmail.com)
+
 This file is part of pythonOCC.
 pythonOCC is free software: you can redistribute it and/or modify
 it under the terms of the GNU Lesser General Public License as published by
@@ -69,8 +68,13 @@ GNU Lesser General Public License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with pythonOCC.  If not, see <http://www.gnu.org/licenses/>.
+*/
 """
-config = ConfigParser.ConfigParser()
+
+#
+# Load configuration file and setup settings
+#
+config = configparser.ConfigParser()
 config.read('wrapper_generator.conf')
 # pythonocc version
 PYTHONOCC_VERSION = config.get('pythonocc-core', 'version')
@@ -78,7 +82,7 @@ PYTHONOCC_VERSION = config.get('pythonocc-core', 'version')
 try:
     oce_base_dir = config.get('OCE', 'base_dir')
     OCE_INCLUDE_DIR = os.path.join(oce_base_dir, 'include', 'oce')
-except ConfigParser.NoOptionError:
+except configparser.NoOptionError:
     OCE_INCLUDE_DIR = config.get('OCE', 'include_dir')
 if not os.path.isdir(OCE_INCLUDE_DIR):
     raise AssertionError("OCE include dir %s not found." % OCE_INCLUDE_DIR)
@@ -86,7 +90,7 @@ if not os.path.isdir(OCE_INCLUDE_DIR):
 # useful to find for cdl files
 try:
     OCE_SRC_DIR = config.get('OCE', 'src_dir')
-except ConfigParser.NoOptionError:
+except configparser.NoOptionError:
     OCE_SRC_DIR = "NotSet"
 if not os.path.isdir(OCE_SRC_DIR):
     print("Warning : OCE_SRC not set, you won't have module documentation")
@@ -384,6 +388,41 @@ NCOLLECTION_ARRAY1_EXTEND_TEMPLATE = '''
 };
 '''
 
+
+def generate_timestamp():
+    """ returns a timestand to be appended to the SWIG file
+    Useful for development
+    """
+    now = '{:%Y-%m-%d %H:%M:%S}'.format(datetime.datetime.now())
+    os_name = platform.linux_distribution()[0] + ' ' + platform.system() + ' ' + platform.release()
+    # find the OCC VERSION targeted by the wrapper
+    # the OCCT version is available from the Standard_Version.hxx header
+    # e.g. define OCC_VERSION_COMPLETE     "7.4.0"
+    standard_version_header = os.path.join(OCE_INCLUDE_DIR, "Standard_Version.hxx")
+    occ_version = "unknown"
+    if os.path.isfile(standard_version_header):
+        with open(standard_version_header, 'r') as f:
+            file_lines = f.readlines()
+        for l in file_lines:
+            if l.startswith("#define OCC_VERSION_COMPLETE"):
+                occ_version = l.split('"')[1].strip()
+    timestamp = """
+/*
+This file was automatically generated using the pythonocc_generator, see
+https://github.com/tpaviot/pythonocc-generator.
+
+This file is platform independant, but was generated under the following
+conditions:
+
+- time : %s
+- operating system : %s
+- occt version targeted : %s
+*/
+
+""" % (now, os_name, occ_version)
+    return timestamp
+
+
 def reset_header_depency():
     global HEADER_DEPENDENCY
     HEADER_DEPENDENCY = ['TColgp', 'TColStd', 'TCollection', 'Storage']
@@ -481,14 +520,6 @@ def check_has_related_handle(class_name):
     if class_name.startswith("Graphic3d"):
         other_possible_filename = os.path.join(OCE_INCLUDE_DIR, "%s_Handle.hxx" % class_name)
     return os.path.exists(filename) or os.path.exists(other_possible_filename) or need_handle(class_name)
-
-def get_license_header():
-    """ Write the header to the different SWIG files
-    """
-    header = "/*\nCopyright %s %s (%s)\n\n" % (header_year, author, author_email)
-    header += license_header
-    header += "\n*/\n"
-    return header
 
 
 def write__init__():
@@ -803,8 +834,15 @@ def test_adapt_param_type_and_name():
 
 
 def check_dependency(item):
-    """ Given a typedef, classname, parameter etc.
-    if not the module prefix then add dependency
+    """ For any type or class name passe to this function,
+    returns the module name to which it belongs.
+    a. Handle_Geom_Curve -> Geom
+    b. Handle ( Geom2d_Curve) -> Geom2d
+    c. opencascade::handle<TopoDS_TShape> -> TopoDS
+    d. TopoDS_Shape -> TopoDS
+    For the case 1 (a, b, c), the module has to be added to the headers list
+    For the case 2 (d), the module TopoDS.i has to be added as a dependency in
+    order that the class hierarchy is propagated.
     """
     if not item:
         return False
@@ -815,15 +853,50 @@ def check_dependency(item):
     if len(item) == 0:
         return False
     # the element can be either a template ie Handle(Something) else Something_
+    # or opencascade::handle<Some_Class>
     if item.startswith("Handle ("):
-      item = item.split("Handle ( ")[1].split(")")[0].strip()
-    module = item.split('_')[0]
+        item = item.split("Handle ( ")[1].split(")")[0].strip()
+        module = item.split('_')[0]
+        case = 1
+    elif item.startswith("Handle_"):
+        module = item.split('_')[1]
+        case = 1
+    elif item.startswith("opencascade::handle<"):
+        item = item.split("<")[1].split(">")[0]
+        module = item.split('_')[0]
+        case = 1
+    elif item.count('_') > 0:  # Standard_Integer or NCollection_CellFilter_InspectorXYZ
+        module = item.split('_')[0]
+        case = 2
+    else:  # do nothing, it's a trap
+        return False
+    # we strip the module, who knows, there maybe trailing spaces
+    module = module.strip()
+    # TODO : is the following line really necessary ?
     if module == 'Font':  # forget about Font dependencies, issues with FreeType
         return True
     if module != CURRENT_MODULE:
-        # need to be added to the list of dependend object
-        if (not module in PYTHON_MODULE_DEPENDENCY) and (is_module(module)):
-            PYTHON_MODULE_DEPENDENCY.append(module)
+      if case == 1 :
+          # need to be added to the list of headers
+          if (not module in HEADER_DEPENDENCY) and (is_module(module)):
+              HEADER_DEPENDENCY.append(module)
+      elif case == 2 :
+          # need to be added to the list of dependend object
+          if (not module in PYTHON_MODULE_DEPENDENCY) and (is_module(module)):
+              PYTHON_MODULE_DEPENDENCY.append(module)
+    return module
+
+
+def test_check_dependency():
+    dep1 = check_dependency("Handle_Geom_Curve")
+    assert dep1 == "Geom"
+    dep2 = check_dependency("Handle ( Geom2d_Curve)")
+    assert dep2 == "Geom2d"
+    dep3 = check_dependency("opencascade::handle<TopoDS_TShape>")
+    print(dep3)
+    assert dep3 == "TopoDS"
+    dep4 = check_dependency("Standard_Integer")
+    assert dep4 == "Standard"
 
 
 def adapt_return_type(return_type):
@@ -1812,7 +1885,8 @@ class ModuleWrapper(object):
         #
         f = open(os.path.join(SWIG_OUTPUT_PATH, "%s.i" % self._module_name), "w")
         # write header
-        f.write(get_license_header())
+        f.write(LICENSE_HEADER)
+        f.write(generate_timestamp())
         # write module docstring
         # for instante define GPDOCSTRING
         docstring_macro = "%sDOCSTRING" % self._module_name.upper()
@@ -1887,9 +1961,10 @@ class ModuleWrapper(object):
         # Headers
         #
         h = open(os.path.join(SWIG_OUTPUT_PATH, "%s_headers.i" % self._module_name), "w")
-        h.write(get_license_header())
+        h.write(LICENSE_HEADER)
+        h.write(generate_timestamp())
         h.write("%{\n")
-        if self._module_name == "Adaptor3d":
+        if self._module_name == "Adaptor3d": # occt bug in headr file, won't compile otherwise
             h.write("#include<Adaptor2d_HCurve2d.hxx>\n")
         module_headers = glob.glob('%s/%s_*.hxx' % (OCE_INCLUDE_DIR, self._module_name))
         module_headers += glob.glob('%s/%s.hxx' % (OCE_INCLUDE_DIR, self._module_name))
@@ -1907,9 +1982,7 @@ class ModuleWrapper(object):
             for header_basename in get_all_module_headers(dep):
                 h.write("#include<%s>\n" % header_basename)
         for add_dep in self._additional_dependencies:
-            #print("Processing additional header requirement: %s" % add_dep)
             for header_basename in get_all_module_headers(add_dep):
-                #print("Adding header: %s" % header_basename)
                 h.write("#include<%s>\n" % header_basename)
         h.write("%};\n")
         for dep in PYTHON_MODULE_DEPENDENCY:
@@ -1980,6 +2053,7 @@ def run_unit_tests():
     test_filter_member_functions()
     test_adapt_param_type_and_name()
     test_adapt_default_value()
+    test_check_dependency()
     print("done.")
 
 
@@ -1991,6 +2065,3 @@ if __name__ == '__main__':
     else:
         write__init__()
         process_all_toolkits()
-
-    # to process only one toolkit, uncomment the following line and change the toolkit name
-    #process_toolkit("TKernel")
