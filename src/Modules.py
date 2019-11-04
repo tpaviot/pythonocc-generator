@@ -97,7 +97,8 @@ TOOLKIT_DataExchange = {
                            'RWStepRepr', 'StepGeom', 'RWStepGeom',
                            'StepShape', 'RWStepShape', 'StepData'],
             'TKIGES': ['IGESControl', 'IGESData', 'IGESToBRep'],
-            'TKXSBase': ['Interface', 'IFSelect', 'XSControl', 'Transfer', 'TransferBRep'],
+            'TKXSBase': ['Interface', 'IFSelect', 'XSControl', 'Transfer', 'TransferBRep',
+                         'MoniTool'],
             'TKVRML': ['Vrml', 'VrmlAPI', 'VrmlConverter', 'VrmlData'],
             }
 
@@ -808,6 +809,7 @@ OCE_MODULES = [
            ('XSControl', ['Message', 'TopLoc', 'Dico', 'Transfer'], []),
            ('Transfer', [], ['Transfer_ProcessForFinder']),
            ('TransferBRep', ['TopLoc'], []),
+           ('MoniTool', [], []),
            ### TKVRML
            ('Vrml', [], []),
            ('VrmlAPI', ['Message', 'Geom', 'GeomAdaptor', 'TShort',
