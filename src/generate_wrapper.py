@@ -18,7 +18,6 @@
 # imports #
 ###########
 import configparser
-import datetime
 import glob
 from operator import itemgetter
 import os
@@ -140,7 +139,9 @@ HXX_TO_EXCLUDE_FROM_CPPPARSER = ['NCollection_StlIterator.hxx',
                                  'IntWalk_PWalking.hxx',
                                  'HLRAlgo_PolyHidingData.hxx',
                                  'HLRAlgo_Array1OfPHDat.hxx',
-                                 'ShapeUpgrade_UnifySameDomain.hxx']
+                                 'ShapeUpgrade_UnifySameDomain.hxx',
+                                 'Standard_Dump.hxx'  # to avoid a dependency of Standard over TCollection
+                                 ]
 
 # some includes fail at being compiled
 HXX_TO_EXCLUDE_FROM_BEING_INCLUDED = [# following file includes a AIS_LocalStatus.hxx
@@ -393,7 +394,6 @@ def generate_timestamp():
     """ returns a timestand to be appended to the SWIG file
     Useful for development
     """
-    now = '{:%Y-%m-%d %H:%M:%S}'.format(datetime.datetime.now())
     os_name = platform.linux_distribution()[0] + ' ' + platform.system() + ' ' + platform.release()
     # find the OCC VERSION targeted by the wrapper
     # the OCCT version is available from the Standard_Version.hxx header
@@ -414,12 +414,11 @@ https://github.com/tpaviot/pythonocc-generator.
 This file is platform independant, but was generated under the following
 conditions:
 
-- time : %s
 - operating system : %s
 - occt version targeted : %s
 */
 
-""" % (now, os_name, occ_version)
+""" % (os_name, occ_version)
     return timestamp
 
 
@@ -1937,10 +1936,10 @@ class ModuleWrapper(object):
             f.write(BREPALGOAPI_HEADER)
         # write public enums
         f.write(self._enums_str)
-        # write type_defs
-        f.write(self._typedefs_str)
         # write wrap_handles
         f.write(self._wrap_handle_str)
+        # write type_defs
+        f.write(self._typedefs_str)
         # write classes_definition
         f.write(self._classes_str)
         # write free_functions definition
