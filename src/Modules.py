@@ -663,7 +663,9 @@ OCE_MODULES = [
              'Graphic3d_ValueInterface': 'As',
              'Graphic3d_ShaderProgram': 'PushVariable',
              'Graphic3d_Group': 'SetGroupPrimitivesAspect',
-             'Graphic3d_GraphicDriver': 'Print'}),
+             'Graphic3d_GraphicDriver': 'Print',
+             'Graphic3d_Layer': ['FrustumCullingBVHBuilder', 'Graphic3d_Layer',  # to avoid circular dep #60
+                                 'SetFrustumCullingBVHBuilder']}),
            ('Visual3d', ['TShort', 'TColQuantity'], [],
             {'Visual3d_View': 'Print',
              'Visual3d_Layer': 'DrawText'}),
@@ -729,7 +731,8 @@ OCE_MODULES = [
            ('RWStepBasic', ['MoniTool','TCollection','Handle_Interface','StepBasic',
                             'Message'], []),
            ('StepRepr', ['MoniTool','TCollection','Interface','StepBasic',
-                         'Message', 'StepData', 'StepGeom', 'StepShape'], []),
+                         'Message', 'StepData', 'StepGeom', 'StepShape'],
+                         ['StepRepr_ReprItemAndMeasureWithUnitAndQRI']),  # avoid cicular dep Issue #60
            ('RWStepRepr', ['MoniTool','TCollection','Interface','StepBasic',
                            'StepData', 'Message', 'StepShape', 'StepGeom'], []),
            ('StepGeom', ['MoniTool','TCollection','Interface','StepBasic',
