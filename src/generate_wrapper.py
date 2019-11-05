@@ -1956,19 +1956,26 @@ class ModuleWrapper:
         module_headers += glob.glob('%s/%s_*.hxx' % (SMESH_INCLUDE_DIR, self._module_name))
         module_headers += glob.glob('%s/%s.hxx' % (SMESH_INCLUDE_DIR, self._module_name))
         module_headers.sort()
+
+        mod_header = open(os.path.join(SWIG_OUTPUT_PATH, "%s_module.hxx" % self._module_name), "w")
+        mod_header.write("#ifndef %s_HXX\n" % self._module_name.upper())
+        mod_header.write("#define %s_HXX\n\n" % self._module_name.upper())
+        mod_header.write(LICENSE_HEADER)
+        mod_header.write("\n")
+
         for module_header in filter_header_list(module_headers, HXX_TO_EXCLUDE_FROM_BEING_INCLUDED):
             if not os.path.basename(module_header) in HXX_TO_EXCLUDE_FROM_BEING_INCLUDED:
-                h.write("#include<%s>\n" % os.path.basename(module_header))
-        # then we add *all* the headers
-        # that come with a dependency.
-        # All those headers may not be necessary
-        # but it's the only way to be sure we don't miss any
+                mod_header.write("#include<%s>\n" % os.path.basename(module_header))
+        mod_header.write("\n#endif // %s_HXX\n" % self._module_name.upper())
+
+        h.write("#include<%s_module.hxx>\n" % self._module_name)
+        h.write("\n//Dependencies\n")
+        # Include all dependencies
         for dep in PYTHON_MODULE_DEPENDENCY:
-            for header_basename in get_all_module_headers(dep):
-                h.write("#include<%s>\n" % header_basename)
+            h.write("#include<%s_module.hxx>\n" % dep)
         for add_dep in self._additional_dependencies:
-            for header_basename in get_all_module_headers(add_dep):
-                h.write("#include<%s>\n" % header_basename)
+            h.write("#include<%s_module.hxx>\n" % add_dep)
+    
         h.write("%};\n")
         for dep in PYTHON_MODULE_DEPENDENCY:
             if is_module(dep):

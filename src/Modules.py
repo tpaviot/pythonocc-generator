@@ -257,8 +257,7 @@ OCE_MODULES = [
              'AppDef_ResConstraintOfMyGradientbisOfBSplineCompute': 'Error',
              'AppDef_ResConstraintOfMyGradientOfCompute': 'Error',
              'AppDef_MultiLine': 'SetParameter'}),
-           ('GeomTools', ['Handle_TCollection', 'Geom_Surface',
-                          'Geom2d_Curve', 'TColStd', 'TColgp'], []),
+           ('GeomTools', ['TColStd', 'TColgp'], []),
            ('GC', [], []),
            ('GCE2d', [], []),
            ('gce', [], []),
@@ -592,7 +591,7 @@ OCE_MODULES = [
            ('BlendFunc', ['Geom2d', 'Geom'], [],
             {'BlendFunc': ['Mults', 'Knots']}),
            ('BRepFilletAPI', ['Adaptor3d', 'GeomAdaptor', 'Geom2d',
-                              'GeomFill', 'BRep', 'Geom2d'
+                              'GeomFill', 'BRep', 'Geom2d',
                               'BRepAdaptor', 'Adaptor2d', 'BRepTools',
                               'Approx', 'TopLoc', 'TopOpeBRepDS',
                               'Extrema', 'Approx', 'BRepBlend', 'Message',
@@ -719,7 +718,7 @@ OCE_MODULES = [
               {},
             ),
            
-           ('AIS', ['Geom_Axis2Placement', 'TopTools', 'Message', 'TShort',
+           ('AIS', ['TopTools', 'Message', 'TShort',
                     'SelectBasics', 'Visual3d', 'HLRAlgo', 'TColQuantity',
                     'SelectMgr'], [],
             {'AIS_LocalContext': ['Reactivate', 'Status'],
@@ -744,9 +743,9 @@ OCE_MODULES = [
            ### TKSTEPBase
            ('StepData', ['MoniTool'], ['StepData_FreeFormEntity', 'StepData_UndefinedEntity'],
             {'StepData_StepReaderData': ['ReadMember', 'ReadEntity']}),
-           ('StepBasic', ['MoniTool','TCollection','Handle_Interface','StepBasic',
+           ('StepBasic', ['MoniTool','TCollection','StepBasic',
                           'Message', 'Interface'], []),
-           ('RWStepBasic', ['MoniTool','TCollection','Handle_Interface','StepBasic',
+           ('RWStepBasic', ['MoniTool','TCollection','StepBasic',
                             'Message'], []),
            ('StepRepr', ['MoniTool','TCollection','Interface','StepBasic',
                          'Message', 'StepData', 'StepGeom', 'StepShape'],
@@ -755,7 +754,7 @@ OCE_MODULES = [
                            'StepData', 'Message', 'StepShape', 'StepGeom'], []),
            ('StepGeom', ['MoniTool','TCollection','Interface','StepBasic',
                          'Message', 'StepShape'], []),
-           ('RWStepGeom', ['MoniTool','TCollection','Handle_Interface','StepBasic',
+           ('RWStepGeom', ['MoniTool','TCollection','StepBasic',
                            'StepData', 'Message', 'StepShape', 'StepRepr'], []),
            ('StepShape', ['MoniTool','TCollection','Interface','StepBasic',
                           'Message'], []),
@@ -814,7 +813,7 @@ OCE_MODULES = [
                            'StepBasic', 'MoniTool'], []),
            ('StepVisual', ['Message', 'Interface', 'MoniTool'], []),
            ###
-           ('StepAP209', ['Message', 'StepBasic', 'gp_Pnt', 'StepGeom',
+           ('StepAP209', ['Message', 'StepBasic', 'StepGeom',
                           'Geom2d', 'StepVisual', 'IFSelect', 'StepAP203', 'Geom',
                           'TopoDS', 'Interface', 'Transfer', 'TopTools',
                           'Quantity', 'TopLoc', 'StepRepr', 'StepData', 'MoniTool'], []),
@@ -864,7 +863,7 @@ OCE_MODULES = [
            ### OCAF
            ###
            ### TKTObj
-           ('TObj', ['Prs3d_Root', 'PCDM', 'CDM', 'CDF', 'Resource'], []),
+           ('TObj', ['PCDM', 'CDM', 'CDF', 'Resource'], []),
            ### TKLCAF
            ('TDF',  [], ['TDF_LabelNode'],
             {'TDF_Attribute': ['FindAttribute'],
