@@ -140,14 +140,12 @@ HXX_TO_EXCLUDE_FROM_CPPPARSER = ['NCollection_StlIterator.hxx',
                                  'HLRAlgo_PolyHidingData.hxx',
                                  'HLRAlgo_Array1OfPHDat.hxx',
                                  'ShapeUpgrade_UnifySameDomain.hxx',
-                                 'Standard_Dump.hxx'  # to avoid a dependency of Standard over TCollection
+                                 'Standard_Dump.hxx',  # to avoid a dependency of Standard over TCollection
+                                 'IMeshData_ParametersListArrayAdaptor.hxx'
                                  ]
 
 # some includes fail at being compiled
-HXX_TO_EXCLUDE_FROM_BEING_INCLUDED = [# following file includes a AIS_LocalStatus.hxx
-                                      # which does not exist in occt7.4.0
-                                      # TODO : report the bug upstream
-                                      'AIS_DataMapOfSelStat.hxx',
+HXX_TO_EXCLUDE_FROM_BEING_INCLUDED = ['AIS_DataMapOfSelStat.hxx', # TODO : report the bug upstream
                                       # same for the following
                                       'AIS_DataMapIteratorOfDataMapOfSelStat.hxx',
                                       # file has to be fixed, missing include
@@ -172,7 +170,8 @@ HXX_TO_EXCLUDE_FROM_BEING_INCLUDED = [# following file includes a AIS_LocalStatu
                                       'IntWalk_PWalking.hxx',
                                       'HLRAlgo_PolyHidingData.hxx',
                                       'HLRAlgo_Array1OfPHDat.hxx',
-                                      'ShapeUpgrade_UnifySameDomain.hxx'
+                                      'ShapeUpgrade_UnifySameDomain.hxx',
+                                      'IMeshData_ParametersListArrayAdaptor.hxx'
                                       ]
 
 # some typedefs parsed by CppHeader can't be wrapped
@@ -201,7 +200,8 @@ TYPEDEF_TO_EXCLUDE = ['Handle_Standard_Transient',
                       'Graphic3d_IndexedMapOfAddress',
                       'Graphic3d_MapOfObject',
                       'Storage_PArray',
-                      'Interface_StaticSatisfies'
+                      'Interface_StaticSatisfies',
+                      'IMeshData::ICurveArrayAdaptor'
                      ]
 
 
@@ -220,6 +220,10 @@ ALL_HSEQUENCE = {}
 # the list of all handles defined by the
 # DEFINE_STANDARD_HANDLE occ macro
 ALL_STANDARD_HANDLES = ['SMESH_MeshVSLink']
+
+# the list of al classes that inherit from Standard_Transient
+# and, as a consequence, need the %wrap_handle and %make_alias macros
+ALL_STANDARD_TRANSIENTS = ['Standard_Transient']
 
 BOPDS_HEADER_TEMPLATE = '''
 %include "BOPCol_NCVector.hxx";
@@ -288,7 +292,7 @@ NCOLLECTION_HEADER_TEMPLATE = '''
 '''
 
 TEMPLATES_TO_EXCLUDE = ['gp_TrsfNLerp',
-                       # IntPolyh templates don't work
+                        # IntPolyh templates don't work
                         'IntPolyh_Array',
                         # and this one also
                         'NCollection_CellFilter',
@@ -521,6 +525,7 @@ def check_has_related_handle(class_name):
     return os.path.exists(filename) or os.path.exists(other_possible_filename) or need_handle(class_name)
 
 
+
 def write__init__():
     """ creates the OCC/__init__.py file.
     In this file, the Version is created.
@@ -536,10 +541,7 @@ def need_handle(class_name):
     Handle to be defined. This is useful when headers define
     handles but no header """
     # @TODO what about DEFINE_RTTI ?
-    if class_name in ALL_STANDARD_HANDLES:
-        return True
-    else:
-        return False
+    return class_name in ALL_STANDARD_HANDLES or class_name in ALL_STANDARD_TRANSIENTS
 
 
 def adapt_header_file(header_content):
@@ -551,7 +553,7 @@ def adapt_header_file(header_content):
     """
     global ALL_STANDARD_HANDLES, ALL_HARRAY1, ALL_HARRAY2, ALL_HSEQUENCE
     # search for STANDARD_HANDLE
-    outer = re.compile("DEFINE_STANDARD_HANDLE[\s]*\([\w\s]+\,+[\w\s]+\)")
+    outer = re.compile("DEFINE_STANDARD_HANDLE[\\s]*\\([\\w\\s]+\\,+[\\w\\s]+\\)")
     matches = outer.findall(header_content)
     if matches:
         for match in matches:
@@ -560,7 +562,7 @@ def adapt_header_file(header_content):
                                                     '//DEFINE_STANDARD_HANDLE')
             ALL_STANDARD_HANDLES.append(match.split('(')[1].split(',')[0])
     # Search for RTTIEXT
-    outer = re.compile("DEFINE_STANDARD_RTTIEXT[\s]*\([\w\s]+\,+[\w\s]+\)")
+    outer = re.compile("DEFINE_STANDARD_RTTIEXT[\\s]*\\([\\w\\s]+\\,+[\\w\\s]+\\)")
     matches = outer.findall(header_content)
     if matches:
         for match in matches:
@@ -568,7 +570,7 @@ def adapt_header_file(header_content):
             header_content = header_content.replace('DEFINE_STANDARD_RTTIEXT',
                                                     '//DEFINE_STANDARD_RTTIEXT')
      # Search for HARRAY1
-    outer = re.compile("DEFINE_HARRAY1[\s]*\([\w\s]+\,+[\w\s]+\)")
+    outer = re.compile("DEFINE_HARRAY1[\\s]*\\([\\w\\s]+\\,+[\\w\\s]+\\)")
     matches = outer.findall(header_content)
     if matches:
         for match in matches:
@@ -580,7 +582,7 @@ def adapt_header_file(header_content):
             print("Found HARRAY1 definition", typename, ':', base_typename)
             ALL_HARRAY1[typename] = base_typename
     # Search for HARRAY2
-    outer = re.compile("DEFINE_HARRAY2[\s]*\([\w\s]+\,+[\w\s]+\)")
+    outer = re.compile("DEFINE_HARRAY2[\\s]*\\([\\w\\s]+\\,+[\\w\\s]+\\)")
     matches = outer.findall(header_content)
     if matches:
         for match in matches:
@@ -592,7 +594,7 @@ def adapt_header_file(header_content):
             print("Found HARRAY2 definition", typename, ':', base_typename)
             ALL_HARRAY2[typename] = base_typename
    # Search for HSEQUENCE
-    outer = re.compile("DEFINE_HSEQUENCE[\s]*\([\w\s]+\,+[\w\s]+\)")
+    outer = re.compile("DEFINE_HSEQUENCE[\\s]*\\([\\w\\s]+\\,+[\\w\\s]+\\)")
     matches = outer.findall(header_content)
     if matches:
         for match in matches:
@@ -604,15 +606,15 @@ def adapt_header_file(header_content):
             print("Found HSEQUENCE definition", typename, ':', base_typename)
             ALL_HSEQUENCE[typename] = base_typename
     header_content = header_content.replace('DEFINE_STANDARD_RTTI_INLINE',
-                                                    '//DEFINE_STANDARD_RTTI_INLINE')
+                                            '//DEFINE_STANDARD_RTTI_INLINE')
     header_content = header_content.replace('Standard_DEPRECATED',
-                                                    '//Standard_DEPRECATED')
+                                            '//Standard_DEPRECATED')
     # TODO : use the @deprecated python decorator to raise a Deprecation exception
     # see https://github.com/tantale/deprecated
     # each time this method is used
     # then we look for Handle(Something) use
     # and replace with Handle_Something
-    outer = re.compile("Handle[\s]*\([\w\s]*\)")
+    outer = re.compile("Handle[\\s]*\\([\\w\\s]*\\)")
     matches = outer.findall(header_content)
     if matches:
         for match in matches:
@@ -660,14 +662,15 @@ def filter_typedefs(typedef_dict):
     if ':' in typedef_dict:
         del typedef_dict[':']
     for key in list(typedef_dict):
+        print("Key:", key)
         if key in TYPEDEF_TO_EXCLUDE:
             del typedef_dict[key]
     return typedef_dict
 
 
 def test_filter_typedefs():
-    a_dict = {'1': 'one', '{': 'two', '3': 'aNCollection_DelMapNodeb'}
-    #assert(filter_typedefs(a_dict) == {'1': 'one'})
+    a_dict = {'1': 'one', '{': 'two', 'NCollection_DelMapNode':'3'}
+    assert filter_typedefs(a_dict) == {'1': 'one'}
 
 
 def process_templates_from_typedefs(list_of_typedefs):
@@ -767,14 +770,14 @@ def process_enums(enums_list):
 
 
 def is_return_type_enum(return_type):
-  """ This method returns True is an enum is returned. For instance:
-  BRepCheck_Status &
-  BRepCheck_Status 
-  """
-  for r in return_type.split():
-      if r in ALL_ENUMS:
-          return True
-  return False
+    """ This method returns True is an enum is returned. For instance:
+    BRepCheck_Status &
+    BRepCheck_Status
+    """
+    for r in return_type.split():
+        if r in ALL_ENUMS:
+            return True
+    return False
 
 
 def adapt_param_type(param_type):
@@ -813,7 +816,7 @@ def adapt_param_type_and_name(param_type_and_name):
     else:
         adapted_param_type_and_name = param_type_and_name
     if "& &" in adapted_param_type_and_name:
-      adapted_param_type_and_name = adapted_param_type_and_name.replace("& &", "&")
+        adapted_param_type_and_name = adapted_param_type_and_name.replace("& &", "&")
     return adapted_param_type_and_name
 
 
@@ -849,7 +852,7 @@ def check_dependency(item):
             "size_type", "void", "reference", "const_", "inline "]
     for f in filt:
         item = item.replace(f, '')
-    if len(item) == 0:
+    if not item:  # if item list is empty
         return False
     # the element can be either a template ie Handle(Something) else Something_
     # or opencascade::handle<Some_Class>
@@ -871,9 +874,9 @@ def check_dependency(item):
     if module == 'Font':  # forget about Font dependencies, issues with FreeType
         return True
     if module != CURRENT_MODULE:
-          # need to be added to the list of dependend object
-          if (not module in PYTHON_MODULE_DEPENDENCY) and (is_module(module)):
-              PYTHON_MODULE_DEPENDENCY.append(module)
+        # need to be added to the list of dependend object
+        if (not module in PYTHON_MODULE_DEPENDENCY) and (is_module(module)):
+            PYTHON_MODULE_DEPENDENCY.append(module)
     return module
 
 
@@ -921,8 +924,8 @@ def adapt_return_type(return_type):
     check_dependency(return_type)
     # check is it is an enum
     if is_return_type_enum(return_type) and "&" in return_type:
-      # remove the reference
-      return_type = return_type.replace("&", "")
+        # remove the reference
+        return_type = return_type.replace("&", "")
     return return_type
 
 
@@ -1008,7 +1011,7 @@ def process_function_docstring(f):
     string_to_return = '\t\t%feature("autodoc", "'
     # first process parameters
     parameters_string = ''
-    if len(f["parameters"]) > 0:
+    if f["parameters"]:  # at leats one element in the least
         for param in f["parameters"]:
             param_type = adapt_param_type(param["type"])
             # remove const and &
@@ -1116,19 +1119,18 @@ def filter_member_functions(class_public_methods, member_functions_to_exclude, c
     """
     member_functions_to_process = []
     for public_method in class_public_methods:
-        #print(public_method)
         method_name = public_method["name"]
         if method_name in member_functions_to_exclude:
             continue
-        elif class_is_abstract and public_method["constructor"]:
+        if class_is_abstract and public_method["constructor"]:
             print("Constructor skipped for abstract class")
             continue
-        elif method_name == "ShallowCopy":  # specific to 0.17.1 and Mingw
+        if method_name == "ShallowCopy":  # specific to 0.17.1 and Mingw
             continue
-        elif "<" in method_name:
+        if "<" in method_name:
             continue
-        else:  # finally, we add this method to process
-            member_functions_to_process.append(public_method)
+        # finally, we add this method to process
+        member_functions_to_process.append(public_method)
     return member_functions_to_process
 
 
@@ -1155,8 +1157,7 @@ def handle_by_value(return_str):
     if match:
         handle_name = match.group('name')
         return handle_name
-    else:
-        return return_str
+    return return_str
 
 
 def process_function(f):
@@ -1315,7 +1316,7 @@ def process_function(f):
     if "TYPENAME" in f["rtnType"]:
         return ""  # something in NCollection
     if function_name == "DEFINE_STANDARD_RTTIEXT":
-      return ""
+        return ""
     if function_name == "Handle":  # TODO: make it possible!
     # this is because Handle (something) some function can not be
     # handled by swig
@@ -1336,8 +1337,8 @@ def process_function(f):
         return_type = ""
     else:
         return_type = adapt_return_type(f["rtnType"])
-    if f['static'] and not 'static' in return_type:
-      return_type = 'static ' + return_type
+    if f['static'] and 'static' not in return_type:
+        return_type = 'static ' + return_type
     # First case we handle : byref Standard_Integer and Standard_Real
     # this is wrapped the followind way:
     # one function Get* that returns the object
@@ -1404,7 +1405,7 @@ def process_free_functions(free_functions_list):
     """ process a string for free functions
     """
     str_free_functions = ""
-    sorted_free_functions_list = sorted(free_functions_list, key=itemgetter('name')) 
+    sorted_free_functions_list = sorted(free_functions_list, key=itemgetter('name'))
     for free_function in sorted_free_functions_list:
         ok_to_wrap = process_function(free_function)
         if ok_to_wrap:
@@ -1491,14 +1492,13 @@ def build_inheritance_tree(classes_dict):
     the more specialized. The more abstract will be
     processed first.
     """
+    global ALL_STANDARD_TRANSIENTS
     # first, we build two dictionaries
     # the first one, level_0_classes
     # contain class names that does not inherit from
     # any other class
     # they will be processed first
     level_0_classes = []
-    # containes
-    level_n_classes = []
     # the inheritance dict contains the relationships
     # betwwen a class and its upper class.
     # the dict schema is as the following :
@@ -1551,6 +1551,18 @@ def build_inheritance_tree(classes_dict):
                                           key=lambda kv: (kv[1], kv[0])):
         if class_name in classes_dict:  # TODO: should always be the case!
             class_list.append(classes_dict[class_name])
+    # Then we build the list of all classes that inherit from Standard_Transient
+    # at some point. These classes will need the %wrap_handle and %make_alias_macros
+    for klass in class_list:
+        upper_class = klass['inherits']
+        class_name = klass['name']
+        if upper_class:
+            upper_class_name = klass['inherits'][0]['class']
+            if upper_class_name in ALL_STANDARD_TRANSIENTS:
+                # this class inherits from a Standard_Transient base class
+                # so we add it to the ALL_STANDARD_TRANSIENTS list:
+                if not klass in ALL_STANDARD_TRANSIENTS:
+                    ALL_STANDARD_TRANSIENTS.append(class_name)
     return class_list
 
 
@@ -1600,27 +1612,28 @@ def process_hsequence():
     return wrapper_str
 
 def process_handles(classes_dict, exclude_classes, exclude_member_functions):
-  """ Check wether a class has to be wrapped as a handle
-  using the wrap_handle swig macro.
-  This code is a bit redundant with process_classes, but this step
-  appeared to be placed before typedef ans templates definition
-  """
-  wrap_handle_str = "/* handles */\n"
-  if exclude_classes == ['*']:  # don't wrap any class
-      return ""
-  inheritance_tree_list = build_inheritance_tree(classes_dict)
-  for klass in inheritance_tree_list:
-      # class name
-      class_name = klass["name"]
-      if class_name in exclude_classes:
-          # if the class has to be excluded,
-          # we go on with the next one to be processed
-          continue
-
-      if check_has_related_handle(class_name) or class_name == "Standard_Transient":
-          wrap_handle_str += "%%wrap_handle(%s)\n" % class_name
-  wrap_handle_str += "/* end handles declaration */\n\n"
-  return wrap_handle_str
+    """ Check wether a class has to be wrapped as a handle
+    using the wrap_handle swig macro.
+    This code is a bit redundant with process_classes, but this step
+    appeared to be placed before typedef ans templates definition
+    """
+    wrap_handle_str = "/* handles */\n"
+    if exclude_classes == ['*']:  # don't wrap any class
+        return ""
+    inheritance_tree_list = build_inheritance_tree(classes_dict)
+    for klass in inheritance_tree_list:
+        # class name
+        class_name = klass["name"]
+        print(class_name)
+        if class_name in exclude_classes:
+            # if the class has to be excluded,
+            # we go on with the next one to be processed
+            continue
+        if check_has_related_handle(class_name) or class_name == "Standard_Transient":
+            wrap_handle_str += "%%wrap_handle(%s)\n" % class_name
+    print("CACA PROOUT")
+    wrap_handle_str += "/* end handles declaration */\n\n"
+    return wrap_handle_str
 
 def process_classes(classes_dict, exclude_classes, exclude_member_functions):
     """ Generate the SWIG string for the class wrapper.
@@ -1702,7 +1715,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
                 continue
             if 'return' in property_value['type']:
                 print('Warning: wrong type in class property : return')
-                continue 
+                continue
             if 'std::map<' in property_value['type']:
                 print('Warning: wrong type in class property std::map')
                 continue  # TODO bug with SMESH_0D_Algo etc.
@@ -1830,9 +1843,9 @@ def parse_module(module_name):
     return module_typedefs, module_enums, module_classes, module_free_functions
 
 
-class ModuleWrapper(object):
-    def __init__(self, module_name, additional_dependencies=[],
-                 exclude_classes=[], exclude_member_functions={}):
+class ModuleWrapper:
+    def __init__(self, module_name, additional_dependencies,
+                 exclude_classes, exclude_member_functions):
         # Reinit global variables
         global CURRENT_MODULE, PYTHON_MODULE_DEPENDENCY
         CURRENT_MODULE = module_name
@@ -1842,7 +1855,7 @@ class ModuleWrapper(object):
             reset_header_depency()
         else:
             PYTHON_MODULE_DEPENDENCY = []
-        
+
         print("=== generating SWIG files for module %s ===" % module_name)
         self._module_name = module_name
         self._module_docstring = get_module_docstring(module_name)
@@ -1852,7 +1865,7 @@ class ModuleWrapper(object):
         self._enums_str = process_enums(enums)
         # handles
         self._wrap_handle_str = process_handles(classes, exclude_classes,
-                                            exclude_member_functions)
+                                                exclude_member_functions)
         # templates and typedefs
         self._typedefs_str = process_typedefs(typedefs)
         #classes
