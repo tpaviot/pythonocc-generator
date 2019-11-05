@@ -706,7 +706,6 @@ def process_templates_from_typedefs(list_of_typedefs):
             elif template_name.endswith("Iter"):
                 typ = template_name.split('Iter')[0]
             wrapper_str += "%%template(%s) NCollection_TListIterator<%s>;\n" %(template_name, typ)
-        #check_dependency(must_include)
     wrapper_str += "/* end templates declaration */\n"
     return wrapper_str
 
@@ -720,6 +719,28 @@ def process_typedefs(typedefs_dict):
     # careful, there might be some strange things returned by CppHeaderParser
     # they should not be taken into account
     filtered_typedef_dict = filter_typedefs(typedefs_dict)
+    # we check if there is any type def type that relies on an opencascade::handle
+    # if this is the case, we must add the corresponding python module
+    # as a dependency otherwise it leads to a runtime issue
+    
+    # #check_dependency(must_include)
+    for template_type in filtered_typedef_dict.values():
+        if "opencascade::handle" in template_type: # we must add a PYTHON DEPENDENCY
+            if template_type.count('<') == 2:
+                h_typ = (template_type.split('<')[2]).split('>')[0]
+            elif template_type.count('<') == 1:
+                h_typ = (template_type.split('<')[1]).split('>')[0]
+            else:
+                print("This template type cannot be handled: ", template_type)
+                continue
+            module = h_typ.split("_")[0]
+            print("Module dep: ", module)
+            if module != CURRENT_MODULE:
+                print()
+                # need to be added to the list of dependend object
+                if (module not in PYTHON_MODULE_DEPENDENCY) and (is_module(module)):
+                    PYTHON_MODULE_DEPENDENCY.append(module)
+
     for typedef_value in filtered_typedef_dict.keys():
         # some occttype defs are actually templated classes,
         # for instance
@@ -867,7 +888,7 @@ def check_dependency(item):
         return True
     if module != CURRENT_MODULE:
         # need to be added to the list of dependend object
-        if (not module in PYTHON_MODULE_DEPENDENCY) and (is_module(module)):
+        if (module not in PYTHON_MODULE_DEPENDENCY) and (is_module(module)):
             PYTHON_MODULE_DEPENDENCY.append(module)
     return module
 
