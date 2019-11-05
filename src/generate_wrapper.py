@@ -662,7 +662,6 @@ def filter_typedefs(typedef_dict):
     if ':' in typedef_dict:
         del typedef_dict[':']
     for key in list(typedef_dict):
-        print("Key:", key)
         if key in TYPEDEF_TO_EXCLUDE:
             del typedef_dict[key]
     return typedef_dict
@@ -701,16 +700,12 @@ def process_templates_from_typedefs(list_of_typedefs):
                     wrapper_str += NCOLLECTION_ARRAY1_EXTEND_TEMPLATE.replace("NCollection_Array1_Template_Instanciation", template_type)
         elif template_name.endswith("Iter") or "_ListIteratorOf" in template_name:  # it's a lst iterator, we use another way to wrap the template
         # #%template(TopTools_ListIteratorOfListOfShape) NCollection_TListIterator<TopTools_ListOfShape>;
-            print(template_type)
             if "IteratorOf" in template_name:
                 if not "opencascade::handle" in template_type:
                     typ = (template_type.split('<')[1]).split('>')[0]
-                    print("Le type est:", typ)
-        #         #print()
                 else:
                     h_typ = (template_type.split('<')[2]).split('>')[0]
                     typ = "opencascade::handle<%s>" % h_typ
-                    print("Le type est:", typ)
             elif template_name.endswith("Iter"):
                 typ = template_name.split('Iter')[0]
             wrapper_str += "%%template(%s) NCollection_TListIterator<%s>;\n" %(template_name, typ)
@@ -1436,15 +1431,11 @@ def must_ignore_default_destructor(klass):
     """
     class_protected_methods = klass['methods']['protected']
     for protected_method in class_protected_methods:
-        #print(public_method)
-        #if klass["name"]=="BOPAlgo_BuilderShape":
-        #  print(protected_method)
         if protected_method["destructor"]:
             return True
     class_private_methods = klass['methods']['private']
     # finally, return True, the default constructor can be safely defined
     for private_method in class_private_methods:
-        #print(public_method)
         if private_method["destructor"]:
             return True
     return False
@@ -1473,13 +1464,11 @@ def class_can_have_default_constructor(klass):
     class_protected_methods = klass['methods']['protected']
     # finally, return True, the default constructor can be safely defined
     for protected_method in class_protected_methods:
-        #print(public_method)
         if protected_method["constructor"]:
             return False
     class_private_methods = klass['methods']['private']
     # finally, return True, the default constructor can be safely defined
     for private_method in class_private_methods:
-        #print(public_method)
         if private_method["constructor"]:
             return False
     # finallyn returns True
@@ -1522,7 +1511,6 @@ def build_inheritance_tree(classes_dict):
         else:
             # prevent multiple inheritance: OCE only has single
             # inheritance
-            #print("\nWARNING : NOT SINGLE INHERITANCE")
             print("CLASS %s has %i ancestors" % (class_name, nbr_upper_classes))
     # then, after that, we process both dictionaries, list so
     # that we reorder class.
@@ -1624,14 +1612,12 @@ def process_handles(classes_dict, exclude_classes, exclude_member_functions):
     for klass in inheritance_tree_list:
         # class name
         class_name = klass["name"]
-        print(class_name)
         if class_name in exclude_classes:
             # if the class has to be excluded,
             # we go on with the next one to be processed
             continue
         if check_has_related_handle(class_name) or class_name == "Standard_Transient":
             wrap_handle_str += "%%wrap_handle(%s)\n" % class_name
-    print("CACA PROOUT")
     wrap_handle_str += "/* end handles declaration */\n\n"
     return wrap_handle_str
 
@@ -1651,7 +1637,6 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
     for klass in inheritance_tree_list:
         # class name
         class_name = klass["name"]
-        #print("class name : %s" % class_name)
         if class_name in exclude_classes:
             # if the class has to be excluded,
             # we go on with the next one to be processed

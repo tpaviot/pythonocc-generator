@@ -515,7 +515,7 @@ OCE_MODULES = [
            ### TKXMesh
            ('XBRepMesh', ['Adaptor2d', 'Geom2dAdaptor', 'Geom', 'BRepAdaptor',
                           'GeomAdaptor', 'Geom2d', 'TopLoc', 'Adaptor3d',
-                          'Message', 'Bnd', 'Poly', 'TShort'], []),
+                          'Message', 'Bnd', 'Poly', 'TShort', 'IMeshTools'], []),
            ### TKBool
            ('TopOpeBRep', ['TColStd', 'TCollection', 'TopLoc', 'TColgp',
                            'Adaptor3d', 'IntAna', 'Message', 'IntSurf',
