@@ -314,7 +314,6 @@ TEMPLATES_TO_EXCLUDE = ['gp_TrsfNLerp',
                         ]
 
 HARRAY1_TEMPLATE = """
-%wrap_handle(HClassName)
 class HClassName : public _Array1Type_, public Standard_Transient {
   public:
     HClassName(const Standard_Integer theLower, const Standard_Integer theUpper);
@@ -328,7 +327,6 @@ class HClassName : public _Array1Type_, public Standard_Transient {
 """
 
 HARRAY2_TEMPLATE = """
-%wrap_handle(HClassName)
 class HClassName : public _Array2Type_, public Standard_Transient {
   public:
     HClassName(const Standard_Integer theRowLow, const Standard_Integer theRowUpp, const Standard_Integer theColLow,
@@ -344,7 +342,6 @@ class HClassName : public _Array2Type_, public Standard_Transient {
 """
 
 HSEQUENCE_TEMPLATE = """
-%wrap_handle(HClassName)
 class HClassName : public _SequenceType_, public Standard_Transient {
     HClassName();
     HClassName(const _SequenceType_& theOther);
@@ -1618,6 +1615,15 @@ def process_handles(classes_dict, exclude_classes, exclude_member_functions):
             continue
         if check_has_related_handle(class_name) or class_name == "Standard_Transient":
             wrap_handle_str += "%%wrap_handle(%s)\n" % class_name
+    for HClassName in ALL_HARRAY1:
+        if HClassName.startswith(CURRENT_MODULE + "_"):
+            wrap_handle_str += "%%wrap_handle(%s)\n" % HClassName
+    for HClassName in ALL_HARRAY2:
+        if HClassName.startswith(CURRENT_MODULE + "_"):
+            wrap_handle_str += "%%wrap_handle(%s)\n" % HClassName
+    for HClassName in ALL_HSEQUENCE:
+        if HClassName.startswith(CURRENT_MODULE + "_"):
+            wrap_handle_str += "%%wrap_handle(%s)\n" % HClassName
     wrap_handle_str += "/* end handles declaration */\n\n"
     return wrap_handle_str
 
