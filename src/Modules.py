@@ -276,7 +276,8 @@ OCE_MODULES = [
            ('BRepTools', ['TShort', 'Poly'], [],
             {'BRepTools_ReShape': 'Merge',
              'BRepTools_History': ['BRepTools_History', 'Merge']}),
-           ('BinTools', ['Message', 'CDF'], []),
+           ('BinTools', ['Message', 'CDF'], [],
+            {'BinTools_Curve2dSet': 'Dump'}), # Fixes undefined ref
            ### TKGeomAlgo
            ('Hatch', [], []),
            ('GeomInt', ['Bnd', 'IntAna', 'Adaptor2d',
@@ -816,7 +817,8 @@ OCE_MODULES = [
                                  'IFSelect_WorkSession': 'theerrhand'}),
            ('XSControl', ['Message', 'TopLoc', 'Dico', 'Transfer', 'MoniTool'], []),
            ('Transfer', ['MoniTool'], ['Transfer_ProcessForFinder']),
-           ('TransferBRep', ['TopLoc', 'MoniTool'], []),
+           ('TransferBRep', ['TopLoc', 'MoniTool'], [],
+           {'TransferBRep': 'BRepCheck'}), # Fixes undefined ref
            ('MoniTool', [], []),
            ### TKVRML
            ('Vrml', [], []),
@@ -833,7 +835,8 @@ OCE_MODULES = [
                 'VrmlData_InBuffer',
                 # new() allocation of abstract classes
                 'VrmlData_ArrayVec3d', 'VrmlData_Texture',
-                'VrmlData_TextureTransform', 'VrmlData_Faceted']),
+                'VrmlData_TextureTransform', 'VrmlData_Faceted'],
+                {'VrmlData_IndexedFaceSet': 'GetNormal'}), # Fixes undefined ref
            ###
            ### OCAF
            ###
