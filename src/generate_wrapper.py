@@ -1386,6 +1386,17 @@ def process_function(f):
         param_type = adapt_param_type(param["type"])
         if "Handle_T &" in param_type:
             return False  # skipe thi function, it will raise a compilation exception, it's something like a template
+        if "T2>" in param_type:
+            # it's a parameter with a template argument, will cause a compilation error as well
+            # for example, from TopoDS.hxx:
+            #template<class T2>
+            #TopoDS_Shape (T2&& theOther, typename std::enable_if<opencascade::std::is_base_of<TopoDS_Shape, T2>::value>::type* = 0)
+            #: myTShape  (std::forward<T2> (theOther).myTShape),
+            # myLocation(std::forward<T2> (theOther).myLocation),
+            #myOrient  (std::forward<T2> (theOther).myOrient)
+            # {
+            #}
+            return False
         if 'array_size' in param:
             param_type_and_name = "%s %s[%s]" % (param_type, param["name"], param["array_size"])
         else:

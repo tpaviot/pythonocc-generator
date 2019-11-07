@@ -265,7 +265,7 @@ OCE_MODULES = [
            ('gce', [], []),
            ### TKBRep
            ('TopoDS', [], [],
-            {'TopoDS_Shape' : ['TopoDS_Shape', 'operator=']}),
+            {'TopoDS_Shape' : ['operator=']}),
            ('TopExp', ['Message', 'TopLoc'], []),
            ('TopTools', ['Message'], []),
            ('BRep', ['TShort', 'Message'], []),
