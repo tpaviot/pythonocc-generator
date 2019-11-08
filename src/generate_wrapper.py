@@ -141,7 +141,10 @@ HXX_TO_EXCLUDE_FROM_CPPPARSER = ['NCollection_StlIterator.hxx',
                                  'HLRAlgo_Array1OfPHDat.hxx',
                                  'ShapeUpgrade_UnifySameDomain.hxx',
                                  'Standard_Dump.hxx',  # to avoid a dependency of Standard over TCollection
-                                 'IMeshData_ParametersListArrayAdaptor.hxx'
+                                 'IMeshData_ParametersListArrayAdaptor.hxx',
+                                 'BRepMesh_CustomBaseMeshAlgo.hxx',
+                                 'BRepMesh_CylinderRangeSplitter.hxx',
+                                 'BRepMesh_DefaultRangeSplitter'
                                  ]
 
 # some includes fail at being compiled
@@ -171,7 +174,10 @@ HXX_TO_EXCLUDE_FROM_BEING_INCLUDED = ['AIS_DataMapOfSelStat.hxx', # TODO : repor
                                       'HLRAlgo_PolyHidingData.hxx',
                                       'HLRAlgo_Array1OfPHDat.hxx',
                                       'ShapeUpgrade_UnifySameDomain.hxx',
-                                      'IMeshData_ParametersListArrayAdaptor.hxx'
+                                      'IMeshData_ParametersListArrayAdaptor.hxx',
+                                      'BRepMesh_CustomBaseMeshAlgo.hxx',
+                                      'BRepMesh_CylinderRangeSplitter.hxx',
+                                      'BRepMesh_DefaultRangeSplitter'
                                       ]
 
 # some typedefs parsed by CppHeader can't be wrapped
@@ -1992,6 +1998,8 @@ class ModuleWrapper:
         h.write("%{\n")
         if self._module_name == "Adaptor3d": # occt bug in headr file, won't compile otherwise
             h.write("#include<Adaptor2d_HCurve2d.hxx>\n")
+        if self._module_name == "AdvApp2Var": # windows compilation issues
+            h.write("#if defined(_WIN32)\n#include <windows.h>\n#endif\n")
         module_headers = glob.glob('%s/%s_*.hxx' % (OCE_INCLUDE_DIR, self._module_name))
         module_headers += glob.glob('%s/%s.hxx' % (OCE_INCLUDE_DIR, self._module_name))
         module_headers += glob.glob('%s/%s_*.hxx' % (SMESH_INCLUDE_DIR, self._module_name))
