@@ -295,6 +295,10 @@ NCOLLECTION_HEADER_TEMPLATE = '''
 %include "NCollection_UtfString.hxx";
 %include "NCollection_UtfIterator.hxx";
 %include "NCollection_SparseArray.hxx";
+
+%ignore NCollection_List::First();
+%ignore NCollection_List::Last();
+%ignore NCollection_TListIterator::Value();
 '''
 
 TEMPLATES_TO_EXCLUDE = ['gp_TrsfNLerp',
