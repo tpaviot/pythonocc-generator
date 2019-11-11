@@ -1949,6 +1949,8 @@ class ModuleWrapper:
             h.write("#include<Adaptor2d_HCurve2d.hxx>\n")
         if self._module_name == "AdvApp2Var": # windows compilation issues
             h.write("#if defined(_WIN32)\n#include <windows.h>\n#endif\n")
+        if self._module_name in ["BRepMesh", "XBRepMesh"]: # wrong header order with gcc4 issue #63
+            h.write("#include<BRepMesh_Delaun.hxx>\n")
         module_headers = glob.glob('%s/%s_*.hxx' % (OCE_INCLUDE_DIR, self._module_name))
         module_headers += glob.glob('%s/%s.hxx' % (OCE_INCLUDE_DIR, self._module_name))
         module_headers += glob.glob('%s/%s_*.hxx' % (SMESH_INCLUDE_DIR, self._module_name))
