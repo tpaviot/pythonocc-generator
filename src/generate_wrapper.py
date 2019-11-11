@@ -78,25 +78,12 @@ config.read('wrapper_generator.conf')
 # pythonocc version
 PYTHONOCC_VERSION = config.get('pythonocc-core', 'version')
 # oce headers location
-try:
-    oce_base_dir = config.get('OCE', 'base_dir')
-    OCE_INCLUDE_DIR = os.path.join(oce_base_dir, 'include', 'oce')
-except configparser.NoOptionError:
-    OCE_INCLUDE_DIR = config.get('OCE', 'include_dir')
+OCE_INCLUDE_DIR = config.get('OCE', 'include_dir')
 if not os.path.isdir(OCE_INCLUDE_DIR):
     raise AssertionError("OCE include dir %s not found." % OCE_INCLUDE_DIR)
-# oce source location
-# useful to find for cdl files
-try:
-    OCE_SRC_DIR = config.get('OCE', 'src_dir')
-except configparser.NoOptionError:
-    OCE_SRC_DIR = "NotSet"
-if not os.path.isdir(OCE_SRC_DIR):
-    print("Warning : OCE_SRC not set, you won't have module documentation")
 
 # smesh, if any
-smesh_base_dir = config.get('SMESH', 'base_dir')
-SMESH_INCLUDE_DIR = os.path.join(smesh_base_dir, 'include', 'smesh')
+SMESH_INCLUDE_DIR = config.get('SMESH', 'include_dir')
 if not os.path.isdir(SMESH_INCLUDE_DIR):
     print("SMESH include dir %s not found. SMESH wrapper not generated." % SMESH_INCLUDE_DIR)
 # swig output path
@@ -940,7 +927,6 @@ def adapt_return_type(return_type):
     return_type = return_type.replace("TAncestorMap", "TopTools_IndexedDataMapOfShapeListOfShape")
     return_type = return_type.replace("ErrorCode", "SMESH_Pattern::ErrorCode")
     return_type = return_type.replace("Fineness", "NETGENPlugin_Hypothesis::Fineness")
-    #ex: Handle_WNT_GraphicDevice const &
     # for instance "const TopoDS_Shape & -> ["const", "TopoDS_Shape", "&"]
     if (('gp' in return_type) and not 'TColgp' in return_type) or ('TopoDS' in return_type):
         return_type = return_type.replace('&', '')
@@ -971,56 +957,15 @@ def test_adapt_function_name():
 
 
 def get_module_docstring(module_name):
-    """ For each module (for example gp, BRepPrimAPI etc.),
-    occt defines a documentation string available in gp.cdl, BRepPrimAPI.cdl etc.
-    This docstring is at the beginning of the file, and follows the following template:
-    package BRepPrimAPI
-
-    ---Purpose: The  BRepBuilderAPI  package   provides  an   Application
-    --          Programming Interface  for the BRep  topology data
-    --          structure.
-    --
-    --          The API is a set of classes aiming to provide :
-    --
-    --          * High level and simple calls  for the most common
-    --          operations.
-
-    Thus, the algorithm to check the module documentation is the following:
-    1. find a file module.cdl
-    2. parse the file, and look for strings that starts with --
-    3. return those lines as a single string.
-
-    Note that the cdl file is available in the /src directory. That is to say
-    this file is not available in the oce binary distribution, one have to have
-    the oce source code to perform the parsing."""
-    if OCE_SRC_DIR is None:
-        print("Waring : OCE_SRC_DIR not set, no docstring for module %s" % module_name)
-        return "No docstring provided."
-    cdl_module_filename = os.path.join(OCE_SRC_DIR, "%s" % module_name, "%s.cdl" % module_name)
-    if not os.path.isfile(cdl_module_filename):
-        return "No docstring provided."
-    # parse the file
-    docstr_l = []
-    with open(cdl_module_filename, "r") as cdl_file:
-        store = False
-        for line in cdl_file:
-            if line.lstrip().startswith("uses") or line.lstrip().startswith("is"):
-                break
-            if line.startswith("package "):
-                store = True
-            if store:
-                line_to_append = line.lstrip()
-                # a few modificztion is required
-                line_to_append = line_to_append.replace("---Purpose: ", "")
-                line_to_append = line_to_append.replace("--", "")
-                line_to_append = line_to_append.replace("  ", " ")
-                line_to_append = line_to_append.replace(" ", " ")
-                line_to_append = line_to_append.replace('"', "'")
-                line_to_append = line_to_append.lstrip()
-                line_to_append = line_to_append.rstrip()
-                docstr_l.append(line_to_append)
-    docstr = '\n'.join(docstr_l[2:])
-    return docstr
+    """ The module docstring is not provided anymore in cdl files since
+    opencascade 7 and higher was released.
+    Instead, the link to the official package documentation is
+    used, for instance, for the gp package:
+    https://www.opencascade.com/doc/occt-7.4.0/refman/html/package_gp.html
+    """
+    module_docstring = "%s module, see official documentation at\n" % module_name
+    module_docstring += "https://www.opencascade.com/doc/occt-7.4.0/refman/html/package_%s.html" % module_name
+    return module_docstring
 
 
 def process_function_docstring(f):
