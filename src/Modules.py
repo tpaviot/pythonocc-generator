@@ -144,7 +144,6 @@ OCE_MODULES = [
            ###
            ###
            ### TKernel
-           ('Dico', [], []),
            ('FSD', [], ['*']),
            ('MMgt', [], []),
            ('Message', [], ['*']),
@@ -775,9 +774,9 @@ OCE_MODULES = [
                             'StepGeom', 'StepRepr', 'StepVisual', 'StepAP214', 'StepDimTol',
                             'MoniTool'], []),
            ('STEPConstruct', ['TopTools', 'IFSelect', 'Message', 'StepBasic',
-                              'Dico', 'Geom2d', 'Geom', 'StepData', 'StepShape',
+                              'Geom2d', 'Geom', 'StepData', 'StepShape',
                               'MoniTool'], []),
-           ('STEPEdit', ['Message', 'StepBasic', 'Dico', 'StepData',
+           ('STEPEdit', ['Message', 'StepBasic', 'StepData',
                          'Interface', 'MoniTool'], []),
            ('GeomToStep', ['Message', 'StepBasic', 'StepBasic', 'StepGeom', 
                            'StepRepr', 'Geom2d', 'Geom', 'MoniTool',
@@ -789,10 +788,10 @@ OCE_MODULES = [
             ['StepToTopoDS_Builder', 'StepToTopoDS_PointVertexMap']),
            ('TopoDSToStep', ['Message', 'StepBasic', 'StepGeom', 'Interface',
                              'StepRepr', 'TopLoc', 'Transfer', 'StepData'], []),
-           ('STEPControl', ['Message', 'TopLoc', 'Dico', 'StepBasic',
+           ('STEPControl', ['Message', 'TopLoc', 'StepBasic',
                             'Transfer', 'Geom2d', 'Geom', 'Interface', 'MoniTool'], []),
            ('STEPSelections', ['Message', 'StepBasic', 'TopoDS', 'StepGeom',
-                               'TopTools', 'TopLoc', 'Dico', 'Geom', 'Geom2d',
+                               'TopTools', 'TopLoc', 'Geom', 'Geom2d',
                                'StepData', 'Transfer', 'MoniTool'], [],
             {'STEPSelections_Counter': ['POP', 'POP2']}),
            ### TKSTEP209
@@ -821,7 +820,7 @@ OCE_MODULES = [
            ('IGESData', ['MoniTool'], [],
             {'IGESData_IGESWriter': ['Send'],
              'IGESData_ParamReader': ['ReadEntity']}),
-           ('IGESControl', ['Message', 'TopLoc', 'Dico', 'TopTools', 'IGESData',
+           ('IGESControl', ['Message', 'TopLoc', 'TopTools', 'IGESData',
                             'Geom', 'Geom2d', 'Interface', 'MoniTool', 'TColGeom',
                             'ShapeExtend'], []),
            ('IGESToBRep', ['TColGeom', 'TopTools', 'MoniTool'], [],
@@ -831,7 +830,7 @@ OCE_MODULES = [
                                  'IFSelect_IntParam': 'StaticName',
                                  'IFSelect_ContextModif': 'Search',
                                  'IFSelect_WorkSession': 'theerrhand'}),
-           ('XSControl', ['Message', 'TopLoc', 'Dico', 'Transfer', 'MoniTool'], []),
+           ('XSControl', ['Message', 'TopLoc', 'Transfer', 'MoniTool'], []),
            ('Transfer', ['MoniTool'], ['Transfer_ProcessForFinder']),
            ('TransferBRep', ['TopLoc', 'MoniTool'], [],
            {'TransferBRep': 'BRepCheck'}), # Fixes undefined ref
@@ -951,7 +950,7 @@ OCE_MODULES = [
            ('AppStd', ['Resource', 'CDF', 'PCDM', 'TDF', 'CDM'], []),
            ### TKXDESTEP
            ('STEPCAFControl', ['Interface', 'TopLoc', 'TopTools', 'CDF', 'PCDM',
-                               'Message', 'Dico', 'Quantity', 'StepGeom', 'CDM',
+                               'Message', 'Quantity', 'StepGeom', 'CDM',
                                'StepAP203', 'Resource', 'StepVisual', 'StepData',
                                'Geom', 'Geom2d', 'IFSelect', 'Transfer', 'Resource',
                                'TopLoc', 'XCAFView', 'XSControl', 'StepRepr',

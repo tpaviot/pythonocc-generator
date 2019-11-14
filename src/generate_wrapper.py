@@ -89,6 +89,7 @@ if not os.path.isdir(SMESH_INCLUDE_DIR):
 # swig output path
 PYTHONOCC_CORE_PATH = config.get('pythonocc-core', 'path')
 SWIG_OUTPUT_PATH = os.path.join(PYTHONOCC_CORE_PATH, 'src', 'SWIG_files', 'wrapper')
+HEADERS_OUTPUT_PATH = os.path.join(PYTHONOCC_CORE_PATH, 'src', 'SWIG_files', 'headers')
 # GEOMAlgo Salome splitter source location
 SPLITTER_PATH = os.path.join(PYTHONOCC_CORE_PATH, 'src', 'Splitter')
 # cmake output path, i.e. the location where the __init__.py file is created
@@ -1911,8 +1912,44 @@ class ModuleWrapper:
 %shared_ptr(SMDS_IteratorOfElements)
 
 """)
-        # specific includes
-        f.write("%%include %s_headers.i\n\n" % self._module_name)
+        # Here we write required dependencies, headers, as well as
+        # other swig interface files
+        f.write("%{\n")
+        if self._module_name == "Adaptor3d": # occt bug in headr file, won't compile otherwise
+            f.write("#include<Adaptor2d_HCurve2d.hxx>\n")
+        if self._module_name == "AdvApp2Var": # windows compilation issues
+            f.write("#if defined(_WIN32)\n#include <windows.h>\n#endif\n")
+        if self._module_name in ["BRepMesh", "XBRepMesh"]: # wrong header order with gcc4 issue #63
+            f.write("#include<BRepMesh_Delaun.hxx>\n")
+        module_headers = glob.glob('%s/%s_*.hxx' % (OCE_INCLUDE_DIR, self._module_name))
+        module_headers += glob.glob('%s/%s.hxx' % (OCE_INCLUDE_DIR, self._module_name))
+        module_headers += glob.glob('%s/%s_*.hxx' % (SMESH_INCLUDE_DIR, self._module_name))
+        module_headers += glob.glob('%s/%s.hxx' % (SMESH_INCLUDE_DIR, self._module_name))
+        module_headers.sort()
+
+        mod_header = open(os.path.join(HEADERS_OUTPUT_PATH, "%s_module.hxx" % self._module_name), "w")
+        mod_header.write("#ifndef %s_HXX\n" % self._module_name.upper())
+        mod_header.write("#define %s_HXX\n\n" % self._module_name.upper())
+        mod_header.write(LICENSE_HEADER)
+        mod_header.write("\n")
+
+        for module_header in filter_header_list(module_headers, HXX_TO_EXCLUDE_FROM_BEING_INCLUDED):
+            if not os.path.basename(module_header) in HXX_TO_EXCLUDE_FROM_BEING_INCLUDED:
+                mod_header.write("#include<%s>\n" % os.path.basename(module_header))
+        mod_header.write("\n#endif // %s_HXX\n" % self._module_name.upper())
+
+        f.write("#include<%s_module.hxx>\n" % self._module_name)
+        f.write("\n//Dependencies\n")
+        # Include all dependencies
+        for dep in PYTHON_MODULE_DEPENDENCY:
+            f.write("#include<%s_module.hxx>\n" % dep)
+        for add_dep in self._additional_dependencies:
+            f.write("#include<%s_module.hxx>\n" % add_dep)
+    
+        f.write("%};\n")
+        for dep in PYTHON_MODULE_DEPENDENCY:
+            if is_module(dep):
+                f.write("%%import %s.i\n" % dep)
         # for NCollection, we add template classes that can be processed
         # automatically with SWIG
         if self._module_name == "NCollection":
@@ -1938,48 +1975,6 @@ class ModuleWrapper:
         # but it sometimes fail to compile
         #f.write(self._free_functions_str)
         f.close()
-        #
-        # Headers
-        #
-        h = open(os.path.join(SWIG_OUTPUT_PATH, "%s_headers.i" % self._module_name), "w")
-        h.write(LICENSE_HEADER)
-        h.write(generate_timestamp())
-        h.write("%{\n")
-        if self._module_name == "Adaptor3d": # occt bug in headr file, won't compile otherwise
-            h.write("#include<Adaptor2d_HCurve2d.hxx>\n")
-        if self._module_name == "AdvApp2Var": # windows compilation issues
-            h.write("#if defined(_WIN32)\n#include <windows.h>\n#endif\n")
-        if self._module_name in ["BRepMesh", "XBRepMesh"]: # wrong header order with gcc4 issue #63
-            h.write("#include<BRepMesh_Delaun.hxx>\n")
-        module_headers = glob.glob('%s/%s_*.hxx' % (OCE_INCLUDE_DIR, self._module_name))
-        module_headers += glob.glob('%s/%s.hxx' % (OCE_INCLUDE_DIR, self._module_name))
-        module_headers += glob.glob('%s/%s_*.hxx' % (SMESH_INCLUDE_DIR, self._module_name))
-        module_headers += glob.glob('%s/%s.hxx' % (SMESH_INCLUDE_DIR, self._module_name))
-        module_headers.sort()
-
-        mod_header = open(os.path.join(SWIG_OUTPUT_PATH, "%s_module.hxx" % self._module_name), "w")
-        mod_header.write("#ifndef %s_HXX\n" % self._module_name.upper())
-        mod_header.write("#define %s_HXX\n\n" % self._module_name.upper())
-        mod_header.write(LICENSE_HEADER)
-        mod_header.write("\n")
-
-        for module_header in filter_header_list(module_headers, HXX_TO_EXCLUDE_FROM_BEING_INCLUDED):
-            if not os.path.basename(module_header) in HXX_TO_EXCLUDE_FROM_BEING_INCLUDED:
-                mod_header.write("#include<%s>\n" % os.path.basename(module_header))
-        mod_header.write("\n#endif // %s_HXX\n" % self._module_name.upper())
-
-        h.write("#include<%s_module.hxx>\n" % self._module_name)
-        h.write("\n//Dependencies\n")
-        # Include all dependencies
-        for dep in PYTHON_MODULE_DEPENDENCY:
-            h.write("#include<%s_module.hxx>\n" % dep)
-        for add_dep in self._additional_dependencies:
-            h.write("#include<%s_module.hxx>\n" % add_dep)
-    
-        h.write("%};\n")
-        for dep in PYTHON_MODULE_DEPENDENCY:
-            if is_module(dep):
-                h.write("%%import %s.i\n" % dep)
 
 
 def process_module(module_name):
