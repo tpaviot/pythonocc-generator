@@ -86,7 +86,7 @@ TOOLKIT_Visualisation = {
 TOOLKIT_DataExchange = {
             'TKBinXCAF': ['BinXCAFDrivers', 'BinMXCAFDoc'],
             'TKIGES': ['IGESControl', 'IGESData', 'IGESToBRep'],
-            'TKRWMesh' : ['RWGltf', 'RWMesh', 'RWObj'],
+            'TKRWMesh' : ['RWGltf', 'RWObj'],
             'TKSTEP': ['StepAP214', 'RWStepAP214', 'StepAP203', 'RWStepAP203',
                        'STEPConstruct', 'STEPEdit', 'GeomToStep', 'StepToGeom',
                        'StepToTopoDS', 'TopoDSToStep', 'STEPControl',
@@ -466,8 +466,7 @@ OCE_MODULES = [
              'BRepMesh_CustomBaseMeshAlgo'],
             {'BRepMesh_MeshTool': ['DumpTriangles', 'EraseTriangles'],
              'BRepMesh_Delaun': ['Frontier', 'InternalEdges', 'FreeEdges', 'ProcessConstraints'],
-             'BRepMesh_GeomTool': ['IntLinLin', 'Normal', 'IntSegSeg'],
-             'BRepMesh_ConeRangeSplitter': 'GetSplitSteps',
+             'BRepMesh_GeomTool': ['IntLinLin', 'Normal', 'IntSegSeg']
             },
             ),
            ('BRepMeshData', [], [],
@@ -681,7 +680,7 @@ OCE_MODULES = [
              'Graphic3d_GraphicDriver': 'Print',
              'Graphic3d_Layer': ['FrustumCullingBVHBuilder', 'Graphic3d_Layer',  # to avoid circular dep #60
                                  'SetFrustumCullingBVHBuilder'],
-             'Graphic3d_BvhCStructureSet': 'Add'}),
+             'Graphic3d_BvhCStructureSet': ['Graphic3d_BvhCStructureSet','Add', 'Clear', 'GetStructureById', 'Remove']}),
            ('Visual3d', ['TShort', 'TColQuantity'], [],
             {'Visual3d_View': 'Print',
              'Visual3d_Layer': 'DrawText'}),
@@ -853,11 +852,19 @@ OCE_MODULES = [
                 'VrmlData_TextureTransform', 'VrmlData_Faceted'],
                 {'VrmlData_IndexedFaceSet': 'GetNormal'}), # Fixes undefined ref
            ('RWGltf', ['CDF', 'PCDM', 'TDF', 'TDocStd', 'Graphic3d', 'Geom',
-                       'TShort', 'Aspect'], ['RWGltf_GltfSharedIStream']),
-           ('RWMesh', ['CDF', 'PCDM', 'TDF', 'TDocStd', 'Graphic3d', 'Geom',
-                       'TShort', 'Aspect', 'Bnd', 'Quantity'], []),
+                       'TShort', 'Aspect'], ['RWGltf_GltfSharedIStream', 'RWGltf_TriangulationReader'],
+              {
+               'RWGltf_CafReader': 'RWGltf_CafReader',
+               'RWGltf_GltfLatePrimitiveArray': ['RWGltf_GltfLatePrimitiveArray', 'AddPrimArrayData', 'BaseColor', 'SetBoundingBox']
+              }
+           ),
            ('RWObj', ['CDF', 'PCDM', 'TDF', 'TDocStd', 'Graphic3d', 'Geom',
-                       'TShort', 'Aspect', 'Bnd', 'Quantity'], []),
+                       'TShort', 'Aspect', 'Bnd', 'Quantity'],
+              ['RWObj', 'RWObj_MtlReader'],
+              {
+                'RWObj_Reader': ['Probe', 'Read'],
+                'RWObj_TriangulationReader': ['RWObj_TriangulationReader', 'GetTriangulation', 'ResultShape']
+              }),
            ###
            ### OCAF
            ###

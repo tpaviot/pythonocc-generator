@@ -132,7 +132,13 @@ HXX_TO_EXCLUDE_FROM_CPPPARSER = ['NCollection_StlIterator.hxx',
                                  'IMeshData_ParametersListArrayAdaptor.hxx',
                                  'BRepMesh_CustomBaseMeshAlgo.hxx',
                                  'BRepMesh_CylinderRangeSplitter.hxx',
-                                 'BRepMesh_DefaultRangeSplitter'
+                                 'BRepMesh_DefaultRangeSplitter',
+                                 'BRepMesh_BoundaryParamsRangeSplitter.hxx',
+                                 'BRepMesh_ConeRangeSplitter.hxx',
+                                 'BRepMesh_NURBSRangeSplitter.hxx',
+                                 'BRepMesh_SphereRangeSplitter.hxx',
+                                 'BRepMesh_TorusRangeSplitter.hxx',
+                                 'BRepMesh_UVParamRangeSplitter.hxx'
                                  ]
 
 # some includes fail at being compiled
@@ -165,7 +171,13 @@ HXX_TO_EXCLUDE_FROM_BEING_INCLUDED = ['AIS_DataMapOfSelStat.hxx', # TODO : repor
                                       'IMeshData_ParametersListArrayAdaptor.hxx',
                                       'BRepMesh_CustomBaseMeshAlgo.hxx',
                                       'BRepMesh_CylinderRangeSplitter.hxx',
-                                      'BRepMesh_DefaultRangeSplitter'
+                                      'BRepMesh_DefaultRangeSplitter',
+                                      'BRepMesh_BoundaryParamsRangeSplitter.hxx',
+                                      'BRepMesh_ConeRangeSplitter.hxx',
+                                      'BRepMesh_NURBSRangeSplitter.hxx',
+                                      'BRepMesh_SphereRangeSplitter.hxx',
+                                      'BRepMesh_TorusRangeSplitter.hxx',
+                                      'BRepMesh_UVParamRangeSplitter.hxx'
                                       ]
 
 # some typedefs parsed by CppHeader can't be wrapped
