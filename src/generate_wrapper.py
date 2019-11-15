@@ -1496,6 +1496,10 @@ def build_inheritance_tree(classes_dict):
         nbr_upper_classes = len(upper_classes)
         if nbr_upper_classes == 0:
             level_0_classes.append(class_name)
+        # if class has one or more ancestors
+        # for class with one or two ancestors, let's process them
+        # the same. Anyway, whan there are two ancestors (only a few cases),
+        # one of the two ancestors come from another module.
         elif nbr_upper_classes == 1:
             upper_class_name = upper_classes[0]["class"]
             # if the upper class depends on another module
@@ -1505,10 +1509,26 @@ def build_inheritance_tree(classes_dict):
             # else build the inheritance tree
             else:
                 inheritance_dict[class_name] = upper_class_name
+        elif nbr_upper_classes == 2:
+            # if one, or the other
+            upper_class_name_1 = upper_classes[0]["class"]
+            class_1_module = upper_class_name_1.split("_")[0]
+            upper_class_name_2 = upper_classes[1]["class"]
+            class_2_module = upper_class_name_2.split("_")[0]
+            if class_1_module == upper_class_name_2 == CURRENT_MODULE:
+                print("WARNING : this is a special case, where the 2 ancestors belong the same module.")
+                print("Class %s skipped." % class_name)
+            if class_1_module == CURRENT_MODULE:
+                inheritance_dict[class_name] = upper_class_name_1
+            elif class_2_module == CURRENT_MODULE:
+                inheritance_dict[class_name] = upper_class_name_2
+            elif upper_class_name_1 == upper_class_name_2:  # the samemodule, but external, not the current one
+                level_0_classes.append(class_name)
+            inheritance_dict[class_name] = upper_class_name_1
         else:
             # prevent multiple inheritance: OCE only has single
             # inheritance
-            print("CLASS %s has %i ancestors" % (class_name, nbr_upper_classes))
+            print("WARNING : class %s has %i ancestors and is skipped." % (class_name, nbr_upper_classes))
     # then, after that, we process both dictionaries, list so
     # that we reorder class.
     # first, we build something called the inheritance_depth.
@@ -1639,7 +1659,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         return ""
     class_def_str = ""
     inheritance_tree_list = build_inheritance_tree(classes_dict)
-
+    print("Wrap classes :", end="")
     for klass in inheritance_tree_list:
         # class name
         class_name = klass["name"]
@@ -1654,7 +1674,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # we rename the class if the module is the same name
         # for instance TopoDS is both a module and a class
         # then we rename the class with lowercase
-        print("Wrapping class %s" % class_name)
+        print(" ",class_name, end="")
         if class_name == CURRENT_MODULE:
             class_def_str += "%%rename(%s) %s;\n" % (class_name.lower(), class_name)
         # then process the class itself
@@ -1669,13 +1689,17 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # then defines the wrapper
         class_def_str += "class %s" % class_name
         # inheritance process
-        # in OCE, only single inheritance
         inherits_from = klass["inherits"]
-        if inherits_from:
+        if inherits_from: # at least 1 ancestor
             inheritance_name = inherits_from[0]["class"]
             check_dependency(inheritance_name)
             inheritance_access = inherits_from[0]["access"]
             class_def_str += " : %s %s" % (inheritance_access, inheritance_name)
+            if len(inherits_from) == 2: ## 2 ancestors
+                inheritance_name_2 = inherits_from[1]["class"]
+                check_dependency(inheritance_name_2)
+                inheritance_access_2 = inherits_from[1]["access"]
+                class_def_str += ", %s %s" % (inheritance_access_2, inheritance_name_2)
         class_def_str += " {\n"
         # process class typedefs here
         typedef_str = '\tpublic:\n'
@@ -1783,6 +1807,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         class_def_str += '\t%' + 'pythoncode {\n'
         class_def_str += '\t__repr__ = _dumps_object\n'
         class_def_str += '\t}\n};\n'
+    print()
     return class_def_str
 
 
