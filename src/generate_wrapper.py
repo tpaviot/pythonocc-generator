@@ -18,13 +18,17 @@
 # imports #
 ###########
 import configparser
+import datetime
 import glob
+import logging
 from operator import itemgetter
 import os
 import os.path
 import platform
 import re
+import subprocess
 import sys
+import time
 
 from Modules import *
 
@@ -36,10 +40,51 @@ sys.path.append(path_from_root('src', 'robotpy-cppheaderparser'))
 
 import CppHeaderParser
 
+##############################################
+# Load configuration file and setup settings #
+##############################################
+config = configparser.ConfigParser()
+config.read('wrapper_generator.conf')
+# pythonocc version
+PYTHONOCC_VERSION = config.get('pythonocc-core', 'version')
+# oce headers location
+OCE_INCLUDE_DIR = config.get('OCE', 'include_dir')
+if not os.path.isdir(OCE_INCLUDE_DIR):
+    raise AssertionError("OCE include dir %s not found." % OCE_INCLUDE_DIR)
+
+# smesh, if any
+SMESH_INCLUDE_DIR = config.get('SMESH', 'include_dir')
+if not os.path.isdir(SMESH_INCLUDE_DIR):
+    logging.warning("SMESH include dir %s not found. SMESH wrapper not generated." % SMESH_INCLUDE_DIR)
+# swig output path
+PYTHONOCC_CORE_PATH = config.get('pythonocc-core', 'path')
+SWIG_OUTPUT_PATH = os.path.join(PYTHONOCC_CORE_PATH, 'src', 'SWIG_files', 'wrapper')
+HEADERS_OUTPUT_PATH = os.path.join(PYTHONOCC_CORE_PATH, 'src', 'SWIG_files', 'headers')
+# cmake output path, i.e. the location where the __init__.py file is created
+CMAKE_PATH = os.path.join(PYTHONOCC_CORE_PATH, 'cmake')
+
+###################################################
+# Set logger, to log both to a file and to stdout #
+# code from https://stackoverflow.com/questions/13733552/logger-configuration-to-log-to-file-and-print-to-stdout
+###################################################
+log_formatter = logging.Formatter("[%(levelname)-5.5s]  %(message)s")
+log = logging.getLogger()
+log.setLevel(logging.INFO)
+log_file_name = os.path.join(SWIG_OUTPUT_PATH, 'generator.log')
+# ensure log file is emptied before running the generator
+lf = open(log_file_name, 'w')
+lf.close()
+
+file_handler = logging.FileHandler(log_file_name)
+file_handler.setFormatter(log_formatter)
+log.addHandler(file_handler)
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(log_formatter)
+log.addHandler(console_handler)
+
 ####################
 # Global variables #
 ####################
-
 ALL_TOOLKITS = [TOOLKIT_Foundation,
                 TOOLKIT_Modeling,
                 TOOLKIT_Visualisation,
@@ -69,31 +114,6 @@ You should have received a copy of the GNU Lesser General Public License
 along with pythonOCC.  If not, see <http://www.gnu.org/licenses/>.
 */
 """
-
-#
-# Load configuration file and setup settings
-#
-config = configparser.ConfigParser()
-config.read('wrapper_generator.conf')
-# pythonocc version
-PYTHONOCC_VERSION = config.get('pythonocc-core', 'version')
-# oce headers location
-OCE_INCLUDE_DIR = config.get('OCE', 'include_dir')
-if not os.path.isdir(OCE_INCLUDE_DIR):
-    raise AssertionError("OCE include dir %s not found." % OCE_INCLUDE_DIR)
-
-# smesh, if any
-SMESH_INCLUDE_DIR = config.get('SMESH', 'include_dir')
-if not os.path.isdir(SMESH_INCLUDE_DIR):
-    print("SMESH include dir %s not found. SMESH wrapper not generated." % SMESH_INCLUDE_DIR)
-# swig output path
-PYTHONOCC_CORE_PATH = config.get('pythonocc-core', 'path')
-SWIG_OUTPUT_PATH = os.path.join(PYTHONOCC_CORE_PATH, 'src', 'SWIG_files', 'wrapper')
-HEADERS_OUTPUT_PATH = os.path.join(PYTHONOCC_CORE_PATH, 'src', 'SWIG_files', 'headers')
-# GEOMAlgo Salome splitter source location
-SPLITTER_PATH = os.path.join(PYTHONOCC_CORE_PATH, 'src', 'Splitter')
-# cmake output path, i.e. the location where the __init__.py file is created
-CMAKE_PATH = os.path.join(PYTHONOCC_CORE_PATH, 'cmake')
 
 # check if SWIG_OUTPUT_PATH exists, otherwise create it
 if not os.path.isdir(SWIG_OUTPUT_PATH):
@@ -401,11 +421,13 @@ NCOLLECTION_ARRAY1_EXTEND_TEMPLATE = '''
 '''
 
 
-def generate_timestamp():
+def get_log_header():
     """ returns a timestand to be appended to the SWIG file
     Useful for development
     """
     os_name = platform.linux_distribution()[0] + ' ' + platform.system() + ' ' + platform.release()
+    generator_git_revision = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).strip().decode('utf8')
+    now = str(datetime.datetime.now())
     # find the OCC VERSION targeted by the wrapper
     # the OCCT version is available from the Standard_Version.hxx header
     # e.g. define OCC_VERSION_COMPLETE     "7.4.0"
@@ -418,19 +440,28 @@ def generate_timestamp():
             if l.startswith("#define OCC_VERSION_COMPLETE"):
                 occ_version = l.split('"')[1].strip()
     timestamp = """
-/*
-This file was automatically generated using the pythonocc_generator, see
-https://github.com/tpaviot/pythonocc-generator.
+############################
+Running pythonocc-generator.
+############################
+git revision : %s
 
-This file is platform independant, but was generated under the following
-conditions:
+operating system : %s
 
-- operating system : %s
-- occt version targeted : %s
-*/
+occt version targeted : %s
 
-""" % (os_name, occ_version)
+date : %s
+############################
+""" % (generator_git_revision, os_name, occ_version, now)
     return timestamp
+
+
+def get_log_footer(total_time):
+    footer = """
+#################################################
+SWIG interface file generation completed in {:.2f}s
+#################################################
+""".format(total_time)
+    return footer
 
 
 def reset_header_depency():
@@ -499,8 +530,6 @@ def get_all_module_headers(module_name):
     mh += case_sensitive_glob(os.path.join(SMESH_INCLUDE_DIR, '%s.hxx' % module_name))
     mh += case_sensitive_glob(os.path.join(SMESH_INCLUDE_DIR, '%s_*.hxx' % module_name))
     mh += case_sensitive_glob(os.path.join(SMESH_INCLUDE_DIR, 'Handle_%s.hxx*' % module_name))
-    # GEOMAlgo splitter
-    mh += case_sensitive_glob(os.path.join(SPLITTER_PATH, '%s_*.hxx' % module_name))
     mh = filter_header_list(mh, HXX_TO_EXCLUDE_FROM_BEING_INCLUDED)
     headers_list = list(map(os.path.basename, mh))
     # sort alphabetical order
@@ -586,7 +615,7 @@ def adapt_header_file(header_content):
             base_typename = match.split(',')[1].split(')')[0]
             # we keep only te RTTI that are defined in this module,
             # to avoid cyclic references in the SWIG files
-            print("Found HARRAY1 definition", typename, ':', base_typename)
+            logging.info("Found HARRAY1 definition" + typename + ':' + base_typename)
             ALL_HARRAY1[typename] = base_typename
     # Search for HARRAY2
     outer = re.compile("DEFINE_HARRAY2[\\s]*\\([\\w\\s]+\\,+[\\w\\s]+\\)")
@@ -598,7 +627,7 @@ def adapt_header_file(header_content):
             base_typename = match.split(',')[1].split(')')[0]
             # we keep only te RTTI that are defined in this module,
             # to avoid cyclic references in the SWIG files
-            print("Found HARRAY2 definition", typename, ':', base_typename)
+            logging.info("Found HARRAY2 definition" + typename + ':' + base_typename)
             ALL_HARRAY2[typename] = base_typename
    # Search for HSEQUENCE
     outer = re.compile("DEFINE_HSEQUENCE[\\s]*\\([\\w\\s]+\\,+[\\w\\s]+\\)")
@@ -610,7 +639,7 @@ def adapt_header_file(header_content):
             base_typename = match.split(',')[1].split(')')[0]
             # we keep only te RTTI that are defined in this module,
             # to avoid cyclic references in the SWIG files
-            print("Found HSEQUENCE definition", typename, ':', base_typename)
+            logging.info("Found HSEQUENCE definition" + typename + ':' + base_typename)
             ALL_HSEQUENCE[typename] = base_typename
     header_content = header_content.replace('DEFINE_STANDARD_RTTI_INLINE',
                                             '//DEFINE_STANDARD_RTTI_INLINE')
@@ -697,7 +726,7 @@ def process_templates_from_typedefs(list_of_typedefs):
             # don't consider this
             if not "_" in template_name:
                 wrap_template = False
-                print("Template: ", template_name, "skipped because name does'nt contain _.")
+                logging.warning("Template: " + template_name + "skipped because name does'nt contain _.")
             if wrap_template:
                 wrapper_str += "%%template(%s) %s;\n" %(template_name, template_type)
                 # if a NCollection_Array1, extend this template to benefit from pythonic methods
@@ -741,12 +770,10 @@ def process_typedefs(typedefs_dict):
             elif template_type.count('<') == 1:
                 h_typ = (template_type.split('<')[1]).split('>')[0]
             else:
-                print("This template type cannot be handled: ", template_type)
+                logging.warning("This template type cannot be handled: " + template_type)
                 continue
             module = h_typ.split("_")[0]
-            print("Module dep: ", module)
             if module != CURRENT_MODULE:
-                print()
                 # need to be added to the list of dependend object
                 if (module not in PYTHON_MODULE_DEPENDENCY) and (is_module(module)):
                     PYTHON_MODULE_DEPENDENCY.append(module)
@@ -909,7 +936,6 @@ def test_check_dependency():
     dep2 = check_dependency("Handle ( Geom2d_Curve)")
     assert dep2 == "Geom2d"
     dep3 = check_dependency("opencascade::handle<TopoDS_TShape>")
-    print(dep3)
     assert dep3 == "TopoDS"
     dep4 = check_dependency("Standard_Integer")
     assert dep4 == "Standard"
@@ -1093,7 +1119,7 @@ def test_adapt_default_value():
     pass#assert adapt_default_value(": : MeshDim_3D") == "MeshDim_3D"
 
 
-def filter_member_functions(class_public_methods, member_functions_to_exclude, class_is_abstract):
+def filter_member_functions(class_name, class_public_methods, member_functions_to_exclude, class_is_abstract):
     """ This functions removes member function to exclude from
     the class methods list. Some of the members functions have to be removed
     because they can't be wrapped (usually, this results in a linkage error)
@@ -1104,7 +1130,7 @@ def filter_member_functions(class_public_methods, member_functions_to_exclude, c
         if method_name in member_functions_to_exclude:
             continue
         if class_is_abstract and public_method["constructor"]:
-            print("Constructor skipped for abstract class")
+            logging.warning("Constructor skipped for abstract class %s" % class_name)
             continue
         if method_name == "ShallowCopy":  # specific to 0.17.1 and Mingw
             continue
@@ -1121,7 +1147,7 @@ def test_filter_member_functions():
                             {"name": "method_3"},
                            ]
     member_functions_to_exclude = ["method_2"]
-    result = filter_member_functions(class_public_methods,
+    result = filter_member_functions("klass_name", class_public_methods,
                                      member_functions_to_exclude,
                                      False)
     assert result == [{"name": "method_1"}, {"name": "method_3"}]
@@ -1516,8 +1542,7 @@ def build_inheritance_tree(classes_dict):
             upper_class_name_2 = upper_classes[1]["class"]
             class_2_module = upper_class_name_2.split("_")[0]
             if class_1_module == upper_class_name_2 == CURRENT_MODULE:
-                print("WARNING : this is a special case, where the 2 ancestors belong the same module.")
-                print("Class %s skipped." % class_name)
+                logging.warning("Tthis is a special case, where the 2 ancestors belong the same module. Class %s skipped." % class_name)
             if class_1_module == CURRENT_MODULE:
                 inheritance_dict[class_name] = upper_class_name_1
             elif class_2_module == CURRENT_MODULE:
@@ -1528,7 +1553,7 @@ def build_inheritance_tree(classes_dict):
         else:
             # prevent multiple inheritance: OCE only has single
             # inheritance
-            print("WARNING : class %s has %i ancestors and is skipped." % (class_name, nbr_upper_classes))
+            logging.warning("Class %s has %i ancestors and is skipped." % (class_name, nbr_upper_classes))
     # then, after that, we process both dictionaries, list so
     # that we reorder class.
     # first, we build something called the inheritance_depth.
@@ -1659,7 +1684,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         return ""
     class_def_str = ""
     inheritance_tree_list = build_inheritance_tree(classes_dict)
-    print("Wrap classes :", end="")
+    logging.info("Wrap classes :")
     for klass in inheritance_tree_list:
         # class name
         class_name = klass["name"]
@@ -1674,7 +1699,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # we rename the class if the module is the same name
         # for instance TopoDS is both a module and a class
         # then we rename the class with lowercase
-        print(" ",class_name, end="")
+        logging.info(class_name)
         if class_name == CURRENT_MODULE:
             class_def_str += "%%rename(%s) %s;\n" % (class_name.lower(), class_name)
         # then process the class itself
@@ -1714,7 +1739,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         nested_classes = klass["nested_classes"]
         for n in nested_classes:
             nested_class_name = n["name"]
-            print("Found nested class %s::%s" % (class_name, nested_class_name))
+            logging.info("Wrap nested class %s::%s" % (class_name, nested_class_name))
             class_def_str += "\t\tclass " + nested_class_name + " {};\n"
         ####### class enums
         if class_enums_list:
@@ -1723,16 +1748,16 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         properties_str = ''
         for property_value in list(klass["properties"]['public']):
             if 'NCollection_Vec2' in property_value['type']: # issue in Aspect_Touch
-                print('Warning: wrong type in class property : NCollection_Vec2')
+                logging.warning('Wrong type in class property : NCollection_Vec2')
                 continue
             if 'using' in property_value['type']:
-                print('Warning: wrong type in class property : using')
+                logging.warning('Wrong type in class property : using')
                 continue
             if 'return' in property_value['type']:
-                print('Warning: wrong type in class property : return')
+                logging.warning('Wrong type in class property : return')
                 continue
             if 'std::map<' in property_value['type']:
-                print('Warning: wrong type in class property std::map')
+                logging.warning('Wrong type in class property std::map')
                 continue  # TODO bug with SMESH_0D_Algo etc.
             if property_value['constant'] or 'virtual' in property_value['raw_type'] or 'Standard_EXPORT' in property_value['raw_type'] or 'allback' in property_value['raw_type']:
                 continue
@@ -1757,7 +1782,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         if class_name in ['TopoDS_Shape', 'TopoDS_Vertex']:
             class_def_str += '\t\t%feature("autodoc", "1");\n'
             class_def_str += '\t\t%s(const %s arg0);\n' % (class_name, class_name)
-        methods_to_process = filter_member_functions(class_public_methods, members_functions_to_exclude, klass["abstract"])
+        methods_to_process = filter_member_functions(class_name, class_public_methods, members_functions_to_exclude, klass["abstract"])
         class_def_str += process_methods(methods_to_process)
         # then terminate the class definition
         class_def_str += "};\n\n"
@@ -1807,7 +1832,6 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         class_def_str += '\t%' + 'pythoncode {\n'
         class_def_str += '\t__repr__ = _dumps_object\n'
         class_def_str += '\t}\n};\n'
-    print()
     return class_def_str
 
 
@@ -1817,7 +1841,7 @@ def is_module(module_name):
     'Standard' should return True
     'inj' should return False
     """
-    for mod in OCE_MODULES + SALOME_SPLITTER_MODUlES + SMESH_MODULES:
+    for mod in OCE_MODULES + SMESH_MODULES:
         if mod[0] == module_name:
             return True
     return False
@@ -1839,7 +1863,6 @@ def parse_module(module_name):
     if not module_headers:  # this can be smesh modules or the splitter
         module_headers = glob.glob('%s/%s_*.hxx' % (SMESH_INCLUDE_DIR, module_name))
         module_headers += glob.glob('%s/%s.hxx' % (SMESH_INCLUDE_DIR, module_name))
-        module_headers += glob.glob('%s/*.hxx' % (SPLITTER_PATH))
     # filter those headers
     module_headers = filter_header_list(module_headers, HXX_TO_EXCLUDE_FROM_CPPPARSER)
     cpp_headers = map(parse_header, module_headers)
@@ -1872,7 +1895,7 @@ class ModuleWrapper:
         else:
             PYTHON_MODULE_DEPENDENCY = []
 
-        print("=== generating SWIG files for module %s ===" % module_name)
+        logging.info("## Processing module %s" % module_name)
         self._module_name = module_name
         self._module_docstring = get_module_docstring(module_name)
         # parse
@@ -1905,7 +1928,6 @@ class ModuleWrapper:
         f = open(os.path.join(SWIG_OUTPUT_PATH, "%s.i" % self._module_name), "w")
         # write header
         f.write(LICENSE_HEADER)
-        f.write(generate_timestamp())
         # write module docstring
         # for instante define GPDOCSTRING
         docstring_macro = "%sDOCSTRING" % self._module_name.upper()
@@ -2015,7 +2037,7 @@ class ModuleWrapper:
 
 
 def process_module(module_name):
-    all_modules = OCE_MODULES + SALOME_SPLITTER_MODUlES + SMESH_MODULES
+    all_modules = OCE_MODULES + SMESH_MODULES
     module_exist = False
     for module in all_modules:
         if module[0] == module_name:
@@ -2040,7 +2062,7 @@ def process_toolkit(toolkit_name):
     For instance : TKernel, TKMath etc.
     """
     modules_list = TOOLKITS[toolkit_name]
-    print("=== processing toolkit %s ===" % toolkit_name)
+    logging.info("Processing toolkit %s ===" % toolkit_name)
     for module in sorted(modules_list):
         process_module(module)
 
@@ -2048,7 +2070,7 @@ def process_toolkit(toolkit_name):
 def process_all_toolkits():
     parallel_build = config.get('build', 'parallel_build')
     if parallel_build == "True":  # multitask
-        print("multiprocessed generator")
+        logging.info("Multiprocess mode")
         from multiprocessing import Pool
         pool = Pool()
         try:
@@ -2061,13 +2083,12 @@ def process_all_toolkits():
             pool.close()
             pool.join()
     else:  # single task
-        print("single processed generator")
+        logging.info("Single process mode")
         for toolkit in sorted(TOOLKITS):
             process_toolkit(toolkit)
 
 
 def run_unit_tests():
-    print("running unittests ...", end="")
     test_is_module()
     test_filter_header_list()
     test_get_all_module_headers()
@@ -2078,14 +2099,20 @@ def run_unit_tests():
     test_adapt_param_type_and_name()
     test_adapt_default_value()
     test_check_dependency()
-    print("done.")
 
 
 if __name__ == '__main__':
+    # do it each time, does not take too much time, prevent regressions
     run_unit_tests()
+    logging.info(get_log_header())
+    start_time = time.time()
     if len(sys.argv) > 1:
         for module_to_process in sys.argv[1:]:
             process_module(module_to_process)
     else:
         write__init__()
         process_all_toolkits()
+    end_time = time.time()
+    total_time = end_time - start_time
+    # footer
+    logging.info(get_log_footer(total_time))
