@@ -1936,11 +1936,6 @@ class ModuleWrapper:
         f.write('%enddef\n')
         # module name
         f.write('%%module (package="OCC.Core", docstring=%s) %s\n\n' % (docstring_macro, self._module_name))
-        # remove warnings
-        # warning 504 because void suppression
-        # 325 : nested class unsupported
-        # 503 : Can't wrap class unless renamed to a valid identifier
-        f.write("#pragma SWIG nowarn=504,325,503,520,350,351,383,389,394,395, 404\n")
         # write windows pragmas to avoid compiler errors
         win_pragmas = """
 %{
