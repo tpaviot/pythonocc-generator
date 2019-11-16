@@ -865,7 +865,7 @@ OCE_MODULES = [
            ),
            ('RWObj', ['CDF', 'PCDM', 'TDF', 'TDocStd', 'Graphic3d', 'Geom',
                        'TShort', 'Aspect', 'Bnd', 'Quantity'],
-              ['RWObj', 'RWObj_MtlReader'],
+              ['RWObj', 'RWObj_MtlReader', 'RWObj_CafReader'],
               {
                 'RWObj_Reader': ['Probe', 'Read'],
                 'RWObj_TriangulationReader': ['RWObj_TriangulationReader', 'GetTriangulation', 'ResultShape']
