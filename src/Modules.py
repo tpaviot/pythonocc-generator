@@ -731,12 +731,13 @@ OCE_MODULES = [
              'AIS_Manipulator': ['TransformBehavior', 'ChangeTransformBehavior',
                                  'SetTransformBehavior']}),
            ('DsgPrs', [], ['*']),
-           ('StdSelect', [], ['*']),
+           ('StdSelect', ['Bnd', 'TShort', 'HLRAlgo', 'Poly', 'TopTools',
+                          'Quantity', 'TopTools'], []),
            # MeshVS
            ('MeshVS', ['TopTools', 'Message', 'TShort',
                        'Geom', 'Visual3d', 'HLRAlgo', 'Poly',
                        'TColQuantity', 'TopoDS', 'V3d',
-                       'TopLoc', 'Prs3d'], []),
+                       'TopLoc', 'Prs3d', 'StdSelect'], []),
            ###
            ### DataExchange
            ###
@@ -945,7 +946,7 @@ OCE_MODULES = [
                         'SelectBasics', 'Visual3d', 'Prs3d',
                         'TColQuantity', 'TDF', 'TDataStd', 'TNaming',
                         'TDataXtd', 'Graphic3d', 'SelectMgr', 'TopoDS', 'PrsMgr',
-                        'CDF', 'CDM', 'PCDM'], []),
+                        'CDF', 'CDM', 'PCDM', 'StdSelect'], []),
            ('XCAFDimTolObjects', ['Message', 'CDF', 'CDM', 'PCDM', 'LDOM', 'TDF',
                                   'Resource', 'TopLoc'],[],
             {'XCAFDimTolObjects_DimensionObject' : ['GetPoints']}),
@@ -958,7 +959,7 @@ OCE_MODULES = [
                          'TDataStd', 'Aspect', 'Visual3d', 'TNaming', 'Select3D',
                          'TColQuantity', 'Message', 'Poly', 'Prs3d', 'Bnd',
                          'TopLoc', 'TShort', 'SelectBasics', 'TopoDS', 'SelectMgr',
-                         'PrsMgr', 'V3d', 'Graphic3d'], []),
+                         'PrsMgr', 'V3d', 'Graphic3d', 'StdSelect'], []),
            ('AppStd', ['Resource', 'CDF', 'PCDM', 'TDF', 'CDM'], []),
            ### TKXDESTEP
            ('STEPCAFControl', ['Interface', 'TopLoc', 'TopTools', 'CDF', 'PCDM',
