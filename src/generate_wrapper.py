@@ -1003,7 +1003,7 @@ def get_module_docstring(module_name):
     https://www.opencascade.com/doc/occt-7.4.0/refman/html/package_gp.html
     """
     module_docstring = "%s module, see official documentation at\n" % module_name
-    module_docstring += "https://www.opencascade.com/doc/occt-7.4.0/refman/html/package_%s.html" % module_name
+    module_docstring += "https://www.opencascade.com/doc/occt-7.4.0/refman/html/package_%s.html" % module_name.lower()
     return module_docstring
 
 
