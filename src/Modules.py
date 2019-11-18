@@ -589,7 +589,8 @@ OCE_MODULES = [
            ('BRepBlend', ['AppParCurves', 'TCollection', 'PLib', 'FEmTool',
                           'Convert', 'Geom', 'Geom2d', 'Message',
                           'BRepAdaptor', 'GeomAdaptor', 'Geom2dAdaptor',
-                          'TopLoc', 'TopoDS', 'TopTools', 'Adaptor3d', 'Adaptor2d'], []),
+                          'TopLoc', 'TopoDS', 'TopTools', 'Adaptor3d', 'Adaptor2d'], [],
+                          {'BRepBlend_AppSurface': 'TolReached'}),
            ('BlendFunc', ['Geom2d', 'Geom'], [],
             {'BlendFunc': ['Mults', 'Knots']}),
            ('BRepFilletAPI', ['Adaptor3d', 'GeomAdaptor', 'Geom2d',
@@ -858,29 +859,19 @@ OCE_MODULES = [
                 'VrmlData_TextureTransform', 'VrmlData_Faceted'],
                 {'VrmlData_IndexedFaceSet': 'GetNormal'}), # Fixes undefined ref
            ('RWGltf', ['CDF', 'PCDM', 'TDF', 'TDocStd', 'Graphic3d', 'Geom',
-                       'TShort', 'Aspect'], ['RWGltf_GltfSharedIStream', 'RWGltf_TriangulationReader'],
-              {
-               'RWGltf_CafReader': 'RWGltf_CafReader',
-               'RWGltf_GltfLatePrimitiveArray': ['RWGltf_GltfLatePrimitiveArray', 'AddPrimArrayData', 'BaseColor', 'SetBoundingBox']
-              }
+                       'TShort', 'Aspect'], ['RWGltf_GltfSharedIStream', 'RWGltf_TriangulationReader',
+                       'RWGltf_GltfLatePrimitiveArray', 'RWGltf_PrimitiveArrayReader', 'RWGltf_CafReader']
            ),
            ('RWObj', ['CDF', 'PCDM', 'TDF', 'TDocStd', 'Graphic3d', 'Geom',
                        'TShort', 'Aspect', 'Bnd', 'Quantity'],
-              ['RWObj', 'RWObj_MtlReader', 'RWObj_CafReader'],
-              {
-                'RWObj_Reader': ['Probe', 'Read'],
-                'RWObj_TriangulationReader': ['RWObj_TriangulationReader', 'GetTriangulation', 'ResultShape']
-              }),
+              ['RWObj', 'RWObj_MtlReader', 'RWObj_CafReader', 'RWObj_TriangulationReader', 'RWObj_Reader']),
            ###
            ### OCAF
            ###
            ### TKTObj
            ('TObj', ['PCDM', 'CDM', 'CDF', 'Resource'], []),
            ### TKLCAF
-           ('TDF',  [], ['TDF_LabelNode'],
-            {'TDF_Attribute': ['FindAttribute'],
-             'TDF_Label': ['FindAttribute'],
-             'TDF_RelocationTable': ['HasRelocation']}),
+           ('TDF',  [], ['TDF_LabelNode']),
            ('TDataStd', [], []),
            ('TFunction', [], []),
            ('TDocStd', [], []),

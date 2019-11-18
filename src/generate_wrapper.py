@@ -1003,7 +1003,7 @@ def get_module_docstring(module_name):
     https://www.opencascade.com/doc/occt-7.4.0/refman/html/package_gp.html
     """
     module_docstring = "%s module, see official documentation at\n" % module_name
-    module_docstring += "https://www.opencascade.com/doc/occt-7.4.0/refman/html/package_%s.html" % module_name
+    module_docstring += "https://www.opencascade.com/doc/occt-7.4.0/refman/html/package_%s.html" % module_name.lower()
     return module_docstring
 
 
@@ -1172,6 +1172,9 @@ def process_function(f):
     If process_docstrings is set to True, the documentation string
     from the C++ header will be used as is for the python wrapper
     """
+    if f["template"]:
+        return False
+
     # first, adapt function name, if needed
     function_name = adapt_function_name(f["name"])
     # destructors are not wrapped
@@ -1380,17 +1383,6 @@ def process_function(f):
         param_type = adapt_param_type(param["type"])
         if "Handle_T &" in param_type:
             return False  # skipe thi function, it will raise a compilation exception, it's something like a template
-        if "T2>" in param_type:
-            # it's a parameter with a template argument, will cause a compilation error as well
-            # for example, from TopoDS.hxx:
-            #template<class T2>
-            #TopoDS_Shape (T2&& theOther, typename std::enable_if<opencascade::std::is_base_of<TopoDS_Shape, T2>::value>::type* = 0)
-            #: myTShape  (std::forward<T2> (theOther).myTShape),
-            # myLocation(std::forward<T2> (theOther).myLocation),
-            #myOrient  (std::forward<T2> (theOther).myOrient)
-            # {
-            #}
-            return False
         if 'array_size' in param:
             param_type_and_name = "%s %s[%s]" % (param_type, param["name"], param["array_size"])
         else:
