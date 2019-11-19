@@ -1085,10 +1085,10 @@ def process_function_docstring(f):
                                                 "Missing detailed docstring")
         # then remove spaces from start and end
         doxygen_string = doxygen_string.strip()
-        doxygen_string = "\t* " + doxygen_string + "\n\n"
+        doxygen_string = "\t* " + doxygen_string + "\n"
     # concatenate everything
     final_string = doxygen_string + parameters_string + returns_string
-    string_to_return += '%s") %s;\n' % (final_string, function_name)
+    string_to_return += '%s") %s;\n' % (final_string.strip(), function_name)
     return string_to_return
 
 
@@ -1318,7 +1318,8 @@ def process_function(f):
     # handled by swig
         return ""
     # enable autocompactargs feature to enable compilation with swig>3.0.3
-    str_function = '\t\t%%feature("compactdefaultargs") %s;\n' % function_name
+    str_function = '\t\t/****************** %s ******************/\n' % function_name
+    str_function += '\t\t%%feature("compactdefaultargs") %s;\n' % function_name
     str_function += process_function_docstring(f)
     str_function += "\t\t"
     # return type
@@ -1335,31 +1336,31 @@ def process_function(f):
         return_type = adapt_return_type(f["rtnType"])
     if f['static'] and 'static' not in return_type:
         return_type = 'static ' + return_type
-    # First case we handle : byref Standard_Integer and Standard_Real
-    # this is wrapped the followind way:
-    # one function Get* that returns the object
-    # one function Set* that sets the object
-    if return_type in ['Standard_Integer &', 'Standard_Real &', 'Standard_Boolean &']:
+    # Case where primitive values are accessed by reference
+    # e.g.
+    # if the method takes not parameters, simply add getter and setters
+    # one method Get* that returns the object
+    # one method Set* that sets the object
+    if return_type in ['Standard_Integer &', 'Standard_Real &', 'Standard_Boolean &'] and not f["parameters"]:
         # we only wrap this way methods that does not have any parameter
         #if len(f["parameters"]) == 0:
-        if not f["parameters"]:
-            modified_return_type = return_type.split(" ")[0]
-            str_function = """
-            %%feature("autodoc","1");
-            %%extend {
-                %s Get%s() {
-                return (%s) $self->%s();
-                }
-            };
-            %%feature("autodoc","1");
-            %%extend {
-                void Set%s(%s value ) {
-                $self->%s()=value;
-                }
-            };
-            """ % (modified_return_type, function_name, modified_return_type,
-                   function_name, function_name, modified_return_type, function_name)
-            return str_function
+        modified_return_type = return_type.split(" ")[0]
+        str_function = """
+        %%feature("autodoc","1");
+        %%extend {
+            %s Get%s() {
+            return (%s) $self->%s();
+            }
+        };
+        %%feature("autodoc","1");
+        %%extend {
+            void Set%s(%s value ) {
+            $self->%s()=value;
+            }
+        };
+        """ % (modified_return_type, function_name, modified_return_type,
+               function_name, function_name, modified_return_type, function_name)
+        return str_function
 
     str_function += "%s " % return_type
     # function name
@@ -1394,7 +1395,7 @@ def process_function(f):
             }
         };
         """
-    str_function = str_function.replace('const const', 'const')
+    str_function = str_function.replace('const const', 'const') + '\n'
     return str_function
 
 
@@ -1667,6 +1668,10 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
     for klass in inheritance_tree_list:
         # class name
         class_name = klass["name"]
+        # header
+        stars = ''.join(['*' for i in range(len(class_name ) + 9)])
+        class_def_str += "/%s\n* class %s *\n%s/\n" % (stars, class_name, stars)
+        #
         if class_name in exclude_classes:
             # if the class has to be excluded,
             # we go on with the next one to be processed
@@ -1810,7 +1815,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         class_def_str += '%%extend %s {\n' % class_name
         class_def_str += '\t%' + 'pythoncode {\n'
         class_def_str += '\t__repr__ = _dumps_object\n'
-        class_def_str += '\t}\n};\n'
+        class_def_str += '\t}\n};\n\n'
     return class_def_str
 
 
