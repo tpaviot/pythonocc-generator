@@ -1337,31 +1337,41 @@ def process_function(f):
     if f['static'] and 'static' not in return_type:
         return_type = 'static ' + return_type
     # Case where primitive values are accessed by reference
-    # e.g.
-    # if the method takes not parameters, simply add getter and setters
     # one method Get* that returns the object
     # one method Set* that sets the object
-    if return_type in ['Standard_Integer &', 'Standard_Real &', 'Standard_Boolean &'] and not f["parameters"]:
-        # we only wrap this way methods that does not have any parameter
-        #if len(f["parameters"]) == 0:
+    if return_type in ['Standard_Integer &', 'Standard_Real &', 'Standard_Boolean &']:
+        logging.warning('Creating Get and Set methods for method %s' % function_name)
         modified_return_type = return_type.split(" ")[0]
+        # we compute the parameters type and name, seperated with comma
+        getter_params_type_and_names = []
+        getter_params_only_names = []
+        for param in f["parameters"]:
+            param_type_and_name = "%s %s" % (adapt_param_type(param["type"]), param["name"])
+            getter_params_type_and_names.append(param_type_and_name)
+            getter_params_only_names.append(param["name"])
+        setter_params_type_and_names = getter_params_type_and_names + ['%s value' % modified_return_type]
+        
+        getter_params_type_and_names_str_csv = ','.join(getter_params_type_and_names)
+        setter_params_type_and_names_str_csv = ','.join(setter_params_type_and_names)
+        getter_params_only_names_str_csv = ','.join(getter_params_only_names)
+        
         str_function = """
         %%feature("autodoc","1");
         %%extend {
-            %s Get%s() {
-            return (%s) $self->%s();
+            %s Get%s(%s) {
+            return (%s) $self->%s(%s);
             }
         };
         %%feature("autodoc","1");
         %%extend {
-            void Set%s(%s value ) {
-            $self->%s()=value;
+            void Set%s(%s) {
+            $self->%s(%s)=value;
             }
-        };
-        """ % (modified_return_type, function_name, modified_return_type,
-               function_name, function_name, modified_return_type, function_name)
+        };\n""" % (modified_return_type, function_name, getter_params_type_and_names_str_csv,
+                   modified_return_type, function_name, getter_params_only_names_str_csv,
+                   function_name, setter_params_type_and_names_str_csv,
+                   function_name, getter_params_only_names_str_csv)
         return str_function
-
     str_function += "%s " % return_type
     # function name
     str_function += "%s " % function_name
