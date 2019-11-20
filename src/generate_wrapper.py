@@ -954,6 +954,7 @@ def adapt_return_type(return_type):
                ]
     for replace in replaces:
         return_type = return_type.replace(replace, "")
+    return_type = return_type.strip()
     # replace Standard_CString with char *
     return_type = return_type.replace("Standard_CString", "const char *")
     # remove const if const virtual double *  # SMESH only
@@ -1309,6 +1310,17 @@ def process_function(f):
             self->%s(s);}
         };
         """ % (function_name, function_name)
+    if function_name == "DumpJson":
+        str_function = """
+        %feature("autodoc", "1");
+        %extend{
+            std::string DumpJsonToString(int depth=-1) {
+            std::stringstream s;
+            self->DumpJson(s, depth);
+            return s.str();}
+        };
+        """
+        return str_function
     if "TYPENAME" in f["rtnType"]:
         return ""  # something in NCollection
     if function_name == "DEFINE_STANDARD_RTTIEXT":
@@ -1339,7 +1351,8 @@ def process_function(f):
     # Case where primitive values are accessed by reference
     # one method Get* that returns the object
     # one method Set* that sets the object
-    if return_type in ['Standard_Integer &', 'Standard_Real &', 'Standard_Boolean &']:
+    if return_type in ['Standard_Integer &', 'Standard_Real &', 'Standard_Boolean &',
+                       'Standard_Integer&', 'Standard_Real&', 'Standard_Boolean&']:
         logging.warning('Creating Get and Set methods for method %s' % function_name)
         modified_return_type = return_type.split(" ")[0]
         # we compute the parameters type and name, seperated with comma
