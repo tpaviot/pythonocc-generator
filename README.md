@@ -5,37 +5,36 @@ pythonocc is a python library whose purpose is to provide 3D modeling
 features. It is intended to developers who aim at developing
 CAD/PDM/PLM applications.
 
-pythonocc is built using the SWIG (http://www.swig.org),
+pythonocc is built using SWIG (http://www.swig.org) ,
 Simple Wrapper Interface Generator, from a set of '.i' SWIG files.
 
 pythonocc-generator is the pythonocc subproject dedicated to automatic
-SWIG '.i' files generator from OCE C++ header files. It relies on CppHeaderParser
-(https://bitbucket.org/senex/cppheaderparser) to perform code generation.
-
-Note : a cppheaderparser fork is available at https://github.com/robotpy/robotpy-cppheaderparser
+SWIG '.i' files generation from OCE or opencascade C++ header files. It relies on a 
+fork of CppHeaderParser (https://github.com/robotpy/robotpy-cppheaderparser)
+to parse hxx headers and perform code generation.
 
 How to create a local copy of the repository?
 ---------------------------------------------
 
-    git clone git://github.com/tpaviot/pythonocc-generator.git
+    $ git clone git://github.com/tpaviot/pythonocc-generator.git
 
 How to stay up to date with latest developements?
 -------------------------------------------------
 
-    cd pythonocc-generator
-    git pull
+    $ cd pythonocc-generator
+    $ git pull
 
 How to use ?
 ------------
 
 Edit/Modify the wrapper-generator.conf file then
 
-    cd src
-    python generate_wrapper.py
+    $ cd src
+    $ python generate_wrapper.py
 
 Requirements
 ------------
-You need OCE (http://github.com/tpaviot/oce) release 0.18.x headers.
+The current developments target opencascade 7.4.0 (http://dev.opencascade.org), source can b downloaded at https://github.com/tpaviot/oce/releases/tag/official-upstream-packages.
 
 All .i SWIG files are created and copied to the generated_swig_files path
 defined in the wrapper-generator.conf
