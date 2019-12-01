@@ -147,7 +147,6 @@ HXX_TO_EXCLUDE_FROM_CPPPARSER = ['NCollection_StlIterator.hxx',
                                  'IntWalk_PWalking.hxx',
                                  'HLRAlgo_PolyHidingData.hxx',
                                  'HLRAlgo_Array1OfPHDat.hxx',
-                                 'ShapeUpgrade_UnifySameDomain.hxx',
                                  'Standard_Dump.hxx',  # to avoid a dependency of Standard over TCollection
                                  'IMeshData_ParametersListArrayAdaptor.hxx',
                                  'BRepMesh_CustomBaseMeshAlgo.hxx',
@@ -1982,6 +1981,8 @@ class ModuleWrapper:
             f.write("#if defined(_WIN32)\n#include <windows.h>\n#endif\n")
         if self._module_name in ["BRepMesh", "XBRepMesh"]: # wrong header order with gcc4 issue #63
             f.write("#include<BRepMesh_Delaun.hxx>\n")
+        if self._module_name == "ShapeUpgrade":
+            f.write("#include<Precision.hxx>\n#include<ShapeUpgrade_UnifySameDomain.hxx>\n")
         module_headers = glob.glob('%s/%s_*.hxx' % (OCE_INCLUDE_DIR, self._module_name))
         module_headers += glob.glob('%s/%s.hxx' % (OCE_INCLUDE_DIR, self._module_name))
         module_headers += glob.glob('%s/%s_*.hxx' % (SMESH_INCLUDE_DIR, self._module_name))
