@@ -1023,8 +1023,15 @@ def process_function_docstring(f):
             param_type = adapt_param_type(param["type"])
             # remove const and &
             param_type = fix_type(param_type)
-            if "gp_" in param_type:
-                param_type = param_type.replace("&", "")
+            # we change opencascade::handle<XXX> & to XXX
+            if 'opencascade::handle' in param_type:
+                param_type = param_type.split('opencascade::handle<')[1].split('>')[0]
+            # in the docstring, we don't care about the "&"
+            # it's not the matter of a python user
+            param_type = param_type.replace("&", "")
+            # same for the const
+            param_type = param_type.replace("const", "")
+
             param_type = param_type.strip()
             parameters_string += "\t:param %s:" % param["name"]
             #parameters_string += "\t%s(%s)" % (param["name"], param_type, )
