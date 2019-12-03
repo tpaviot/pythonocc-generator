@@ -372,6 +372,7 @@ class HClassName : public _Array2Type_, public Standard_Transient {
 
 HSEQUENCE_TEMPLATE = """
 class HClassName : public _SequenceType_, public Standard_Transient {
+  public:
     HClassName();
     HClassName(const _SequenceType_& theOther);
     const _SequenceType_& Sequence();
@@ -1616,7 +1617,7 @@ def fix_type(type_str):
 
 
 def process_harray1():
-    wrapper_str = "/* harray1 class */"
+    wrapper_str = "/* harray1 classes */"
     for HClassName in ALL_HARRAY1:
         if HClassName.startswith(CURRENT_MODULE + "_"):
             _Array1Type_ = ALL_HARRAY1[HClassName]
@@ -1628,7 +1629,7 @@ def process_harray1():
 
 
 def process_harray2():
-    wrapper_str = "/* harray2 class */"
+    wrapper_str = "/* harray2 classes */"
     for HClassName in ALL_HARRAY2:
         if HClassName.startswith(CURRENT_MODULE + "_"):
             _Array2Type_ = ALL_HARRAY2[HClassName]
@@ -1640,7 +1641,7 @@ def process_harray2():
 
 
 def process_hsequence():
-    wrapper_str = "/* harray2 class */"
+    wrapper_str = "/* hsequence classes */"
     for HClassName in ALL_HSEQUENCE:
         if HClassName.startswith(CURRENT_MODULE + "_"):
             _SequenceType_ = ALL_HSEQUENCE[HClassName]
