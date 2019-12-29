@@ -871,7 +871,7 @@ OCE_MODULES = [
            ### TKTObj
            ('TObj', ['PCDM', 'CDM', 'CDF', 'Resource'], []),
            ### TKLCAF
-           ('TDF',  [], ['TDF_LabelNode']),
+           ('TDF',  ['TDataStd'], ['TDF_LabelNode']),
            ('TDataStd', [], []),
            ('TFunction', [], []),
            ('TDocStd', [], []),

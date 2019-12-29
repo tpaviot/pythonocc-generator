@@ -1798,6 +1798,21 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             class_def_str += '\t\t%s(const %s arg0);\n' % (class_name, class_name)
         methods_to_process = filter_member_functions(class_name, class_public_methods, members_functions_to_exclude, klass["abstract"])
         class_def_str += process_methods(methods_to_process)
+        # We add a special method for recovering label names
+        if class_name == "TDF_Label":
+            class_def_str += '%feature("autodoc", "Returns the label name") GetLabelName;\n'
+            class_def_str += '\t\t%extend{\n'
+            class_def_str += '\t\t\tstd::string GetLabelName() {\n'
+            class_def_str += '\t\t\tstd::string txt;\n'
+            class_def_str += '\t\t\tHandle(TDataStd_Name) name;\n'
+            class_def_str += '\t\t\tif (!self->IsNull() && self->FindAttribute(TDataStd_Name::GetID(),name)) {\n'
+            class_def_str += '\t\t\tTCollection_ExtendedString extstr = name->Get();\n'
+            class_def_str += '\t\t\tchar* str = new char[extstr.LengthOfCString()+1];\n'
+            class_def_str += '\t\t\textstr.ToUTF8CString(str);\n'
+            class_def_str += '\t\t\ttxt = str;\n'
+            class_def_str += '\t\t\tdelete[] str;}\n'
+            class_def_str += '\t\t\treturn txt;}\n'
+            class_def_str += '\t\t};\n'
         # then terminate the class definition
         class_def_str += "};\n\n"
         #
