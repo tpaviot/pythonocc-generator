@@ -420,9 +420,36 @@ NCOLLECTION_ARRAY1_EXTEND_TEMPLATE = '''
 };
 '''
 
+# We extend the NCollection_DataMap template with a Keys
+# method that returns a list of Keys
+# TODO: do the same for other Key types
+NCOLLECTION_DATAMAP_EXTEND_TEMPLATE = '''
+%extend NCollection_DataMap_Template_Instanciation {
+    PyObject* Keys() {
+        PyObject *l=PyList_New(0);
+        for (NCollection_DataMap_Template_Name::Iterator anIt1(*self); anIt1.More(); anIt1.Next()) {
+          PyObject *o = PyLong_FromLong(anIt1.Key());
+          PyList_Append(l, o);
+          Py_DECREF(o);
+        }
+    return l;
+    }
+};
+'''
+
+NODEFAULTCTOR = ['IFSelect_SelectBase', 'IFSelect_SelectControl', 'IFSelect_SelectDeduct',
+                 'PCDM_RetrievalDriver', 'MeshVS_DataSource3D', 'AIS_Dimension', 'Graphic3d_Layer',
+                 'Expr_BinaryExpression', 'Expr_NamedExpression', 'Expr_UnaryExpression',
+                 'Expr_SingleExpression', 'Expr_SingleRelation', 'Expr_UnaryExpression',
+                 'Geom_SweptSurface', 'Geom_BoundedSurface', 'ShapeCustom_Modification',
+                 'SelectMgr_CompositionFilter',
+                 'BRepMeshData_Wire', 'BRepMeshData_PCurve', 'BRepMeshData_Face',
+                 'BRepMeshData_Edge', 'BRepMeshData_Curve',
+                 'Graphic3d_BvhCStructureSet' ## Windows specific
+                 ]
 
 def get_log_header():
-    """ returns a timestand to be appended to the SWIG file
+    """ returns a header to be appended to the SWIG file
     Useful for development
     """
     os_name = platform.linux_distribution()[0] + ' ' + platform.system() + ' ' + platform.release()
@@ -734,6 +761,21 @@ def process_templates_from_typedefs(list_of_typedefs):
                 # TODO : it should be a good thing to use decorators here, to avoid code duplication
                 if 'NCollection_Array1' in template_type:
                     wrapper_str += NCOLLECTION_ARRAY1_EXTEND_TEMPLATE.replace("NCollection_Array1_Template_Instanciation", template_type)
+                elif 'NCollection_DataMap ' in template_type:
+                    print("Template type :", template_type)
+                    # NCollection_Datamap is similar to a Python dict,
+                    # it's a (key, value) store. Defined as
+                    # template < class TheKeyType, 
+                    # class TheItemType, 
+                    #class Hasher = NCollection_DefaultHasher<TheKeyType> >
+                    # some occt method return such an object, but the iterator can't be accessed
+                    # through Python. Se we extend this class with a Keys() methd that iterates over
+                    # NCollection_DataMap keys and returns a Python list of key objects.
+                    # Note : works for standard_Integer keys only so far
+                    if '<Standard_Integer' in template_type:
+                        ncollection_datamap_extent = NCOLLECTION_DATAMAP_EXTEND_TEMPLATE.replace("NCollection_DataMap_Template_Instanciation", template_type)
+                        ncollection_datamap_extent = ncollection_datamap_extent.replace("NCollection_DataMap_Template_Name", template_name)
+                        wrapper_str += ncollection_datamap_extent
         elif template_name.endswith("Iter") or "_ListIteratorOf" in template_name:  # it's a lst iterator, we use another way to wrap the template
         # #%template(TopTools_ListIteratorOfListOfShape) NCollection_TListIterator<TopTools_ListOfShape>;
             if "IteratorOf" in template_name:
@@ -951,6 +993,7 @@ def adapt_return_type(return_type):
                 "DEFINE_STANDARD_ALLOC ",
                 "DEFINE_NCOLLECTION_ALLOC :",
                 "DEFINE_NCOLLECTION_ALLOC",
+                "Standard_NODISCARD"
                ]
     for replace in replaces:
         return_type = return_type.replace(replace, "")
@@ -1475,36 +1518,38 @@ def must_ignore_default_destructor(klass):
 
 
 def class_can_have_default_constructor(klass):
-    """ By default, classes don't have default constructor.
-    We only use default constructor for classes that :
-    have DEFINE_STANDARD_ALLOC
-    and has not any private or protected constructor
+    """ Check if the class can have a defaultctor wrap
+    or, if not, return False if the %nodefaultctor is required
     """
+    if klass["name"] in NODEFAULTCTOR:
+        return False
     # class must not be an abstract class
     if klass["abstract"]:
+        logging.info("Class %s is abstract, using %%nodefaultctor directive." % klass["name"])
         return False
-    # we look for the DEFINE_STANDARD_ALLOC string in the class definition
+    # check if the class has at least one public constructor defined
+    has_one_public_constructor = False
     class_public_methods = klass['methods']['public']
-    IS_STANDARD_ALLOC = False
     for public_method in class_public_methods:
-        if "rtnType" in public_method:
-            if "DEFINE_STANDARD_ALLOC" in public_method["rtnType"]:
-                IS_STANDARD_ALLOC = True
-                break
-    if not IS_STANDARD_ALLOC:
-        return False
-    # moreover, we have to ensure that no private or protected constructor is defined
+        if public_method["constructor"]:
+            has_one_public_constructor = True
+    # we have to ensure that no private or protected constructor is defined
+    # we look for protected () constructor
+    has_one_protected_constructor = False
     class_protected_methods = klass['methods']['protected']
-    # finally, return True, the default constructor can be safely defined
     for protected_method in class_protected_methods:
         if protected_method["constructor"]:
-            return False
+            has_one_protected_constructor = True
+    # check for private constructor
+    has_one_private_constructor = False
     class_private_methods = klass['methods']['private']
-    # finally, return True, the default constructor can be safely defined
     for private_method in class_private_methods:
         if private_method["constructor"]:
-            return False
-    # finallyn returns True
+            has_one_private_constructor = True
+    if ((has_one_private_constructor and not has_one_public_constructor) or
+       (has_one_protected_constructor and not has_one_public_constructor)):
+       return False
+    #finally returns True, no need to use the %nodefaultctor
     return True
 
 
@@ -1918,7 +1963,7 @@ class ModuleWrapper:
         global CURRENT_MODULE, PYTHON_MODULE_DEPENDENCY
         CURRENT_MODULE = module_name
         # all modules depend, by default, upon Standard, NCollection and others
-        if module_name != 'Standard':
+        if module_name not in ['Standard', 'NCollection']:
             PYTHON_MODULE_DEPENDENCY = ['Standard', 'NCollection']
             reset_header_depency()
         else:
