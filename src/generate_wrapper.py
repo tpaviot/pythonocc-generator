@@ -51,11 +51,6 @@ PYTHONOCC_VERSION = config.get('pythonocc-core', 'version')
 OCE_INCLUDE_DIR = config.get('OCE', 'include_dir')
 if not os.path.isdir(OCE_INCLUDE_DIR):
     raise AssertionError("OCE include dir %s not found." % OCE_INCLUDE_DIR)
-
-# smesh, if any
-SMESH_INCLUDE_DIR = config.get('SMESH', 'include_dir')
-if not os.path.isdir(SMESH_INCLUDE_DIR):
-    logging.warning("SMESH include dir %s not found. SMESH wrapper not generated." % SMESH_INCLUDE_DIR)
 # swig output path
 PYTHONOCC_CORE_PATH = config.get('pythonocc-core', 'path')
 SWIG_OUTPUT_PATH = os.path.join(PYTHONOCC_CORE_PATH, 'src', 'SWIG_files', 'wrapper')
@@ -90,7 +85,6 @@ ALL_TOOLKITS = [TOOLKIT_Foundation,
                 TOOLKIT_Visualisation,
                 TOOLKIT_DataExchange,
                 TOOLKIT_OCAF,
-                TOOLKIT_SMesh,
                 TOOLKIT_VTK]
 TOOLKITS = {}
 for tk in ALL_TOOLKITS:
@@ -244,7 +238,7 @@ ALL_HSEQUENCE = {}
 
 # the list of all handles defined by the
 # DEFINE_STANDARD_HANDLE occ macro
-ALL_STANDARD_HANDLES = ['SMESH_MeshVSLink']
+ALL_STANDARD_HANDLES = []
 
 # the list of al classes that inherit from Standard_Transient
 # and, as a consequence, need the %wrap_handle and %make_alias macros
@@ -514,8 +508,6 @@ def filter_header_list(header_list, exclusion_list):
     for header_to_remove in exclusion_list:
         if os.path.join(OCE_INCLUDE_DIR, header_to_remove) in header_list:
             header_list.remove(os.path.join(OCE_INCLUDE_DIR, header_to_remove))
-        elif os.path.join(SMESH_INCLUDE_DIR, header_to_remove) in header_list:
-            header_list.remove(os.path.join(SMESH_INCLUDE_DIR, header_to_remove))
     # remove platform dependent files
     # this is done to have the same SWIG files on every platform
     # wnt specific
@@ -554,9 +546,6 @@ def get_all_module_headers(module_name):
     """
     mh = case_sensitive_glob(os.path.join(OCE_INCLUDE_DIR, '%s.hxx' % module_name))
     mh += case_sensitive_glob(os.path.join(OCE_INCLUDE_DIR, '%s_*.hxx' % module_name))
-    mh += case_sensitive_glob(os.path.join(SMESH_INCLUDE_DIR, '%s.hxx' % module_name))
-    mh += case_sensitive_glob(os.path.join(SMESH_INCLUDE_DIR, '%s_*.hxx' % module_name))
-    mh += case_sensitive_glob(os.path.join(SMESH_INCLUDE_DIR, 'Handle_%s.hxx*' % module_name))
     mh = filter_header_list(mh, HXX_TO_EXCLUDE_FROM_BEING_INCLUDED)
     headers_list = list(map(os.path.basename, mh))
     # sort alphabetical order
@@ -687,17 +676,8 @@ def adapt_header_file(header_content):
             # 'Handle(Graphic3d_DataStructureManager)']
             match = match.replace(" ", "")
             match = (match.split('Handle(')[1]).split(')')[0]
-            #header_content = header_content.replace(orig_match,
-            #                                        'Handle_%s' % match)
             header_content = header_content.replace(orig_match,
                                                     'opencascade::handle<%s>' % match)
-
-    # for smesh, remove EXPORTS that cause parser errors
-    header_content = header_content.replace("SMESH_EXPORT", "")
-    header_content = header_content.replace("SMESHCONTROLS_EXPORT", "")
-    header_content = header_content.replace("SMESHDS_EXPORT", "")
-    header_content = header_content.replace("STDMESHERS_EXPORT", "")
-    header_content = header_content.replace("NETGENPLUGIN_EXPORT", "")
     return header_content
 
 
@@ -875,14 +855,6 @@ def is_return_type_enum(return_type):
 def adapt_param_type(param_type):
     param_type = param_type.replace("Standard_CString", "const char *")
     param_type = param_type.replace("DrawType", "NIS_Drawer::DrawType")
-    # for SMESH
-    param_type = param_type.replace("TDefaults", "SMESH_0D_Algo::TDefaults")
-    param_type = param_type.replace("DistrType", "StdMeshers_NumberOfSegments::DistrType")
-    param_type = param_type.replace("TWireVector", "StdMeshers_MEFISTO_2D::TWireVector")
-    param_type = param_type.replace("::SMESH_Mesh", "SMESH_Mesh")
-    param_type = param_type.replace("::MeshDimension", " MeshDimension")
-    param_type = param_type.replace("TShapeShapeMap", " StdMeshers_ProjectionUtils::TShapeShapeMap")
-    param_type = param_type.replace("TAncestorMap", "StdMeshers_ProjectionUtils::TAncestorMap")
     check_dependency(param_type)
     return param_type
 
@@ -989,7 +961,6 @@ def adapt_return_type(return_type):
     """
     replaces = ["Standard_EXPORT ",
                 "Standard_EXPORT",
-                "SMESHDS_EXPORT",
                 "DEFINE_STANDARD_ALLOC ",
                 "DEFINE_NCOLLECTION_ALLOC :",
                 "DEFINE_NCOLLECTION_ALLOC",
@@ -1000,16 +971,11 @@ def adapt_return_type(return_type):
     return_type = return_type.strip()
     # replace Standard_CString with char *
     return_type = return_type.replace("Standard_CString", "const char *")
-    # remove const if const virtual double *  # SMESH only
+    # remove const if const virtual double *
     return_type = return_type.replace(": static", "static")
     return_type = return_type.replace(": const", "const")
     return_type = return_type.replace("const virtual double *", "virtual double *")
-    return_type = return_type.replace("DistrType", "StdMeshers_NumberOfSegments::DistrType")
-    return_type = return_type.replace("TWireVector", "StdMeshers_MEFISTO_2D::TWireVector")
-    return_type = return_type.replace("PGroupIDs", "SMESH_MeshEditor::PGroupIDs")
     return_type = return_type.replace("TAncestorMap", "TopTools_IndexedDataMapOfShapeListOfShape")
-    return_type = return_type.replace("ErrorCode", "SMESH_Pattern::ErrorCode")
-    return_type = return_type.replace("Fineness", "NETGENPlugin_Hypothesis::Fineness")
     # for instance "const TopoDS_Shape & -> ["const", "TopoDS_Shape", "&"]
     if (('gp' in return_type) and not 'TColgp' in return_type) or ('TopoDS' in return_type):
         return_type = return_type.replace('&', '')
@@ -1767,9 +1733,6 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         if must_ignore_default_destructor(klass):
         # check if the destructor is protected or private
             class_def_str += "%%ignore %s::~%s();\n" % (class_name, class_name)
-        # SMDS_ITerator is templated
-        if class_name == "SMDS_Iterator":
-            class_def_str += "template<typename VALUE> "
         # then defines the wrapper
         class_def_str += "class %s" % class_name
         # inheritance process
@@ -1817,7 +1780,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
                 continue
             if 'std::map<' in property_value['type']:
                 logging.warning('Wrong type in class property std::map')
-                continue  # TODO bug with SMESH_0D_Algo etc.
+                continue
             if property_value['constant'] or 'virtual' in property_value['raw_type'] or 'Standard_EXPORT' in property_value['raw_type'] or 'allback' in property_value['raw_type']:
                 continue
             if 'array_size' in property_value:
@@ -1890,14 +1853,6 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             class_def_str += '\t\tthe_shape.Location(location)\n'
             class_def_str += '\t\tself.this = the_shape.this\n'
             class_def_str += '\t}\n};\n'
-        # add SMDS_ITerator template instanciation
-        if class_name == "SMDS_Iterator":
-            class_def_str += "%template(SMDS_ElemIteratorPtr) SMDS_Iterator<const SMDS_MeshElement *>;\n"
-            class_def_str += "%template(SMDS_NodeIteratorPtr) SMDS_Iterator<const SMDS_MeshNode *>;\n"
-            class_def_str += "%template(SMDS_0DElementIteratorPtr) SMDS_Iterator<const SMDS_Mesh0DElement *>;\n"
-            class_def_str += "%template(SMDS_EdgeIteratorPtr) SMDS_Iterator<const SMDS_MeshEdge *>;\n"
-            class_def_str += "%template(SMDS_FaceIteratorPtr) SMDS_Iterator<const SMDS_MeshFace *>;\n"
-            class_def_str += "%template(SMDS_VolumeIteratorPtr) SMDS_Iterator<const SMDS_MeshVolume *>;\n\n"
         # for each class, overload the __repr__ method to avoid things like:
         # >>> print(box)
         #<OCC.TopoDS.TopoDS_Shape; proxy of <Swig Object of type 'TopoDS_Shape *' at 0x02
@@ -1915,7 +1870,7 @@ def is_module(module_name):
     'Standard' should return True
     'inj' should return False
     """
-    for mod in OCE_MODULES + SMESH_MODULES:
+    for mod in OCE_MODULES:
         if mod[0] == module_name:
             return True
     return False
@@ -1934,9 +1889,6 @@ def parse_module(module_name):
     """
     module_headers = glob.glob('%s/%s_*.hxx' % (OCE_INCLUDE_DIR, module_name))
     module_headers += glob.glob('%s/%s.hxx' % (OCE_INCLUDE_DIR, module_name))
-    if not module_headers:  # this can be smesh modules or the splitter
-        module_headers = glob.glob('%s/%s_*.hxx' % (SMESH_INCLUDE_DIR, module_name))
-        module_headers += glob.glob('%s/%s.hxx' % (SMESH_INCLUDE_DIR, module_name))
     # filter those headers
     module_headers = filter_header_list(module_headers, HXX_TO_EXCLUDE_FROM_CPPPARSER)
     cpp_headers = map(parse_header, module_headers)
@@ -2026,20 +1978,6 @@ class ModuleWrapper:
         for include in includes:
             f.write("%%include ../common/%s.i\n" % include)
         f.write("\n\n")
-        ## SMDS special process
-        # the following lines enable to wrap SMDS_Iterators
-        # that are boost_shared pointers
-        if self._module_name == "SMDS":
-            f.write("""%include <boost_shared_ptr.i>
-%shared_ptr(SMDS_Iterator<const SMDS_MeshElement *>)
-%shared_ptr(SMDS_Iterator<const SMDS_MeshNode *>)
-%shared_ptr(SMDS_Iterator<const SMDS_Mesh0DElement *>)
-%shared_ptr(SMDS_Iterator<const SMDS_MeshEdge *>)
-%shared_ptr(SMDS_Iterator<const SMDS_MeshFace *>)
-%shared_ptr(SMDS_Iterator<const SMDS_MeshVolume *>)
-%shared_ptr(SMDS_IteratorOfElements)
-
-""")
         # Here we write required dependencies, headers, as well as
         # other swig interface files
         f.write("%{\n")
@@ -2053,8 +1991,6 @@ class ModuleWrapper:
             f.write("#include<Precision.hxx>\n#include<ShapeUpgrade_UnifySameDomain.hxx>\n")
         module_headers = glob.glob('%s/%s_*.hxx' % (OCE_INCLUDE_DIR, self._module_name))
         module_headers += glob.glob('%s/%s.hxx' % (OCE_INCLUDE_DIR, self._module_name))
-        module_headers += glob.glob('%s/%s_*.hxx' % (SMESH_INCLUDE_DIR, self._module_name))
-        module_headers += glob.glob('%s/%s.hxx' % (SMESH_INCLUDE_DIR, self._module_name))
         module_headers.sort()
 
         mod_header = open(os.path.join(HEADERS_OUTPUT_PATH, "%s_module.hxx" % self._module_name), "w")
@@ -2108,7 +2044,7 @@ class ModuleWrapper:
 
 
 def process_module(module_name):
-    all_modules = OCE_MODULES + SMESH_MODULES
+    all_modules = OCE_MODULES
     module_exist = False
     for module in all_modules:
         if module[0] == module_name:

@@ -125,10 +125,6 @@ TOOLKIT_OCAF = {
             'TKXmlTObj': ['XmlTObjDrivers'],
             }
 
-TOOLKIT_SMesh = {
-            'SMESH': ['SMDSAbs', 'SMDS', 'SMESH', 'SMESHDS', 'StdMeshers', 'NETGENPlugin']
-            }
-
 TOOLKIT_VTK = {
             'TKIVtk': ['IVtk', 'IVtkOCC', 'IVtkVTK', 'IVtkTools']
             }
@@ -971,42 +967,6 @@ OCE_MODULES = [
            ('IVtkOCC', [], []),
            ('IVtkVTK', [], []),
            ('IVtkTools', [], []),
-           ]
-
-SALOME_SPLITTER_MODUlES = [
-          ('GEOMAlgo', [], []),
-          ]
-
-SMESH_MODULES = [
-           ('SMDSAbs', [], []),
-           ('SMDS', [], ['SMDS_EXPORT'],
-             {'SMDS_Mesh': ['ChangeElementNodes', 'boundaryEdges', 'boundaryFaces'],
-              'SMDS_FaceOfNodes': 'ChangeNodes',
-              'SMDS_PolygonalFaceOfNodes': 'ChangeNodes',
-              'SMDS_QuadraticFaceOfNodes': 'ChangeNodes',
-              'SMDS_QuadraticVolumeOfNodes': 'ChangeNodes',
-              'SMDS_VolumeOfNodes': 'ChangeNodes',
-              'SMDS_SpacePosition': ['SetCoords', 'GetTypeOfPosition']}),
-           ('SMESHDS', [], ['SMESHDS_GroupBase', 'SMESHDS_Hypothesis'],
-            {'SMESHDS_Mesh': 'ChangeElementNodes', 'SMESHDS_Command': 'ChangeElementNodes',
-             'SMESHDS_Script': 'ChangeElementNodes'}),
-           ('SMESH', ['math', 'gp', 'TopExp', 'TColStd', 'TShort',
-                      'Message', 'TCollection', 'Graphic3d', 'AIS', 'Aspect',
-                      'HLRAlgo', 'Poly', 'V3d', 'Select3D', 'Geom', 'TopTools',
-                      'SelectBasics', 'Visual3d', 'Prs3d', 'Quantity',
-                      'TColQuantity', 'TopLoc', 'Bnd', 'SelectMgr'],
-                     ['SMESH_Comment', 'SMESH_Octree', 'SMESH_OctreeNode',
-                      'SMESH_Array1', 'SMESH_Array2',
-                      'SMESH_ComputeError'],
-            {'SMESH_Hypothesis': 'IsStatusFatal', 'SMESH_Mesh': 'GetGroups',
-             'SMESH_MesherHelper': 'IsQuadraticMesh',
-             'SMESH_MeshEditor' : ['RotationSweep', 'ExtrusionSweep', 'Transform']},),
-           ('StdMeshers', ['TopTools', 'Adaptor3d'], ['StdMeshers_CompositeSegment_1D', 'StdMeshers_ProjectionUtils'],
-            {'StdMeshers_CompositeHexa_3D': 'CheckHypothesis',
-             'StdMeshers_ProjectionUtils': 'FindFaceAssociation'
-             }),
-           ('NETGENPlugin', [], ['NETGENPlugin_NETGEN_2D_ONLY'],
-            {'NETGENPlugin_Mesher': ['PrepareOCCgeometry', 'RemoveTmpFiles']}),
            ]
 
 if __name__ == '__main__':
