@@ -709,7 +709,6 @@ OCE_MODULES = [
               [],
               {},
             ),
-           
            ('AIS', ['TopTools', 'Message', 'TShort',
                     'SelectBasics', 'Visual3d', 'HLRAlgo', 'TColQuantity',
                     'SelectMgr'], [],
@@ -772,7 +771,7 @@ OCE_MODULES = [
                               'MoniTool'], []),
            ('STEPEdit', ['Message', 'StepBasic', 'StepData',
                          'Interface', 'MoniTool'], []),
-           ('GeomToStep', ['Message', 'StepBasic', 'StepBasic', 'StepGeom', 
+           ('GeomToStep', ['Message', 'StepBasic', 'StepBasic', 'StepGeom',
                            'StepRepr', 'Geom2d', 'Geom', 'MoniTool',
                            'StepElement', 'Interface', 'StepData', 'StepShape'], []),
            ('StepToGeom', ['Message', 'StepShape', 'StepBasic', 'StepGeom',  'StepRepr',
