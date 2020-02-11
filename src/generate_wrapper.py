@@ -874,6 +874,8 @@ def adapt_param_type(param_type):
             elif "&" in param_type: # pattern & is an out value
                 param_type = param_type.replace("&", "")
                 param_type = param_type.replace(pattern, "Standard_Integer &OutValue")
+            elif pattern == param_type:
+                param_type = param_type.replace(pattern, "int")
             else:
                 logging.warning("Unknown pattern in Standard_Integer typedef")
     param_type = param_type.strip()
