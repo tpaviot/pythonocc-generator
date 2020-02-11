@@ -748,8 +748,8 @@ def process_templates_from_typedefs(list_of_typedefs):
                 elif 'NCollection_DataMap ' in template_type:
                     # NCollection_Datamap is similar to a Python dict,
                     # it's a (key, value) store. Defined as
-                    # template < class TheKeyType, 
-                    # class TheItemType, 
+                    # template < class TheKeyType,
+                    # class TheItemType,
                     #class Hasher = NCollection_DefaultHasher<TheKeyType> >
                     # some occt method return such an object, but the iterator can't be accessed
                     # through Python. Se we extend this class with a Keys() methd that iterates over
@@ -786,7 +786,7 @@ def process_typedefs(typedefs_dict):
     # we check if there is any type def type that relies on an opencascade::handle
     # if this is the case, we must add the corresponding python module
     # as a dependency otherwise it leads to a runtime issue
-    
+
     # #check_dependency(must_include)
     for template_type in filtered_typedef_dict.values():
         if "opencascade::handle" in template_type: # we must add a PYTHON DEPENDENCY
@@ -1401,11 +1401,11 @@ def process_function(f):
             getter_params_type_and_names.append(param_type_and_name)
             getter_params_only_names.append(param["name"])
         setter_params_type_and_names = getter_params_type_and_names + ['%s value' % modified_return_type]
-        
+
         getter_params_type_and_names_str_csv = ','.join(getter_params_type_and_names)
         setter_params_type_and_names_str_csv = ','.join(setter_params_type_and_names)
         getter_params_only_names_str_csv = ','.join(getter_params_only_names)
-        
+
         str_function = """
         %%feature("autodoc","1");
         %%extend {
@@ -1535,8 +1535,8 @@ def class_can_have_default_constructor(klass):
         if private_method["constructor"]:
             has_one_private_constructor = True
     if ((has_one_private_constructor and not has_one_public_constructor) or
-       (has_one_protected_constructor and not has_one_public_constructor)):
-       return False
+            (has_one_protected_constructor and not has_one_public_constructor)):
+        return False
     #finally returns True, no need to use the %nodefaultctor
     return True
 
@@ -1732,7 +1732,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # class name
         class_name = klass["name"]
         # header
-        stars = ''.join(['*' for i in range(len(class_name ) + 9)])
+        stars = ''.join(['*' for i in range(len(class_name) + 9)])
         class_def_str += "/%s\n* class %s *\n%s/\n" % (stars, class_name, stars)
         #
         if class_name in exclude_classes:
@@ -2033,7 +2033,7 @@ class ModuleWrapper:
             f.write("#include<%s_module.hxx>\n" % dep)
         for add_dep in self._additional_dependencies:
             f.write("#include<%s_module.hxx>\n" % add_dep)
-    
+
         f.write("%};\n")
         for dep in PYTHON_MODULE_DEPENDENCY:
             if is_module(dep):
