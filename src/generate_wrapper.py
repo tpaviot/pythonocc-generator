@@ -223,7 +223,11 @@ TYPEDEF_TO_EXCLUDE = ['Handle_Standard_Transient',
                       'IMeshData::ICurveArrayAdaptor'
                      ]
 
-
+# Following are standard integer typedefs. They have to be replaced
+# with int, in the function adapt_param_type
+STANDARD_INTEGER_TYPEDEF = ["Graphic3d_ArrayFlags", "Graphic3d_ZLayerId",
+                            "MeshVS_BuilderPriority", "MeshVS_BuilderPriority",
+                            "MeshVS_DisplayModeFlags", "XCAFPrs_DocumentExplorerFlags"]
 # The list of all enums defined in oce
 ALL_ENUMS = []
 
@@ -742,7 +746,6 @@ def process_templates_from_typedefs(list_of_typedefs):
                 if 'NCollection_Array1' in template_type:
                     wrapper_str += NCOLLECTION_ARRAY1_EXTEND_TEMPLATE.replace("NCollection_Array1_Template_Instanciation", template_type)
                 elif 'NCollection_DataMap ' in template_type:
-                    print("Template type :", template_type)
                     # NCollection_Datamap is similar to a Python dict,
                     # it's a (key, value) store. Defined as
                     # template < class TheKeyType, 
@@ -853,8 +856,27 @@ def is_return_type_enum(return_type):
 
 
 def adapt_param_type(param_type):
+    param_type = param_type.strip()
     param_type = param_type.replace("Standard_CString", "const char *")
     param_type = param_type.replace("DrawType", "NIS_Drawer::DrawType")
+    # some enums are type defs and not properly handled by swig
+    # these are Standard_Integer
+    for pattern in STANDARD_INTEGER_TYPEDEF:
+        if pattern in param_type:
+            if "const" in param_type and "&" in param_type:
+                # const pattern is wrapped as an integer
+                param_type = param_type.replace(pattern, "int")
+                param_type = param_type.replace("const", "")
+                param_type = param_type.replace("&", "")
+            elif "const" in param_type:
+                param_type = param_type.replace("const", "")
+                param_type = param_type.replace(pattern, "int")
+            elif "&" in param_type: # pattern & is an out value
+                param_type = param_type.replace("&", "")
+                param_type = param_type.replace(pattern, "Standard_Integer &OutValue")
+            else:
+                logging.warning("Unknown pattern in Standard_Integer typedef")
+    param_type = param_type.strip()
     check_dependency(param_type)
     return param_type
 
