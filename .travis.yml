@@ -1,0 +1,80 @@
+os: linux
+
+dist: bionic
+
+language: cpp
+
+git:
+  depth: false
+
+jobs:
+  include:
+# Linux
+    - env: PYTHON="3.6" CONDA_PY=36 ARCH="x86_64"
+    - env: PYTHON="3.7" CONDA_PY=37 ARCH="x86_64"
+# OSX
+    - env: PYTHON="3.6" CONDA_PY=36 ARCH="x86_64"
+      os: osx
+      osx_image: xcode9.4
+    - env: PYTHON="3.7" CONDA_PY=37 ARCH="x86_64"
+      os: osx
+      osx_image: xcode9.4
+# Windows
+#    - env: PYTHON="3.7" CONDA_PY=36 ARCH="x86_64"
+#      os: windows
+
+before_install:
+  - if [[ "$TRAVIS_OS_NAME" != "windows" ]]; then
+      MINICONDA_PATH=$HOME/miniconda;
+      MINICONDA_SUB_PATH=$MINICONDA_PATH/bin;
+    elif [[ "$TRAVIS_OS_NAME" == "windows" ]]; then
+      MINICONDA_PATH=/c/tools/miniconda3;
+      MINICONDA_SUB_PATH=$MINICONDA_PATH/Scripts;
+    fi
+  - if [ "$TRAVIS_OS_NAME" == "linux" ]; then
+      wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
+    elif [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+      wget https://repo.continuum.io/miniconda/Miniconda3-latest-MacOSX-x86_64.sh -O miniconda.sh;
+    fi
+
+install:
+  - if [[ "$TRAVIS_OS_NAME" != "windows" ]]; then
+      chmod +x miniconda.sh;
+      yes | ./miniconda.sh -b -p $MINICONDA_PATH;
+    elif  [[ "$TRAVIS_OS_NAME" == "windows" ]]; then
+      echo "installing miniconda for windows";
+      choco install openssl.light;
+      choco install miniconda3;
+    fi;
+  - export PATH="$MINICONDA_PATH:$MINICONDA_SUB_PATH:$PATH";
+  - hash -r
+  - conda config --set always_yes yes --set changeps1 no
+  - conda update -q conda
+  # Useful for debugging any issues with conda
+  - conda info -a
+  # download/install occt 7.4.0 from dlr-sc channel
+  - conda config --add channels https://conda.anaconda.org/dlr-sc
+  # create a test environment
+  - conda create -n test_pythonocc_generator python=$PYTHON
+  # switch to this environment
+  - source activate test_pythonocc_generator
+  - conda install opencascade=7.4.0
+  - conda install -c conda-forge ply
+
+
+script:
+  - pwd
+  - if [ "$TRAVIS_OS_NAME" == "linux" ]; then
+      cp ./ci/wrapper_generator.travis.linux.conf ./src/wrapper_generator.conf;
+    elif [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+      cp ./ci/wrapper_generator.travis.osx.conf ./src/wrapper_generator.conf;
+    elif  [[ "$TRAVIS_OS_NAME" == "windows" ]]; then
+      cp ./ci/wrapper_generator.travis.win.conf ./src/wrapper_generator.conf;
+    fi
+  # create required folders
+  - mkdir -p output/cmake
+  - mkdir -p output/src/SWIG_files/wrapper
+  - mkdir -p output/src/SWIG_files/headers
+  # then generate the SWIG files
+  - cd src
+  - python generate_wrapper.py
