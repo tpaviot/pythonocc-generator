@@ -32,12 +32,6 @@ import time
 
 from Modules import *
 
-# import CppHeaderParser
-def path_from_root(*pathelems):
-    return os.path.join(__rootpath__, *pathelems)
-__rootpath__ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(path_from_root('src', 'robotpy-cppheaderparser'))
-
 import CppHeaderParser
 
 ##############################################
