@@ -1,3 +1,5 @@
+[![Travis Badge](https://travis-ci.org/tpaviot/pythonocc-generator.svg?branch=master)](https://travis-ci.org/tpaviot/pythonocc-generator)
+
 pythonocc-generator
 -------------------
 
