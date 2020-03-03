@@ -59,7 +59,8 @@ install:
   # switch to this environment
   - source activate test_pythonocc_generator
   - conda install opencascade=7.4.0
-  - conda install -c conda-forge ply
+  # install required dependencies ply and cppheaderparser
+  - pip install -r requirements.txt
 
 
 script:
