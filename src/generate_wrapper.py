@@ -655,10 +655,13 @@ def adapt_header_file(header_content):
             # to avoid cyclic references in the SWIG files
             logging.info("Found HSEQUENCE definition" + typename + ':' + base_typename)
             ALL_HSEQUENCE[typename] = base_typename
+    # skip some defines that prevent header parsing
     header_content = header_content.replace('DEFINE_STANDARD_RTTI_INLINE',
                                             '//DEFINE_STANDARD_RTTI_INLINE')
     header_content = header_content.replace('Standard_DEPRECATED',
                                             '//Standard_DEPRECATED')
+    header_content = header_content.replace('DECLARE_TOBJOCAF_PERSISTENCE',
+                                            '//DECLARE_TOBJOCAF_PERSISTENCE')
     # TODO : use the @deprecated python decorator to raise a Deprecation exception
     # see https://github.com/tantale/deprecated
     # each time this method is used
