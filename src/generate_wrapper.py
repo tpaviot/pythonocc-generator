@@ -74,6 +74,13 @@ log.addHandler(console_handler)
 ####################
 # Global variables #
 ####################
+
+##################
+# For statistics #
+##################
+NB_TOTAL_CLASSES = 0  # number of wrapped classes
+NB_TOTAL_METHODS = 0  # number of wrapped methods
+
 ALL_TOOLKITS = [TOOLKIT_Foundation,
                 TOOLKIT_Modeling,
                 TOOLKIT_Visualisation,
@@ -85,7 +92,7 @@ for tk in ALL_TOOLKITS:
     TOOLKITS.update(tk)
 
 LICENSE_HEADER = """/*
-Copyright 2008-2019 Thomas Paviot (tpaviot@gmail.com)
+Copyright 2008-2020 Thomas Paviot (tpaviot@gmail.com)
 
 This file is part of pythonOCC.
 pythonOCC is free software: you can redistribute it and/or modify
@@ -242,6 +249,43 @@ ALL_STANDARD_HANDLES = []
 # and, as a consequence, need the %wrap_handle and %make_alias macros
 ALL_STANDARD_TRANSIENTS = ['Standard_Transient']
 
+# classes that must not wrap a default constructor
+NODEFAULTCTOR = ['IFSelect_SelectBase', 'IFSelect_SelectControl', 'IFSelect_SelectDeduct',
+                 'PCDM_RetrievalDriver', 'MeshVS_DataSource3D', 'AIS_Dimension', 'Graphic3d_Layer',
+                 'Expr_BinaryExpression', 'Expr_NamedExpression', 'Expr_UnaryExpression',
+                 'Expr_SingleExpression', 'Expr_SingleRelation', 'Expr_UnaryExpression',
+                 'Geom_SweptSurface', 'Geom_BoundedSurface', 'ShapeCustom_Modification',
+                 'SelectMgr_CompositionFilter',
+                 'BRepMeshData_Wire', 'BRepMeshData_PCurve', 'BRepMeshData_Face',
+                 'BRepMeshData_Edge', 'BRepMeshData_Curve',
+                 'Graphic3d_BvhCStructureSet' ## Windows specific
+                 ]
+
+
+TEMPLATES_TO_EXCLUDE = ['gp_TrsfNLerp',
+                        # IntPolyh templates don't work
+                        'IntPolyh_Array',
+                        # and this one also
+                        'NCollection_CellFilter',
+                        'BVH_PrimitiveSet',
+                        'BVH_Builder',
+                        'pair',  # for std::pair
+                        # for Graphic3d to compile
+                        'Graphic3d_UniformValue',
+                        'NCollection_Shared',
+                        'NCollection_Handle',
+                        'NCollection_DelMapNode'
+                        'BOPTools_BoxSet',
+                        'BOPTools_PairSelector',
+                        'BOPTools_BoxSet',
+                        'BOPTools_BoxSelector',
+                        'BOPTools_PairSelector'
+                        ]
+
+##########################
+# Templates for includes #
+##########################
+
 BOPDS_HEADER_TEMPLATE = '''
 %include "BOPCol_NCVector.hxx";
 '''
@@ -312,27 +356,9 @@ NCOLLECTION_HEADER_TEMPLATE = '''
 %ignore NCollection_TListIterator::Value();
 '''
 
-TEMPLATES_TO_EXCLUDE = ['gp_TrsfNLerp',
-                        # IntPolyh templates don't work
-                        'IntPolyh_Array',
-                        # and this one also
-                        'NCollection_CellFilter',
-                        'BVH_PrimitiveSet',
-                        'BVH_Builder',
-                        'std::pair',
-                        # for Graphic3d to compile
-                        'Graphic3d_UniformValue',
-                        'NCollection_Shared',
-                        'NCollection_Handle',
-                        'NCollection_DelMapNode'
-                        #'NCollection_IndexedMap',
-                        #'NCollection_DataMap'
-                        'BOPTools_BoxSet',
-                        'BOPTools_PairSelector',
-                        'BOPTools_BoxSet',
-                        'BOPTools_BoxSelector',
-                        'BOPTools_PairSelector'
-                        ]
+################################
+# Templates for method wrapper #
+################################
 
 HARRAY1_TEMPLATE = """
 class HClassName : public _Array1Type_, public Standard_Transient {
@@ -429,22 +455,161 @@ NCOLLECTION_DATAMAP_EXTEND_TEMPLATE = '''
 };
 '''
 
-NODEFAULTCTOR = ['IFSelect_SelectBase', 'IFSelect_SelectControl', 'IFSelect_SelectDeduct',
-                 'PCDM_RetrievalDriver', 'MeshVS_DataSource3D', 'AIS_Dimension', 'Graphic3d_Layer',
-                 'Expr_BinaryExpression', 'Expr_NamedExpression', 'Expr_UnaryExpression',
-                 'Expr_SingleExpression', 'Expr_SingleRelation', 'Expr_UnaryExpression',
-                 'Geom_SweptSurface', 'Geom_BoundedSurface', 'ShapeCustom_Modification',
-                 'SelectMgr_CompositionFilter',
-                 'BRepMeshData_Wire', 'BRepMeshData_PCurve', 'BRepMeshData_Face',
-                 'BRepMeshData_Edge', 'BRepMeshData_Curve',
-                 'Graphic3d_BvhCStructureSet' ## Windows specific
-                 ]
+TEMPLATE__EQ__ = """
+            %%extend{
+                bool __eq_wrapper__(%s other) {
+                if (*self==other) return true;
+                else return false;
+                }
+            }
+            %%pythoncode {
+            def __eq__(self, right):
+                try:
+                    return self.__eq_wrapper__(right)
+                except:
+                    return False
+            }
+"""
+
+TEMPLATE__IMUL__ = """
+            %%extend{
+                void __imul_wrapper__(%s other) {
+                *self *= other;
+                }
+            }
+            %%pythoncode {
+            def __imul__(self, right):
+                self.__imul_wrapper__(right)
+                return self
+            }
+"""
+
+TEMPLATE__NE__ = """
+            %%extend{
+                bool __ne_wrapper__(%s other) {
+                if (*self!=other) return true;
+                else return false;
+                }
+            }
+            %%pythoncode {
+            def __ne__(self, right):
+                try:
+                    return self.__ne_wrapper__(right)
+                except:
+                    return True
+            }
+"""
+
+TEMPLATE__IADD__ = """
+            %%extend{
+                void __iadd_wrapper__(%s other) {
+                *self += other;
+                }
+            }
+            %%pythoncode {
+            def __iadd__(self, right):
+                self.__iadd_wrapper__(right)
+                return self
+            }
+"""
+
+TEMPLATE__ISUB__ = """
+            %%extend{
+                void __isub_wrapper__(%s other) {
+                *self -= other;
+                }
+            }
+            %%pythoncode {
+            def __isub__(self, right):
+                self.__isub_wrapper__(right)
+                return self
+            }
+"""
+
+TEMPLATE__ITRUEDIV__ = """
+            %%extend{
+                void __itruediv_wrapper__(%s other) {
+                *self /= other;
+                }
+            }
+            %%pythoncode {
+            def __itruediv__(self, right):
+                self.__itruediv_wrapper__(right)
+                return self
+            }
+"""
+
+TEMPLATE_OSTREAM = """
+        %%feature("autodoc", "1");
+        %%extend{
+            std::string %sToString() {
+            std::stringstream s;
+            self->%s(s);
+            return s.str();}
+        };
+"""
+
+TEMPLATE_ISTREAM = """
+            %%feature("autodoc", "1");
+            %%extend{
+                void %sFromString(std::string src) {
+                std::stringstream s(src);
+                self->%s(s);}
+            };
+"""
+
+TEMPLATE_DUMPJSON = """
+            %feature("autodoc", "1");
+            %extend{
+                std::string DumpJsonToString(int depth=-1) {
+                std::stringstream s;
+                self->DumpJson(s, depth);
+                return s.str();}
+            };
+"""
+
+TEMPLATE_GETTER_SETTER = """
+        %%feature("autodoc","1");
+        %%extend {
+            %s Get%s(%s) {
+            return (%s) $self->%s(%s);
+            }
+        };
+        %%feature("autodoc","1");
+        %%extend {
+            void Set%s(%s) {
+            $self->%s(%s)=value;
+            }
+        };
+"""
+
+TEMPLATE_HASHCODE = """
+        %extend {
+            Standard_Integer __hash__() {
+            return $self->HashCode(2147483647);
+            }
+        };
+"""
+
+TIMESTAMP_TEMPLATE = """
+############################
+Running pythonocc-generator.
+############################
+git revision : %s
+
+operating system : %s
+
+occt version targeted : %s
+
+date : %s
+############################
+"""
 
 def get_log_header():
     """ returns a header to be appended to the SWIG file
     Useful for development
     """
-    os_name = platform.linux_distribution()[0] + ' ' + platform.system() + ' ' + platform.release()
+    os_name = platform.system() + ' ' + platform.architecture()[0] + ' ' + platform.release()
     generator_git_revision = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).strip().decode('utf8')
     now = str(datetime.datetime.now())
     # find the OCC VERSION targeted by the wrapper
@@ -458,19 +623,7 @@ def get_log_header():
         for l in file_lines:
             if l.startswith("#define OCC_VERSION_COMPLETE"):
                 occ_version = l.split('"')[1].strip()
-    timestamp = """
-############################
-Running pythonocc-generator.
-############################
-git revision : %s
-
-operating system : %s
-
-occt version targeted : %s
-
-date : %s
-############################
-""" % (generator_git_revision, os_name, occ_version, now)
+    timestamp = TIMESTAMP_TEMPLATE % (generator_git_revision, os_name, occ_version, now)
     return timestamp
 
 
@@ -619,7 +772,7 @@ def adapt_header_file(header_content):
             # @TODO find inheritance name
             header_content = header_content.replace('DEFINE_STANDARD_RTTIEXT',
                                                     '//DEFINE_STANDARD_RTTIEXT')
-     # Search for HARRAY1
+    # Search for HARRAY1
     outer = re.compile("DEFINE_HARRAY1[\\s]*\\([\\w\\s]+\\,+[\\w\\s]+\\)")
     matches = outer.findall(header_content)
     if matches:
@@ -662,23 +815,28 @@ def adapt_header_file(header_content):
                                             '//Standard_DEPRECATED')
     header_content = header_content.replace('DECLARE_TOBJOCAF_PERSISTENCE',
                                             '//DECLARE_TOBJOCAF_PERSISTENCE')
+    # remove stuff that prevent CppHeaderPArser to work correctly    
+    header_content = header_content.replace('DEFINE_STANDARD_ALLOC', '')
+    header_content = header_content.replace('Standard_EXPORT', '')
+    header_content = header_content.replace('Standard_NODISCARD', '')
     # TODO : use the @deprecated python decorator to raise a Deprecation exception
     # see https://github.com/tantale/deprecated
     # each time this method is used
     # then we look for Handle(Something) use
-    # and replace with Handle_Something
+    # and replace with opencascade::handle<Something>
     outer = re.compile("Handle[\\s]*\\([\\w\\s]*\\)")
     matches = outer.findall(header_content)
     if matches:
         for match in matches:
-            orig_match = match
             # matches are of the form :
             #['Handle(Graphic3d_Structure)',
             # 'Handle(Graphic3d_DataStructureManager)']
             match = match.replace(" ", "")
-            match = (match.split('Handle(')[1]).split(')')[0]
-            header_content = header_content.replace(orig_match,
-                                                    'opencascade::handle<%s>' % match)
+            class_name = (match.split('Handle(')[1]).split(')')[0]
+            if class_name == "" or not class_name[0].isupper():
+                continue
+            header_content = header_content.replace(match,
+                                                    'opencascade::handle<%s>' % class_name)
     return header_content
 
 
@@ -708,6 +866,9 @@ def filter_typedefs(typedef_dict):
     for key in list(typedef_dict):
         if key in TYPEDEF_TO_EXCLUDE:
             del typedef_dict[key]
+    for key in list(typedef_dict):
+        typedef_dict[key] = typedef_dict[key].replace(" ::", "::")
+        typedef_dict[key] = typedef_dict[key].replace(" , ", ", ")
     return typedef_dict
 
 
@@ -721,8 +882,10 @@ def process_templates_from_typedefs(list_of_typedefs):
     """
     wrapper_str = "/* templates */\n"
     for t in list_of_typedefs:
-        template_name = t[1]
+        template_name = t[1].replace(" ", "")
         template_type = t[0]
+        if "unsigned" not in template_type and "const" not in template_type:
+          template_type = template_type.replace(" ", "")
         # we must include
         if not (template_type.endswith("::Iterator") or template_type.endswith("::Type")):  #it's not an iterator
             # check that there's no forbidden template
@@ -742,7 +905,7 @@ def process_templates_from_typedefs(list_of_typedefs):
                 # TODO : it should be a good thing to use decorators here, to avoid code duplication
                 if 'NCollection_Array1' in template_type:
                     wrapper_str += NCOLLECTION_ARRAY1_EXTEND_TEMPLATE.replace("NCollection_Array1_Template_Instanciation", template_type)
-                elif 'NCollection_DataMap ' in template_type:
+                elif 'NCollection_DataMap' in template_type:
                     # NCollection_Datamap is similar to a Python dict,
                     # it's a (key, value) store. Defined as
                     # template < class TheKeyType,
@@ -759,7 +922,7 @@ def process_templates_from_typedefs(list_of_typedefs):
         elif template_name.endswith("Iter") or "_ListIteratorOf" in template_name:  # it's a lst iterator, we use another way to wrap the template
         # #%template(TopTools_ListIteratorOfListOfShape) NCollection_TListIterator<TopTools_ListOfShape>;
             if "IteratorOf" in template_name:
-                if not "opencascade::handle" in template_type:
+                if not "::handle" in template_type:
                     typ = (template_type.split('<')[1]).split('>')[0]
                 else:
                     h_typ = (template_type.split('<')[2]).split('>')[0]
@@ -784,7 +947,6 @@ def process_typedefs(typedefs_dict):
     # if this is the case, we must add the corresponding python module
     # as a dependency otherwise it leads to a runtime issue
 
-    # #check_dependency(must_include)
     for template_type in filtered_typedef_dict.values():
         if "opencascade::handle" in template_type: # we must add a PYTHON DEPENDENCY
             if template_type.count('<') == 2:
@@ -947,7 +1109,7 @@ def check_dependency(item):
     elif item.startswith("Handle_"):
         module = item.split('_')[1]
     elif item.startswith("opencascade::handle<"):
-        item = item.split("<")[1].split(">")[0]
+        item = item.split("<")[1].split(">")[0].strip()
         module = item.split('_')[0]
     elif item.count('_') > 0:  # Standard_Integer or NCollection_CellFilter_InspectorXYZ
         module = item.split('_')[0]
@@ -977,16 +1139,11 @@ def test_check_dependency():
 
 
 def adapt_return_type(return_type):
-    """ Remove Standard_EXPORT and everything that pollute
-    the type definition
+    """ adapt the type definition
     """
-    replaces = ["Standard_EXPORT ",
-                "Standard_EXPORT",
-                "DEFINE_STANDARD_ALLOC ",
+    replaces = ["public", "protected : private",  # TODO: CppHeaderParser may badly parse these methods
                 "DEFINE_NCOLLECTION_ALLOC :",
-                "DEFINE_NCOLLECTION_ALLOC",
-                "Standard_NODISCARD"
-               ]
+                "DEFINE_NCOLLECTION_ALLOC"]
     for replace in replaces:
         return_type = return_type.replace(replace, "")
     return_type = return_type.strip()
@@ -998,8 +1155,11 @@ def adapt_return_type(return_type):
     return_type = return_type.replace("const virtual double *", "virtual double *")
     return_type = return_type.replace("TAncestorMap", "TopTools_IndexedDataMapOfShapeListOfShape")
     # for instance "const TopoDS_Shape & -> ["const", "TopoDS_Shape", "&"]
+    # opencascade::handle may contain extra spaces, that has to be removed
+    if "opencascade::handle" in return_type:
+        return_type = return_type.replace(" >", ">")
     if (('gp' in return_type) and not 'TColgp' in return_type) or ('TopoDS' in return_type):
-        return_type = return_type.replace('&', '')
+        return_type = return_type.replace('&', '').strip()
     check_dependency(return_type)
     # check is it is an enum
     if is_return_type_enum(return_type) and "&" in return_type:
@@ -1009,10 +1169,10 @@ def adapt_return_type(return_type):
 
 
 def test_adapt_return_type():
-    adapted_1 = adapt_return_type("Standard_EXPORT Standard_Integer")
-    assert adapted_1 == "Standard_Integer"
-    adapted_2 = adapt_return_type("DEFINE_STANDARD_ALLOC Standard_EXPORT static Standard_Integer")
-    assert adapted_2 == "static Standard_Integer"
+    adapted_1 = adapt_return_type("Standard_CString")
+    assert adapted_1 == "const char *"
+    adapted_2 = adapt_return_type("gp_Dir &")
+    assert adapted_2 == "gp_Dir"
 
 
 def adapt_function_name(f_name):
@@ -1077,7 +1237,7 @@ def process_function_docstring(f):
     ret = adapt_return_type(f["rtnType"])
     if ret != 'void':
         ret = ret.replace("&", "")
-        ret = ret.replace("virtual", "")
+        #ret = ret.replace("virtual", "")
         ret = fix_type(ret)
         ret = ret.replace(": static ", "")
         ret = ret.replace("static ", "")
@@ -1098,7 +1258,7 @@ def process_function_docstring(f):
         # remove <br>
         # first, a strange thing in BSplClib
         doxygen_string = doxygen_string.replace('\\ <br>', " ")
-        doxygen_string = doxygen_string.replace('<br>', " ")
+        doxygen_string = doxygen_string.replace('<br>', "")
         # replace <me> with <self>, which is more pythonic
         doxygen_string = doxygen_string.replace('<me>', "<self>")
         # make '\r' correctly processed
@@ -1116,40 +1276,30 @@ def process_function_docstring(f):
         doxygen_string = doxygen_string.replace('    ', " ")
         doxygen_string = doxygen_string.replace('   ', " ")
         doxygen_string = doxygen_string.replace('  ', " ")
-        # when documentation is missing,
-        # the related string is "returns the algorithm"
-        # it's quite unclear
-        doxygen_string = doxygen_string.replace("Returns the algorithm",
-                                                "Missing detailed docstring")
+
+        doxygen_string = doxygen_string.capitalize()
+        if not doxygen_string.endswith("."):
+            doxygen_string = doxygen_string + "."
         # then remove spaces from start and end
-        doxygen_string = doxygen_string.strip()
-        doxygen_string = "\t* " + doxygen_string + "\n"
+        doxygen_string = doxygen_string.strip() + "\n\n"  # a blank line is added
     # concatenate everything
     final_string = doxygen_string + parameters_string + returns_string
-    string_to_return += '%s") %s;\n' % (final_string.strip(), function_name)
+    string_to_return += '%s") %s;\n' % (final_string, function_name)
     return string_to_return
 
 
 def adapt_default_value(def_value):
     """ adapt default value """
-    #def_value = def_value.replace(": : ", "")
     def_value = def_value.replace(' ', '')
     def_value = def_value.replace('"', "'")
     def_value = def_value.replace("''", '""')
-    def_value = def_value.replace("PConfusion", "::Confusion")
-    def_value = def_value.replace("PrecisionConfusion", "Precision::Confusion")
-    def_value = def_value.replace("Precision::::Confusion", "Precision::Confusion")
     return def_value
 
 
 def adapt_default_value_parmlist(parm):
     """ adapts default value to be used in swig parameter list """
     def_value = parm["defaultValue"]
-    #def_value = def_value.replace(": : ", "")
     def_value = def_value.replace(' ', '')
-    def_value = def_value.replace("PConfusion", "::Confusion")
-    def_value = def_value.replace("PrecisionConfusion", "Precision::Confusion")
-    def_value = def_value.replace("Precision::::Confusion", "Precision::Confusion")
     return def_value
 
 
@@ -1196,184 +1346,75 @@ def process_function(f):
     If process_docstrings is set to True, the documentation string
     from the C++ header will be used as is for the python wrapper
     """
+    global NB_TOTAL_METHODS
     if f["template"]:
         return False
-
     # first, adapt function name, if needed
     function_name = adapt_function_name(f["name"])
+    ################################################
+    # Cases where the method should not be wrapped #
+    ################################################
     # destructors are not wrapped
     # they are shadowed by a function that calls a garbage collector
     if f["destructor"]:
         return ""
     if f["returns"] == "~":
         return ""  # a destructor that should be considered as a destructor
-    if "operator Handle" in function_name:
-        return ""  # difficult to wrap, useless
-    if "operator ++" in function_name:
-        return ""  # impossible to wrap in python
-    if "operator ()" in function_name:
-        return""  # impossible to wrap in python
-    if "operator []" in function_name:
-        return ""  # impossible to wrap in python
-    if "operator <<" in function_name:
-        return ""
-    if "operator ^" in function_name:
-        return ""
-    if "operator !" in function_name:
-        return ""
-    # special process for operator ==
-    if "operator ==" in function_name:
-        param = f["parameters"][0]
-        param_type = param["type"].replace("&", "")
-        return """
-        %%extend{
-            bool __eq_wrapper__(%s other) {
-            if (*self==other) return true;
-            else return false;
-            }
-        }
-        %%pythoncode {
-        def __eq__(self, right):
-            try:
-                return self.__eq_wrapper__(right)
-            except:
-                return False
-        }
-        """ % param_type
-    # special process for operator !=
-    if "operator !=" in function_name:
-        param = f["parameters"][0]
-        param_type = param["type"].replace("&", "")
-        return """
-        %%extend{
-            bool __ne_wrapper__(%s other) {
-            if (*self!=other) return true;
-            else return false;
-            }
-        }
-        %%pythoncode {
-        def __ne__(self, right):
-            try:
-                return self.__ne_wrapper__(right)
-            except:
-                return True
-        }
-        """ % param_type
-    # special process for operator +=
-    if "operator +=" in function_name:
-        param = f["parameters"][0]
-        param_type = param["type"].replace("&", "")
-        return """
-        %%extend{
-            void __iadd_wrapper__(%s other) {
-            *self += other;
-            }
-        }
-        %%pythoncode {
-        def __iadd__(self, right):
-            self.__iadd_wrapper__(right)
-            return self
-        }
-        """ % param_type
-    # special process for operator *=
-    if "operator *=" in function_name:
-        param = f["parameters"][0]
-        param_type = param["type"].replace("&", "")
-        return """
-        %%extend{
-            void __imul_wrapper__(%s other) {
-            *self *= other;
-            }
-        }
-        %%pythoncode {
-        def __imul__(self, right):
-            self.__imul_wrapper__(right)
-            return self
-        }
-        """ % param_type
-    # special process for operator -=
-    if "operator -=" in function_name:
-        param = f["parameters"][0]
-        param_type = param["type"].replace("&", "")
-        return """
-        %%extend{
-            void __isub_wrapper__(%s other) {
-            *self -= other;
-            }
-        }
-        %%pythoncode {
-        def __isub__(self, right):
-            self.__isub_wrapper__(right)
-            return self
-        }
-        """ % param_type
-    # special process for operator -=
-    if "operator /=" in function_name:
-        param = f["parameters"][0]
-        param_type = param["type"].replace("&", "")
-        return """
-        %%extend{
-            void __itruediv_wrapper__(%s other) {
-            *self /= other;
-            }
-        }
-        %%pythoncode {
-        def __itruediv__(self, right):
-            self.__itruediv_wrapper__(right)
-            return self
-        }
-        """ % param_type
-    # special case : Standard_OStream or Standard_IStream is the only parameter
-    if len(f["parameters"]) == 1:
-        param = f["parameters"][0]
-        param_type = param["type"].replace("&", "")
-        if 'Standard_OStream' in '%s' % param_type:
-            str_function = """
-        %%feature("autodoc", "1");
-        %%extend{
-            std::string %sToString() {
-            std::stringstream s;
-            self->%s(s);
-            return s.str();}
-        };
-        """ % (function_name, function_name)
-            return str_function
-        if ('std::istream &' in '%s' % param_type) or ('Standard_IStream' in param_type):
-            return """
-        %%feature("autodoc", "1");
-        %%extend{
-            void %sFromString(std::string src) {
-            std::stringstream s(src);
-            self->%s(s);}
-        };
-        """ % (function_name, function_name)
-    if function_name == "DumpJson":
-        str_function = """
-        %feature("autodoc", "1");
-        %extend{
-            std::string DumpJsonToString(int depth=-1) {
-            std::stringstream s;
-            self->DumpJson(s, depth);
-            return s.str();}
-        };
-        """
-        return str_function
-    if "TYPENAME" in f["rtnType"]:
+    if "TYPENAME" in f["rtnType"]:  # TODO remove
         return ""  # something in NCollection
-    if function_name == "DEFINE_STANDARD_RTTIEXT":
+    if function_name == "DEFINE_STANDARD_RTTIEXT":  # TODO remove
         return ""
     if function_name == "Handle":  # TODO: make it possible!
     # this is because Handle (something) some function can not be
     # handled by swig
         return ""
+    #############
+    # Operators #
+    #############
+    operator_wrapper = {"+": None,
+                        "-": None,
+                        "*": None,
+                        "/": None,
+                        "==": TEMPLATE__EQ__,
+                        "!=": TEMPLATE__NE__,
+                        "+=": TEMPLATE__IADD__,
+                        "*=": TEMPLATE__IMUL__,
+                        "-=": TEMPLATE__ISUB__,
+                        "/=": TEMPLATE__ITRUEDIV__}
+    if "operator" in function_name:
+        operand = function_name.split("operator ")[1].strip()
+        # if not allowed, just skip it
+        if not operand in operator_wrapper:
+            return ""
+        ##############################################
+        # Cases where the method is actually wrapped #
+        ##############################################
+        if operator_wrapper[operand] is not None:
+            param = f["parameters"][0]
+            param_type = param["type"].replace("&", "").strip()
+            return operator_wrapper[operand] % param_type    
+
+    # at this point, we can increment the method counter
+    NB_TOTAL_METHODS += 1
+    
+    # special case : Standard_OStream or Standard_IStream is the only parameter
+    if len(f["parameters"]) == 1:
+        param = f["parameters"][0]
+        param_type = param["type"].replace("&", "").strip()
+        if 'Standard_OStream' in '%s' % param_type:
+            str_function = TEMPLATE_OSTREAM % (function_name, function_name)
+            return str_function
+        if ('std::istream &' in '%s' % param_type) or ('Standard_IStream' in param_type):
+            return TEMPLATE_ISTREAM % (function_name, function_name)
+    if function_name == "DumpJson":
+        str_function = TEMPLATE_DUMPJSON
+        return str_function
     # enable autocompactargs feature to enable compilation with swig>3.0.3
     str_function = '\t\t/****************** %s ******************/\n' % function_name
     str_function += '\t\t%%feature("compactdefaultargs") %s;\n' % function_name
     str_function += process_function_docstring(f)
     str_function += "\t\t"
     # return type
-    # in the return type, we remove the Standard_EXPORT macro
-    # and all that pollutes the wrapping
     # Careful: for constructors, we have to remove the "void"
     # return type from the SWIG wrapper
     # otherwise it causes the compiler to fail
@@ -1383,6 +1424,8 @@ def process_function(f):
         return_type = ""
     else:
         return_type = adapt_return_type(f["rtnType"])
+    if f['virtual']:
+        return_type = 'virtual ' + return_type
     if f['static'] and 'static' not in return_type:
         return_type = 'static ' + return_type
     # Case where primitive values are accessed by reference
@@ -1405,56 +1448,41 @@ def process_function(f):
         setter_params_type_and_names_str_csv = ','.join(setter_params_type_and_names)
         getter_params_only_names_str_csv = ','.join(getter_params_only_names)
 
-        str_function = """
-        %%feature("autodoc","1");
-        %%extend {
-            %s Get%s(%s) {
-            return (%s) $self->%s(%s);
-            }
-        };
-        %%feature("autodoc","1");
-        %%extend {
-            void Set%s(%s) {
-            $self->%s(%s)=value;
-            }
-        };\n""" % (modified_return_type, function_name, getter_params_type_and_names_str_csv,
-                   modified_return_type, function_name, getter_params_only_names_str_csv,
-                   function_name, setter_params_type_and_names_str_csv,
-                   function_name, getter_params_only_names_str_csv)
+        str_function = TEMPLATE_GETTER_SETTER % (modified_return_type, function_name,
+                                                 getter_params_type_and_names_str_csv,
+                                                 modified_return_type,
+                                                 function_name,
+                                                 getter_params_only_names_str_csv,
+                                                 function_name,
+                                                 setter_params_type_and_names_str_csv,
+                                                 function_name,
+                                                 getter_params_only_names_str_csv)
         return str_function
     str_function += "%s " % return_type
     # function name
-    str_function += "%s " % function_name
+    str_function += "%s" % function_name
     # process parameters
-    str_function += "("
+    # create a list of types/names
+    parameters_types_and_names = []
     for param in f["parameters"]:
+        param_string = ""
         param_type = adapt_param_type(param["type"])
         if "Handle_T &" in param_type:
-            return False  # skipe thi function, it will raise a compilation exception, it's something like a template
+            return False  # skip this function, it will raise a compilation exception, it's something like a template
         if 'array_size' in param:
             param_type_and_name = "%s %s[%s]" % (param_type, param["name"], param["array_size"])
         else:
             param_type_and_name = "%s %s" % (param_type, param["name"])
-        str_function += adapt_param_type_and_name(param_type_and_name)
+        param_string += adapt_param_type_and_name(param_type_and_name)
         if "defaultValue" in param:
             def_value = adapt_default_value_parmlist(param)
-            str_function += " = %s" % def_value
-        # argument separator
-        str_function += ","
-    # before closing parenthesis, remove the last comma
-    if str_function.endswith(","):
-        str_function = str_function[:-1]
-    str_function += ");\n"
+            param_string += " = %s" % def_value
+        parameters_types_and_names.append(param_string)    
+    str_function += "(" + ", ".join(parameters_types_and_names) + ");\n"
     # if the function is HashCode, we add immediately after
     # an __hash__ overloading
     if function_name == "HashCode" and len(f["parameters"]) == 1:
-        str_function += """
-        %extend {
-            Standard_Integer __hash__() {
-            return $self->HashCode(2147483647);
-            }
-        };
-        """
+        str_function += TEMPLATE_HASHCODE
     str_function = str_function.replace('const const', 'const') + '\n'
     return str_function
 
@@ -1518,20 +1546,20 @@ def class_can_have_default_constructor(klass):
     has_one_public_constructor = False
     class_public_methods = klass['methods']['public']
     for public_method in class_public_methods:
-        if public_method["constructor"]:
+        if public_method["constructor"] and public_method['name'] == klass["name"]:
             has_one_public_constructor = True
     # we have to ensure that no private or protected constructor is defined
     # we look for protected () constructor
     has_one_protected_constructor = False
     class_protected_methods = klass['methods']['protected']
     for protected_method in class_protected_methods:
-        if protected_method["constructor"]:
+        if protected_method["constructor"] and protected_method['name'] == klass["name"]:
             has_one_protected_constructor = True
     # check for private constructor
     has_one_private_constructor = False
     class_private_methods = klass['methods']['private']
     for private_method in class_private_methods:
-        if private_method["constructor"]:
+        if private_method["constructor"] and private_method['name'] == klass["name"]:
             has_one_private_constructor = True
     if ((has_one_private_constructor and not has_one_public_constructor) or
             (has_one_protected_constructor and not has_one_public_constructor)):
@@ -1722,6 +1750,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
     exclude_member_functions is a dict with classes names as keys and member
     function names as values
     """
+    global NB_TOTAL_CLASSES
     if exclude_classes == ['*']:  # don't wrap any class
         return ""
     class_def_str = ""
@@ -1782,6 +1811,9 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         nested_classes = klass["nested_classes"]
         for n in nested_classes:
             nested_class_name = n["name"]
+            # skip anon structs, for instance in AdvApp2Var_SysBase
+            if "anon-struct" in nested_class_name:
+                continue
             logging.info("Wrap nested class %s::%s" % (class_name, nested_class_name))
             class_def_str += "\t\tclass " + nested_class_name + " {};\n"
         ####### class enums
@@ -1802,7 +1834,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             if 'std::map<' in property_value['type']:
                 logging.warning('Wrong type in class property std::map')
                 continue
-            if property_value['constant'] or 'virtual' in property_value['raw_type'] or 'Standard_EXPORT' in property_value['raw_type'] or 'allback' in property_value['raw_type']:
+            if property_value['constant'] or 'virtual' in property_value['raw_type'] or 'allback' in property_value['raw_type']:
                 continue
             if 'array_size' in property_value:
                 temp = "\t\t%s %s[%s];\n" % (fix_type(property_value['type']), property_value['name'], property_value['array_size'])
@@ -1882,6 +1914,8 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         class_def_str += '\t%' + 'pythoncode {\n'
         class_def_str += '\t__repr__ = _dumps_object\n'
         class_def_str += '\t}\n};\n\n'
+        # increment global number of classes
+        NB_TOTAL_CLASSES += 1
     return class_def_str
 
 
@@ -2144,3 +2178,5 @@ if __name__ == '__main__':
     total_time = end_time - start_time
     # footer
     logging.info(get_log_footer(total_time))
+    logging.info("Number of classes: %i" % NB_TOTAL_CLASSES)
+    logging.info("Number of methods: %i" % NB_TOTAL_METHODS)
