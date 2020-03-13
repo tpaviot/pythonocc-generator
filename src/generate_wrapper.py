@@ -2134,24 +2134,8 @@ def process_toolkit(toolkit_name):
 
 
 def process_all_toolkits():
-    parallel_build = config.get('build', 'parallel_build')
-    if parallel_build == "True":  # multitask
-        logging.info("Multiprocess mode")
-        from multiprocessing import Pool
-        pool = Pool()
-        try:
-            # the timeout is required for proper handling when exciting the parallel build
-            pool.map_async(process_toolkit, TOOLKITS).get(timeout=1000)
-        except KeyboardInterrupt:
-            pool.terminate()
-            pool.join()
-        else:
-            pool.close()
-            pool.join()
-    else:  # single task
-        logging.info("Single process mode")
-        for toolkit in sorted(TOOLKITS):
-            process_toolkit(toolkit)
+    for toolkit in sorted(TOOLKITS):
+        process_toolkit(toolkit)
 
 
 def run_unit_tests():
