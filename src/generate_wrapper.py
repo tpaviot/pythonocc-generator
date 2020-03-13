@@ -1202,7 +1202,9 @@ def process_function_docstring(f):
     """ Create the docstring, for the function f,
     that will be used by the wrapper.
     For that, first check the function parameters and type
-    then add the doxygen value
+    then add the doxygen value.
+    We use the numpy doc docstring convention see
+    https://numpydoc.readthedocs.io/en/latest/format.html
     """
     function_name = f["name"]
     function_name = adapt_function_name(function_name)
@@ -1210,6 +1212,8 @@ def process_function_docstring(f):
     # first process parameters
     parameters_string = ''
     if f["parameters"]:  # at leats one element in the least
+        # we add a "Parameters section"
+        parameters_string += "\nParameters\n----------\n"
         for param in f["parameters"]:
             param_type = adapt_param_type(param["type"])
             # remove const and &
@@ -1222,18 +1226,18 @@ def process_function_docstring(f):
             param_type = param_type.replace("&", "")
             # same for the const
             param_type = param_type.replace("const", "")
-
             param_type = param_type.strip()
-            parameters_string += "\t:param %s:" % param["name"]
-            #parameters_string += "\t%s(%s)" % (param["name"], param_type, )
+            # add the parameter to the list
+            parameters_string += "%s: %s" % (param["name"], param_type)
             if "defaultValue" in param:
+                parameters_string += ",optional\n"
                 def_value = adapt_default_value(param["defaultValue"])
-                parameters_string += " default value is %s" % def_value
-            parameters_string += "\n"
-            parameters_string += "\t:type %s: %s" % (param["name"], param_type)
+                parameters_string += "\tdefault value is %s" % def_value
+            #parameters_string += "\n"
+            
             parameters_string += "\n"
     # return types:
-    returns_string = '\t:rtype:'
+    returns_string = 'Returns\n-------\n'
     ret = adapt_return_type(f["rtnType"])
     if ret != 'void':
         ret = ret.replace("&", "")
@@ -1242,11 +1246,11 @@ def process_function_docstring(f):
         ret = ret.replace(": static ", "")
         ret = ret.replace("static ", "")
         ret = ret.strip()
-        returns_string += " %s\n" % ret
+        returns_string += "%s\n" % ret
     else:
-        returns_string += " None\n"
+        returns_string += "None\n"
     # process doxygen strings
-    doxygen_string = ""
+    doxygen_string = "No available documentation.\n"
     if "doxygen" in f:
         doxygen_string = f["doxygen"]
         # remove comment separator
@@ -1281,9 +1285,9 @@ def process_function_docstring(f):
         if not doxygen_string.endswith("."):
             doxygen_string = doxygen_string + "."
         # then remove spaces from start and end
-        doxygen_string = doxygen_string.strip() + "\n\n"  # a blank line is added
+        doxygen_string = doxygen_string.strip() + "\n"
     # concatenate everything
-    final_string = doxygen_string + parameters_string + returns_string
+    final_string = doxygen_string + parameters_string + '\n' + returns_string
     string_to_return += '%s") %s;\n' % (final_string, function_name)
     return string_to_return
 
