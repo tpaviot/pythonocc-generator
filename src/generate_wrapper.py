@@ -20,6 +20,7 @@
 import configparser
 import datetime
 import glob
+import keyword  # to prevent using python language keywords
 import logging
 from operator import itemgetter
 import os
@@ -152,7 +153,8 @@ HXX_TO_EXCLUDE_FROM_CPPPARSER = ['NCollection_StlIterator.hxx',
                                  'BRepMesh_NURBSRangeSplitter.hxx',
                                  'BRepMesh_SphereRangeSplitter.hxx',
                                  'BRepMesh_TorusRangeSplitter.hxx',
-                                 'BRepMesh_UVParamRangeSplitter.hxx'
+                                 'BRepMesh_UVParamRangeSplitter.hxx',
+                                 'AdvApp2Var_Data_f2c.hxx'
                                  ]
 
 # some includes fail at being compiled
@@ -933,11 +935,30 @@ def process_templates_from_typedefs(list_of_typedefs):
     wrapper_str += "/* end templates declaration */\n"
     return wrapper_str
 
+def adapt_type_for_hint_typedef(typedef_type_str):
+    typedef_type_str = typedef_type_str.replace(' *', '')
+    typedef_type_str = typedef_type_str.replace('&OutValue', '')
+    if 'char' in typedef_type_str or 'Char' in typedef_type_str:
+        typedef_type_str = "str"
+    if '_int' in typedef_type_str or " int" in typedef_type_str or " long" in typedef_type_str:
+        typedef_type_str = "int"
+    if 'double' in typedef_type_str:
+        typedef_type_str = "float"
+    if 'void' in typedef_type_str or "VOID" in typedef_type_str:
+        typedef_type_str = "None"
+    if 'GUID' in typedef_type_str:
+        typedef_type_str = "str"
+    if 'size_t' in typedef_type_str:
+        typedef_type_str = "int"
+    if 'struct' in typedef_type_str:
+        typedef_type_str = "int"
+    return typedef_type_str
 
 def process_typedefs(typedefs_dict):
     """ Take a typedef dictionary and returns a SWIG definition string
     """
     templates_str = ""
+    typedef_pyi_str = ""  # NewTypes related to typedef aliases
     typedef_str = "/* typedefs */\n"
     templates = []
     # careful, there might be some strange things returned by CppHeaderParser
@@ -962,7 +983,10 @@ def process_typedefs(typedefs_dict):
                 if (module not in PYTHON_MODULE_DEPENDENCY) and (is_module(module)):
                     PYTHON_MODULE_DEPENDENCY.append(module)
 
-    for typedef_value in filtered_typedef_dict.keys():
+    sorted_list_of_typedefs = list(filtered_typedef_dict.keys())
+    sorted_list_of_typedefs.sort()
+
+    for typedef_value in sorted_list_of_typedefs:
         # some occttype defs are actually templated classes,
         # for instance
         # typedef NCollection_Array1<Standard_Real> TColStd_Array1OfReal;
@@ -976,31 +1000,87 @@ def process_typedefs(typedefs_dict):
             templates.append([filtered_typedef_dict[typedef_value], typedef_value])
         typedef_str += "typedef %s %s;\n" % (filtered_typedef_dict[typedef_value], typedef_value)
         check_dependency(filtered_typedef_dict[typedef_value].split()[0])
+        # Define a new type, only for aliases
+        type_to_define = filtered_typedef_dict[typedef_value]
+        if '<' not in type_to_define and ':' not in type_to_define and not 'struct' in type_to_define and not ')' in type_to_define:
+            type_to_define = adapt_type_for_hint_typedef(type_to_define)
+            typedef_pyi_str += "\n%s = NewType('%s', %s)" % (typedef_value, typedef_value, type_to_define)
+    typedef_pyi_str += "\n"
     typedef_str += "/* end typedefs declaration */\n\n"
     # then we process templates
     # at this stage, we get a list as follows
     templates_str += process_templates_from_typedefs(templates)
     templates_str += "\n"
-    return templates_str + typedef_str
+    return templates_str + typedef_str, typedef_pyi_str
 
 
 def process_enums(enums_list):
     """ Take an enum list and generate a compliant SWIG string
+    Then create a python class that mimics the enum
+    for instance, from the TopAbs_Orientation.hxx header, we have
+    enum TopAbs_Orientation
+    {
+    TopAbs_FORWARD,
+    TopAbs_REVERSED,
+    TopAbs_INTERNAL,
+    TopAbs_EXTERNAL
+    };
+
+    In SWIG, this will be wrapped in the interface file as
+    
+    enum TopAbs_Orientation {
+      TopAbs_FORWARD = 0,
+      TopAbs_REVERSED = 1,
+      TopAbs_INTERNAL = 2,
+      TopAbs_EXTERNAL = 3,
+    };
+
+    However, python does not know anything about TopAbs_Orientation, he only knows TopAbs_FORWARD
+    So we also create a python class that mimics the enum and let python know about the TopAbs_Orientation type
+
+    %pythoncode {
+    class TopAbs_Orientation:
+        TopAbs_FORWARD = 0
+        TopAbs_REVERSED = 1
+        TopAbs_INTERNAL = 2
+        TopAbs_EXTERNAL = 3
+    }
+
+    Then, from python, it's possible to use:
+    >>> TopAbs_Orientation.TopAbs_FORWARD
+
+    Note: this only makes sense for named enums
     """
     enum_str = "/* public enums */\n"
+
+    enum_python_proxies = "/* python proy classes for enums */\n"
+    enum_python_proxies += "%pythoncode {\n"
+
+    enum_pyi_str = ""
+    # loop over enums
     for enum in enums_list:
+        python_proxy = True
         if "name" not in enum:
             enum_name = ""
+            python_proxy = False
         else:
             enum_name = enum["name"]
             if not enum_name in ALL_ENUMS:
                 ALL_ENUMS.append(enum_name)
         enum_str += "enum %s {\n" % enum_name
+        if python_proxy:
+            enum_python_proxies += "\nclass %s:\n" % enum_name
+            enum_pyi_str += "\nclass %s:\n" % enum_name
         for enum_value in enum["values"]:
             enum_str += "\t%s = %s,\n" % (enum_value["name"], enum_value["value"])
+            if python_proxy:
+                enum_python_proxies += "\t%s = %s\n" % (enum_value["name"], enum_value["value"])
+                enum_pyi_str += "\t%s: int = ...\n" % enum_value["name"]
         enum_str += "};\n\n"
+    enum_python_proxies += "};\n"
     enum_str += "/* end public enums declaration */\n\n"
-    return enum_str
+    enum_python_proxies += "/* end python proxy for enums */\n\n"
+    return enum_str + enum_python_proxies, enum_pyi_str
 
 
 def is_return_type_enum(return_type):
@@ -1209,6 +1289,8 @@ def process_function_docstring(f):
     function_name = f["name"]
     function_name = adapt_function_name(function_name)
     string_to_return = '\t\t%feature("autodoc", "'
+    # the returns
+    ret = []
     # first process parameters
     parameters_string = ''
     if f["parameters"]:  # at leats one element in the least
@@ -1227,26 +1309,35 @@ def process_function_docstring(f):
             # same for the const
             param_type = param_type.replace("const", "")
             param_type = param_type.strip()
+            # check the &OutValue
+            the_type_and_name = param["type"] + param["name"]
+            popo = adapt_param_type_and_name(the_type_and_name)
+            if 'OutValue' in popo:
+                # this parameter has to be added to the
+                # returns, not the parameters of the python method
+                ret.append("%s: %s" % (param["name"], param_type))
+                continue
             # add the parameter to the list
             parameters_string += "%s: %s" % (param["name"], param_type)
             if "defaultValue" in param:
                 parameters_string += ",optional\n"
                 def_value = adapt_default_value(param["defaultValue"])
-                parameters_string += "\tdefault value is %s" % def_value
-            #parameters_string += "\n"
-            
+                parameters_string += "\tdefault value is %s" % def_value           
             parameters_string += "\n"
     # return types:
     returns_string = 'Returns\n-------\n'
-    ret = adapt_return_type(f["rtnType"])
-    if ret != 'void':
-        ret = ret.replace("&", "")
+    method_return_type = adapt_return_type(f["rtnType"])
+    if len(ret) >= 1: # at least on by ref parameter
+        for r in ret:
+            returns_string += "%s\n" % r
+    elif method_return_type != 'void':
+        method_return_type = method_return_type.replace("&", "")
         #ret = ret.replace("virtual", "")
-        ret = fix_type(ret)
-        ret = ret.replace(": static ", "")
-        ret = ret.replace("static ", "")
-        ret = ret.strip()
-        returns_string += "%s\n" % ret
+        method_return_type = fix_type(method_return_type)
+        method_return_type = method_return_type.replace(": static ", "")
+        method_return_type = method_return_type.replace("static ", "")
+        method_return_type = method_return_type.strip()
+        returns_string += "%s\n" % method_return_type
     else:
         returns_string += "None\n"
     # process doxygen strings
@@ -1316,6 +1407,9 @@ def filter_member_functions(class_name, class_public_methods, member_functions_t
     the class methods list. Some of the members functions have to be removed
     because they can't be wrapped (usually, this results in a linkage error)
     """
+    # split wrapped methods into twoo lists
+    constructors = []
+    other_methods = []
     member_functions_to_process = []
     for public_method in class_public_methods:
         method_name = public_method["name"]
@@ -1328,28 +1422,20 @@ def filter_member_functions(class_name, class_public_methods, member_functions_t
             continue
         if "<" in method_name:
             continue
-        # finally, we add this method to process
-        member_functions_to_process.append(public_method)
-    return member_functions_to_process
-
-
-def test_filter_member_functions():
-    class_public_methods = [{"name": "method_1"},
-                            {"name": "method_2"},
-                            {"name": "method_3"},
-                           ]
-    member_functions_to_exclude = ["method_2"]
-    result = filter_member_functions("klass_name", class_public_methods,
-                                     member_functions_to_exclude,
-                                     False)
-    assert result == [{"name": "method_1"}, {"name": "method_3"}]
+        # finally, we add this method to process in the correct list
+        if public_method["constructor"]:
+            constructors.append(public_method)
+        else:
+            other_methods.append(public_method)
+    return constructors, other_methods
 
 
 def adapt_type_for_hint(type_str):
     """ convert c++ types to python types, for type hints
     Returns False if there's no possible type
     """
-    if type_str.count('<') > 1:  #it's a template
+    if type_str == "0":  # huu ? in XCAFDoc, skip it
+        logging.warning("\t[TypeHint] Skipping unknown type, 0")
         return False
     if "void" in type_str or type_str in [""]:
         return "None"
@@ -1358,7 +1444,7 @@ def adapt_type_for_hint(type_str):
     if "char *" in type_str:
         return "str"
     if not "_" in type_str:  # TODO these are special cases, e.g. nested classes
-        logging.warning("not _ in %s" % type_str)
+        logging.warning("\t[TypeHint] Skipping type %s, should contain _" % type_str)
         return False  # returns a boolean to prevent type hint creation, the type will not be found
     # we only keep what is
     for tp in type_str.split(" "):
@@ -1369,18 +1455,97 @@ def adapt_type_for_hint(type_str):
     type_str = type_str.replace("Standard_Integer", "int")
     type_str = type_str.replace("Standard_Real", "float")
     type_str = type_str.replace("Standard_Boolean", "bool")
+    type_str = type_str.replace("Standard_Character", "str")
+    type_str = type_str.replace("Standard_Byte", "str")
+    type_str = type_str.replace("Standard_Address", "None")
+    type_str = type_str.replace("Standard_Size", "int")
+    type_str = type_str.replace("Standard_Time", "float")
 
     # transform opencascade::handle<Message_Alert> to return Message_Alert
     if type_str.startswith("opencascade::handle<"):
         type_str = type_str[20:].split(">")[0].strip()
-
+    if ":" in type_str:
+        logging.warning("\t[TypeHint] Skip type %s, because of trailing :" % type_str)
+        return False
+    if "_" in type_str and not is_module(type_str.split('_')[0]):
+        logging.warning("\t[TypeHint] Skipping unknown type, %s not in module list" % type_str.split('_')[0])
+        return False
+    if type_str.count('<') >= 1:  # at least one <, it's a template
+        logging.warning("\t[TypeHint] Skipping type %s, seems to be a template" % type_str) 
+        return False
     return type_str
 
 
-def process_function(f):
+def get_classname_from_handle(handle_name):
+    """ input : opencascade::handle<Something>
+    returns: Something
+    """
+    if handle_name.startswith("opencascade::handle<"):
+        class_name = handle_name[20:].split(">")[0].strip()
+
+    return class_name
+
+
+def adapt_type_hint_parameter_name(param_name_str):
+    """ some parameter names may conflict with python keyword,
+    for instance with, False etc.
+    Returns the modified name, and wether to take it into accound"""
+    if keyword.iskeyword(param_name_str):
+        new_param_name = param_name_str + "_"
+        success = True
+    elif param_name_str == "":
+        new_param_name = "x"  # give a fake name
+        success = True
+    elif param_name_str == '&':
+        new_param_name = ""
+        success = False
+    else:  # default
+        new_param_name = param_name_str
+        success = True
+    if '[' in new_param_name:
+        # something like 
+        param_name, snd_part = new_param_name.split('[')
+        param_name = param_name.replace(')', '')
+        number = snd_part.split(']')[0]
+        new_param_name = param_name + "_list"
+        success = True
+    return new_param_name, success
+
+
+# def adapt_type_hint_default_value(default_value_str):
+#     """ default values such as Standard_True etc. must be
+#     converted to correct python values
+#     """
+#     if default_value_str == "Standard_True":
+#         new_default_value_str = "True"
+#         success = True
+#     elif default_value_str == "Standard_False":
+#         new_default_value_str = "False"
+#         success = True
+#     elif default_value_str == "Precision::Confusion()":
+#         new_default_value_str = "precision_Confusion()"
+#         success = True
+#     elif "opencascade::handle" in default_value_str:
+#         # case opencascade::handle<Message_ProgressIndicator>()
+#         # should be Message_ProgressIndicator()
+#         classname = get_classname_from_handle(default_value_str)
+#         if classname == "Message_ProgressIndicator":  # no constructor defined, abstract class
+#             new_default_value_str = "'Message_ProgressIndicator()'"
+#         else:
+#           new_default_value_str = classname + default_value_str.split('>')[1]
+#         success = True
+#     else:
+#         new_default_value_str = default_value_str
+#         success = True
+#     return new_default_value_str, success
+
+
+def process_function(f, overload=False):
     """ Process function f and returns a SWIG compliant string.
     If process_docstrings is set to True, the documentation string
     from the C++ header will be used as is for the python wrapper
+    f : a dict for the function f
+    overload: False by default, True if other method with the same name exists
     """
     global NB_TOTAL_METHODS
     if f["template"]:
@@ -1391,7 +1556,6 @@ def process_function(f):
     # Cases where the method should not be wrapped #
     ################################################
     # destructors are not wrapped
-    # they are shadowed by a function that calls a garbage collector
     if f["destructor"]:
         return "", ""
     if f["returns"] == "~":
@@ -1407,10 +1571,10 @@ def process_function(f):
     #############
     # Operators #
     #############
-    operator_wrapper = {"+": None,
-                        "-": None,
-                        "*": None,
-                        "/": None,
+    operator_wrapper = {"+": None,  # wrapped by SWIG, no need for a custom template
+                        "-": None,  # wrapped by SWIG, no need for a custom template
+                        "*": None,  # wrapped by SWIG, no need for a custom template
+                        "/": None,  # wrapped by SWIG, no need for a custom template
                         "==": TEMPLATE__EQ__,
                         "!=": TEMPLATE__NE__,
                         "+=": TEMPLATE__IADD__,
@@ -1469,16 +1633,27 @@ def process_function(f):
     # one method Set* that sets the object
     if return_type in ['Standard_Integer &', 'Standard_Real &', 'Standard_Boolean &',
                        'Standard_Integer&', 'Standard_Real&', 'Standard_Boolean&']:
-        logging.warning('Creating Get and Set methods for method %s' % function_name)
+        logging.info('\tCreating Get and Set methods for method %s' % function_name)
         modified_return_type = return_type.split(" ")[0]
         # we compute the parameters type and name, seperated with comma
         getter_params_type_and_names = []
         getter_params_only_names = []
+        getter_param_hints = ['self']
         for param in f["parameters"]:
             param_type_and_name = "%s %s" % (adapt_param_type(param["type"]), param["name"])
             getter_params_type_and_names.append(param_type_and_name)
             getter_params_only_names.append(param["name"])
+            # process hints
+            type_for_hint = adapt_type_for_hint(adapt_param_type(param["type"]))
+            getter_param_hints.append("%s: %s" % (param["name"], 
+                                                  type_for_hint))
+            
+            
         setter_params_type_and_names = getter_params_type_and_names + ['%s value' % modified_return_type]
+        # the setter hint
+        hint_output_type = adapt_type_for_hint(modified_return_type)
+        hint_value = ['value: %s' % hint_output_type]
+        setter_param_hints = getter_param_hints + hint_value
 
         getter_params_type_and_names_str_csv = ','.join(getter_params_type_and_names)
         setter_params_type_and_names_str_csv = ','.join(setter_params_type_and_names)
@@ -1493,56 +1668,113 @@ def process_function(f):
                                                  setter_params_type_and_names_str_csv,
                                                  function_name,
                                                  getter_params_only_names_str_csv)
-        return str_function, ""
+        # process type hint for this case
+        getter_hint_str = "\tdef Get%s(%s) -> %s: ...\n" % (function_name,
+                                                            ', '.join(getter_param_hints),
+                                                            hint_output_type)
+        setter_hint_str = "\tdef Set%s(%s) -> None: ...\n" % (function_name,
+                                                            ', '.join(setter_param_hints))
+
+        # finally returns the method definition and hint
+        type_hint_str = getter_hint_str + setter_hint_str
+        return str_function, type_hint_str
     str_function += "%s " % return_type
     # function name
     str_function += "%s" % function_name
     # process parameters
-    # create a list of types/names tuples
     parameters_types_and_names = []
     parameters_definition_strs = []
+    num_parameters = len(f["parameters"])
     for param in f["parameters"]:
         param_string = ""
         param_type = adapt_param_type(param["type"])
 
         if "Handle_T &" in param_type:
             return False, ""  # skip this function, it will raise a compilation exception, it's something like a template
+        if ('Standard_IStream' in param_type or 'Standard_OStream' in  param_type) and num_parameters > 1:
+            return "", ""  # skip this method TODO : wrap std:istream and std::ostream properly
         if 'array_size' in param:
-            #param_type_and_name = "%s %s[%s]" % (param_type, param["name"], param["array_size"])
+            # create a list of types/names tuples
+            # a liste with 3 items [type, name, default_value]
+            # if there's no default value, False
+            # other wise the default value as a string
             param_type_and_name = ["%s" % param_type, "%s[%s]" % (param["name"], param["array_size"])]
         else:
-            #param_type_and_name = "%s %s" % (param_type, param["name"])
             param_type_and_name = ["%s" % param_type, "%s" % param["name"]]
+
         param_string += adapt_param_type_and_name(" ".join(param_type_and_name))
+
         if "defaultValue" in param:
             def_value = adapt_default_value_parmlist(param)
             param_string += " = %s" % def_value
+            # we add the default value to the end of the list param_type_and_name
+            param_type_and_name.append(def_value)
+
         parameters_types_and_names.append(param_type_and_name)
         parameters_definition_strs.append(param_string)
     # generate the parameters string
     str_function += "(" + ", ".join(parameters_definition_strs) + ");\n"
+    #
+    # The following stuff is all related to type hints
     # function type hints
     #
     canceled = False
+    str_typehint = ""
+    # below is the list of types returned by the method
+    # generally, all c++ methods return either zero (void) values
+    # or 1. In some special cases, by ef returned parameters are wrapped
+    # to python types and added to the return values
+    # thus, some method may return a tuple
+    types_returned = ["%s" % adapt_type_for_hint(return_type)]  # by default, nothing
     if "operator" not in function_name:
         if f["constructor"]:
-            str_typehint = "\tdef __init__(self"
+            # add the overload decorator to handle
+            # multiple constructors
+            if overload:
+                str_typehint += "\t@overload\n"
+            str_typehint += "\tdef __init__(self"
         else:
-            str_typehint = "\tdef %s(self" % function_name
+            if f['static']:
+                str_typehint += "\t@staticmethod\n"
+            str_typehint += "\tdef %s(self" % function_name
         if parameters_types_and_names:
             for par in parameters_types_and_names:
                 par_typ = adapt_type_for_hint(par[0])
                 if not par_typ:
                     canceled = True
-                par_nam = par[1]
-                if par_nam == '&':
+                    break
+                # check if there is some OutValue
+                popo = adapt_param_type_and_name(" ".join(par))
+                if 'OutValue' in popo:
+                    type_to_add = "%s" % adapt_type_for_hint(popo)
+                    if types_returned[0] == "None":
+                        types_returned[0] = type_to_add
+                    else:
+                        types_returned.append(type_to_add)
+                    continue
+                # if there's a default value, the type becomes Optional[type] = value
+                if len(par) == 3:
+                    #def_value, adapt_type_hint_default_value_success = adapt_type_hint_default_value(par[2])
+                    #par_typ = "Optional[%s] = %s" % (par_typ, def_value)
+                    # forget about the default value, it's too complex, TODO
+                    par_typ = "Optional[%s]" % par_typ
+                par_nam, success = adapt_type_hint_parameter_name(par[1])
+                if not success:
                     canceled = True
+                if par_nam.endswith('_list'):  # it's a list
+                    par_typ = "List[%s]" % par_typ
                 str_typehint += ', ' + "%s: %s" % (par_nam, par_typ)
-        str_typehint += ")->%s: ...\n" % adapt_type_for_hint(return_type)
+        if len(types_returned) == 1:
+            returned_type_hint = types_returned[0]
+        elif len(types_returned) > 1:  # it's a tuple
+            returned_type_hint = "Tuple[%s]" % (", ".join(types_returned))
+        else:
+            raise AssertionError("Method should at least have one returned type.")
+        str_typehint += ") -> %s: ...\n" % returned_type_hint
     else:
         str_typehint = ""
     if canceled:
-       str_typehint = ""
+        str_typehint = ""
     # if the function is HashCode, we add immediately after
     # an __hash__ overloading
     if function_name == "HashCode" and len(f["parameters"]) == 1:
@@ -1561,6 +1793,33 @@ def process_free_functions(free_functions_list):
         if ok_to_wrap:
             str_free_functions += ok_to_wrap
     return str_free_functions
+
+
+def process_constructors(constructors_list):
+    """ this function process constructors.
+    The constructors_list is a list of constructors
+    """
+    # first, assume that all methods are constructors
+    for c in constructors_list:
+        if not c['constructor']:
+            raise AssertioError("This method is not a constructor")
+    # then we cound the number of available constructors
+    number_of_constructors = len(constructors_list)
+    # if there are more than one constructor, then the __init__ method
+    # has to be tagged as overloaded using the @overload decorator
+    need_overload = False
+    if number_of_constructors > 1 :
+        need_overload = True
+        logging.info("\t[TypeHint] More than 1 constructor, @overload decorator needed.")
+    # then process the constructors
+    str_functions = ""
+    type_hints = ""
+    for constructor in constructors_list:
+        ok_to_wrap, ok_hints = process_function(constructor, need_overload)
+        if ok_to_wrap:
+            str_functions += ok_to_wrap
+            type_hints += ok_hints
+    return str_functions, type_hints
 
 
 def process_methods(methods_list):
@@ -1606,7 +1865,7 @@ def class_can_have_default_constructor(klass):
         return False
     # class must not be an abstract class
     if klass["abstract"]:
-        logging.info("Class %s is abstract, using %%nodefaultctor directive." % klass["name"])
+        logging.info("\tClass %s is abstract, using %%nodefaultctor directive." % klass["name"])
         return False
     # check if the class has at least one public constructor defined
     has_one_public_constructor = False
@@ -1818,12 +2077,19 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
     """
     global NB_TOTAL_CLASSES
     if exclude_classes == ['*']:  # don't wrap any class
-        return "", ""
+        # that is to say we add all classes to the list of exclude_member_functions
+        new_exclude_classes= []
+        for klass in classes_dict:
+            class_name_to_exclude = klass.split('::')[0]
+            class_name_to_exclude = class_name_to_exclude.split('<')[0]
+            if class_name_to_exclude not in new_exclude_classes:
+                new_exclude_classes.append(class_name_to_exclude)
+        exclude_classes = new_exclude_classes.copy()
+        #return "", ""
     class_def_str = ""  # the string for class definition
     class_pyi_str = ""  # the string for class type hints
 
     inheritance_tree_list = build_inheritance_tree(classes_dict)
-    logging.info("Wrap classes :")
     for klass in inheritance_tree_list:
         # class name
         class_name = klass["name"]
@@ -1854,7 +2120,8 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # then defines the wrapper
         class_def_str += "class %s" % class_name
         # the class type hint
-        class_pyi_str += "\nclass %s" % class_name  # type hints
+        class_name_for_pyi = class_name.split('<')[0]
+        class_pyi_str += "\nclass %s" % class_name_for_pyi  # type hints
         # inheritance process
         inherits_from = klass["inherits"]
         if inherits_from: # at least 1 ancestor
@@ -1862,7 +2129,9 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             check_dependency(inheritance_name)
             inheritance_access = inherits_from[0]["access"]
             class_def_str += " : %s %s" % (inheritance_access, inheritance_name)
-            class_pyi_str += "(%s" % inheritance_name
+            class_pyi_str += "("
+            if not "::" in inheritance_name and not "<" in inheritance_name:
+                class_pyi_str += "%s" % inheritance_name
             if len(inherits_from) == 2: ## 2 ancestors
                 inheritance_name_2 = inherits_from[1]["class"]
                 check_dependency(inheritance_name_2)
@@ -1871,11 +2140,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
                 class_pyi_str += ", %s" % inheritance_name_2
             class_pyi_str += ")"
         class_pyi_str += ":\n"
-        # we add the pass statement because some classes does not define any method
-        # and python raises a syntax error
-        # TODO: remove this pass and look for another solution, it's not elegant
-        class_pyi_str += "\tpass\n"
-
+        class_pyi_str += "\tpass\n"  # TODO CHANGE
         class_def_str += " {\n"
         # process class typedefs here
         typedef_str = '\tpublic:\n'
@@ -1893,11 +2158,12 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             # skip anon structs, for instance in AdvApp2Var_SysBase
             if "anon-struct" in nested_class_name:
                 continue
-            logging.info("Wrap nested class %s::%s" % (class_name, nested_class_name))
+            logging.info("\tWrap nested class %s::%s" % (class_name, nested_class_name))
             class_def_str += "\t\tclass " + nested_class_name + " {};\n"
         ####### class enums
         if class_enums_list:
-            class_def_str += process_enums(class_enums_list)
+            class_enum_def, class_enum_pyi = process_enums(class_enums_list)
+            class_def_str += class_enum_def
         # process class properties here
         properties_str = ''
         for property_value in list(klass["properties"]['public']):
@@ -1937,9 +2203,29 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             class_def_str += '\t\t%feature("autodoc", "1");\n'
             class_def_str += '\t\t%s(const %s arg0);\n' % (class_name, class_name)
         methods_to_process = filter_member_functions(class_name, class_public_methods, members_functions_to_exclude, klass["abstract"])
-        method_definitions, method_type_hints = process_methods(methods_to_process)
-        class_def_str += method_definitions
-        class_pyi_str += method_type_hints
+        # amons all methods, we first process constructors, than the others
+        constructors, other_methods =  methods_to_process
+        # first constructors
+        constructors_definitions, constructors_type_hints = process_constructors(constructors)
+        class_def_str += constructors_definitions
+        class_pyi_str += constructors_type_hints
+        # and the other methods
+        other_method_definitions, other_method_type_hints = process_methods(other_methods)
+        class_def_str += other_method_definitions
+        class_pyi_str += other_method_type_hints
+
+        # after that change, we remove the "pass" if it appears to be unnecessary
+        # for example
+        # class gp_Ax22d:
+        #    pass
+        #    def Location
+        # should be
+        # class gp_Ax22d:
+        #    def Location
+        class_pyi_str = class_pyi_str.replace('pass\n\t@overload', '@overload')
+        class_pyi_str = class_pyi_str.replace('pass\n\tdef', 'def')
+        class_pyi_str = class_pyi_str.replace('pass\n\t@staticmethod', '@staticmethod')
+        # a special wrapper template for TDF_Label
         # We add a special method for recovering label names
         if class_name == "TDF_Label":
             class_def_str += '%feature("autodoc", "Returns the label name") GetLabelName;\n'
@@ -1994,9 +2280,28 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         class_def_str += '%%extend %s {\n' % class_name
         class_def_str += '\t%' + 'pythoncode {\n'
         class_def_str += '\t__repr__ = _dumps_object\n'
+        # we process methods that are excluded fro mthe wrapper
+        # they used to be skipped, but it's better to explicitely
+        # raise a MethodNotWrappedError exception
+        for excluded_method_name in members_functions_to_exclude:
+            if excluded_method_name != 'Handle':
+                class_def_str += '\n\t@methodnotwrapped\n'
+                class_def_str += '\tdef %s(self):\n\t\tpass\n' % excluded_method_name   
         class_def_str += '\t}\n};\n\n'
         # increment global number of classes
         NB_TOTAL_CLASSES += 1
+    #
+    # Finally, we create a python proxy for each exclude class
+    # to raise a python exception ClassNotWrapped
+    #
+    if exclude_classes:  # if the list is not empty
+        class_def_str += "/* python proxy for excluded classes */\n"
+        class_def_str += "%pythoncode {\n"
+        for excluded_class in exclude_classes:
+            class_def_str += "@classnotwrapped\n"
+            class_def_str += "class %s:\n\tpass\n\n" % excluded_class
+        class_def_str += "}\n"
+        class_def_str += "/* end python proxy for excluded classes */\n"
     return class_def_str, class_pyi_str
 
 
@@ -2004,7 +2309,7 @@ def is_module(module_name):
     """ Checks if the name passed as a parameter is
     (or is not) a module that aims at being wrapped.
     'Standard' should return True
-    'inj' should return False
+    'inj' or whatever should return False
     """
     for mod in OCE_MODULES:
         if mod[0] == module_name:
@@ -2063,12 +2368,12 @@ class ModuleWrapper:
         # parse
         typedefs, enums, classes, free_functions = parse_module(module_name)
         #enums
-        self._enums_str = process_enums(enums)
+        self._enums_str, self._enums_pyi_str = process_enums(enums)
         # handles
         self._wrap_handle_str = process_handles(classes, exclude_classes,
                                                 exclude_member_functions)
         # templates and typedefs
-        self._typedefs_str = process_typedefs(typedefs)
+        self._typedefs_str, self._typedefs_pyi_str = process_typedefs(typedefs)
         #classes
         self._classes_str, self._classes_pyi_str = process_classes(classes,
                                                                    exclude_classes,
@@ -2131,9 +2436,9 @@ class ModuleWrapper:
         module_headers.sort()
 
         mod_header = open(os.path.join(HEADERS_OUTPUT_PATH, "%s_module.hxx" % self._module_name), "w")
+        mod_header.write(LICENSE_HEADER)
         mod_header.write("#ifndef %s_HXX\n" % self._module_name.upper())
         mod_header.write("#define %s_HXX\n\n" % self._module_name.upper())
-        mod_header.write(LICENSE_HEADER)
         mod_header.write("\n")
 
         for module_header in filter_header_list(module_headers, HXX_TO_EXCLUDE_FROM_BEING_INCLUDED):
@@ -2153,6 +2458,12 @@ class ModuleWrapper:
         for dep in PYTHON_MODULE_DEPENDENCY:
             if is_module(dep):
                 swig_interface_file.write("%%import %s.i\n" % dep)
+        #
+        # The Exceptions and decorator
+        #
+        swig_interface_file.write("\n%pythoncode {\n")
+        swig_interface_file.write("from OCC.Core.Exception import *\n};\n\n")        
+
         # for NCollection, we add template classes that can be processed
         # automatically with SWIG
         if self._module_name == "NCollection":
@@ -2184,13 +2495,19 @@ class ModuleWrapper:
         #
         pyi_stub_file = open(os.path.join(SWIG_OUTPUT_PATH, "%s.pyi" % self._module_name), "w")
         # first write the header
-        pyi_stub_file.write("from typing import Optional\n\n")
-    
+        pyi_stub_file.write("from typing import overload, NewType, Optional, Tuple\n\n")
+
         pyi_stub_file.write("from OCC.Core.%s import *\n" % CURRENT_MODULE)
         for dep in PYTHON_MODULE_DEPENDENCY:
             if is_module(dep):
                 pyi_stub_file.write("from OCC.Core.%s import *\n" % dep)
-        
+        # we create NewTypes for some typedef which are just aliases. For instance, Prs3d_Presentation
+        # type is not defined in Python, whereas it's just an alias for Graphic3d_Structure. Then we define
+        # Prs3d_Presentation = NewType("Prs3d_Presentation", Graphic3d_Structure)
+        pyi_stub_file.write(self._typedefs_pyi_str)
+        # enums, wrapped by python class
+        pyi_stub_file.write(self._enums_pyi_str)
+        # then write classes and methods
         pyi_stub_file.write(self._classes_pyi_str)
         pyi_stub_file.close()
 
@@ -2238,7 +2555,6 @@ def run_unit_tests():
     test_adapt_return_type()
     test_filter_typedefs()
     test_adapt_function_name()
-    test_filter_member_functions()
     test_adapt_param_type_and_name()
     test_adapt_default_value()
     test_check_dependency()
