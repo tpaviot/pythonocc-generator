@@ -50,8 +50,8 @@ if not os.path.isdir(OCE_INCLUDE_DIR):
 PYTHONOCC_CORE_PATH = config.get('pythonocc-core', 'path')
 SWIG_OUTPUT_PATH = os.path.join(PYTHONOCC_CORE_PATH, 'src', 'SWIG_files', 'wrapper')
 HEADERS_OUTPUT_PATH = os.path.join(PYTHONOCC_CORE_PATH, 'src', 'SWIG_files', 'headers')
-# cmake output path, i.e. the location where the __init__.py file is created
-CMAKE_PATH = os.path.join(PYTHONOCC_CORE_PATH, 'cmake')
+
+GENERATE_SWIG_FILES = False  # if set to False, skip .i generator, to avoid recompile everything
 
 ###################################################
 # Set logger, to log both to a file and to stdout #
@@ -118,6 +118,7 @@ if not os.path.isdir(SWIG_OUTPUT_PATH):
 # the following var is set when the module
 # is created
 CURRENT_MODULE = None
+CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES = ""
 
 PYTHON_MODULE_DEPENDENCY = []
 HEADER_DEPENDENCY = []
@@ -607,6 +608,15 @@ date : %s
 ############################
 """
 
+WIN_PRAGMAS = """
+%{
+#ifdef WNT
+#pragma warning(disable : 4716)
+#endif
+%}
+
+"""
+
 def get_log_header():
     """ returns a header to be appended to the SWIG file
     Useful for development
@@ -728,17 +738,6 @@ def check_has_related_handle(class_name):
     if class_name.startswith("Graphic3d"):
         other_possible_filename = os.path.join(OCE_INCLUDE_DIR, "%s_Handle.hxx" % class_name)
     return os.path.exists(filename) or os.path.exists(other_possible_filename) or need_handle(class_name)
-
-
-
-def write__init__():
-    """ creates the OCC/__init__.py file.
-    In this file, the Version is created.
-    The OCE version is checked into the oce-version.h file
-    """
-    fp__init__ = open(os.path.join(CMAKE_PATH, '__init__.py'), 'w')
-    fp__init__.write('VERSION = "%s"\n' % PYTHONOCC_VERSION)
-    # @TODO : then check OCE version
 
 
 def need_handle(class_name):
@@ -1002,9 +1001,18 @@ def process_typedefs(typedefs_dict):
         check_dependency(filtered_typedef_dict[typedef_value].split()[0])
         # Define a new type, only for aliases
         type_to_define = filtered_typedef_dict[typedef_value]
-        if '<' not in type_to_define and ':' not in type_to_define and not 'struct' in type_to_define and not ')' in type_to_define:
+        if ('<' not in type_to_define and
+            ':' not in type_to_define and
+            'struct' not in type_to_define and
+            ')' not in type_to_define):
             type_to_define = adapt_type_for_hint_typedef(type_to_define)
             typedef_pyi_str += "\n%s = NewType('%s', %s)" % (typedef_value, typedef_value, type_to_define)
+        elif (')' not in typedef_value and
+              '(' not in typedef_value and
+              ':' not in typedef_value):
+            typedef_pyi_str += "\n#the following typedef cannot be wrapped as is"
+            typedef_pyi_str += "\n%s = NewType('%s', Any)" % (typedef_value, typedef_value)
+
     typedef_pyi_str += "\n"
     typedef_str += "/* end typedefs declaration */\n\n"
     # then we process templates
@@ -1059,6 +1067,7 @@ def process_enums(enums_list):
     enum_pyi_str = ""
     # loop over enums
     for enum in enums_list:
+        alias_str = ""
         python_proxy = True
         if "name" not in enum:
             enum_name = ""
@@ -1069,14 +1078,21 @@ def process_enums(enums_list):
                 ALL_ENUMS.append(enum_name)
         enum_str += "enum %s {\n" % enum_name
         if python_proxy:
-            enum_python_proxies += "\nclass %s:\n" % enum_name
-            enum_pyi_str += "\nclass %s:\n" % enum_name
+            enum_python_proxies += "\nclass %s(IntEnum):\n" % enum_name
+            enum_pyi_str += "\nclass %s(IntEnum):\n" % enum_name
         for enum_value in enum["values"]:
             enum_str += "\t%s = %s,\n" % (enum_value["name"], enum_value["value"])
             if python_proxy:
                 enum_python_proxies += "\t%s = %s\n" % (enum_value["name"], enum_value["value"])
                 enum_pyi_str += "\t%s: int = ...\n" % enum_value["name"]
+                # then, in both proxy and stub files, we create the alias for each named enum,
+                # for instance
+                # gp_IntrisicXYZ = gp_EulerSequence.gp_IntrinsicXYZ
+                alias_str += "%s = %s.%s\n" % (enum_value["name"], enum_name, enum_value["name"])
+        enum_python_proxies += alias_str
+        enum_pyi_str += alias_str
         enum_str += "};\n\n"
+        
     enum_python_proxies += "};\n"
     enum_str += "/* end public enums declaration */\n\n"
     enum_python_proxies += "/* end python proxy for enums */\n\n"
@@ -1507,8 +1523,11 @@ def adapt_type_hint_parameter_name(param_name_str):
         param_name, snd_part = new_param_name.split('[')
         param_name = param_name.replace(')', '')
         number = snd_part.split(']')[0]
-        new_param_name = param_name + "_list"
-        success = True
+        if param_name == "":
+            success = False
+        else:
+            new_param_name = param_name + "_list"
+            success = True
     return new_param_name, success
 
 
@@ -1547,7 +1566,7 @@ def process_function(f, overload=False):
     f : a dict for the function f
     overload: False by default, True if other method with the same name exists
     """
-    global NB_TOTAL_METHODS
+    global NB_TOTAL_METHODS, CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES
     if f["template"]:
         return False, ""
     # first, adapt function name, if needed
@@ -1628,6 +1647,15 @@ def process_function(f, overload=False):
         return_type = 'virtual ' + return_type
     if f['static'] and 'static' not in return_type:
         return_type = 'static ' + return_type
+    if f['static']:
+        parent_class_name = f['parent']['name']
+        if parent_class_name == CURRENT_MODULE:
+            parent_class_name = parent_class_name.lower()
+        if not "<" in parent_class_name:
+            CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES += "%s_%s = %s.%s\n" % (parent_class_name,
+                                                                       function_name,
+                                                                       parent_class_name,
+                                                                       function_name)
     # Case where primitive values are accessed by reference
     # one method Get* that returns the object
     # one method Set* that sets the object
@@ -1726,12 +1754,12 @@ def process_function(f, overload=False):
     # to python types and added to the return values
     # thus, some method may return a tuple
     types_returned = ["%s" % adapt_type_for_hint(return_type)]  # by default, nothing
+    if overload:
+                str_typehint += "\t@overload\n"
     if "operator" not in function_name:
         if f["constructor"]:
             # add the overload decorator to handle
             # multiple constructors
-            if overload:
-                str_typehint += "\t@overload\n"
             str_typehint += "\tdef __init__(self"
         else:
             if f['static']:
@@ -1829,10 +1857,21 @@ def process_methods(methods_list):
     type_hints = ""
     # sort methods according to the method name
     sorted_methods_list = sorted(methods_list, key=itemgetter('name'))
+    # create a dict to map function names and the number of occurrences,
+    # to determine whether or not use the @overload decorator
     for function in sorted_methods_list:
         # don't process friend methods
+        need_overload = False
         if not function["friend"]:
-            ok_to_wrap, ok_hints = process_function(function)
+            # check if this method is many times in the function list
+            names_count = 0
+            function_name = function['name']
+            for f in sorted_methods_list:
+                if f["name"] == function_name:
+                    names_count += 1
+            if names_count > 1:
+                need_overload = True
+            ok_to_wrap, ok_hints = process_function(function, need_overload)
             if ok_to_wrap:
                 str_functions += ok_to_wrap
                 type_hints += ok_hints
@@ -2286,20 +2325,22 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         for excluded_method_name in members_functions_to_exclude:
             if excluded_method_name != 'Handle':
                 class_def_str += '\n\t@methodnotwrapped\n'
-                class_def_str += '\tdef %s(self):\n\t\tpass\n' % excluded_method_name   
+                class_def_str += '\tdef %s(self):\n\t\tpass\n' % excluded_method_name
         class_def_str += '\t}\n};\n\n'
         # increment global number of classes
         NB_TOTAL_CLASSES += 1
     #
     # Finally, we create a python proxy for each exclude class
     # to raise a python exception ClassNotWrapped
-    #
+    # and we do the same in the stub file
     if exclude_classes:  # if the list is not empty
         class_def_str += "/* python proxy for excluded classes */\n"
         class_def_str += "%pythoncode {\n"
         for excluded_class in exclude_classes:
             class_def_str += "@classnotwrapped\n"
             class_def_str += "class %s:\n\tpass\n\n" % excluded_class
+            class_pyi_str += "\n#classnotwrapped\n"
+            class_pyi_str += "class %s:\n\tpass\n" % excluded_class
         class_def_str += "}\n"
         class_def_str += "/* end python proxy for excluded classes */\n"
     return class_def_str, class_pyi_str
@@ -2353,8 +2394,9 @@ class ModuleWrapper:
     def __init__(self, module_name, additional_dependencies,
                  exclude_classes, exclude_member_functions):
         # Reinit global variables
-        global CURRENT_MODULE, PYTHON_MODULE_DEPENDENCY
+        global CURRENT_MODULE, CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES, PYTHON_MODULE_DEPENDENCY
         CURRENT_MODULE = module_name
+        CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES = ""
         # all modules depend, by default, upon Standard, NCollection and others
         if module_name not in ['Standard', 'NCollection']:
             PYTHON_MODULE_DEPENDENCY = ['Standard', 'NCollection']
@@ -2393,111 +2435,107 @@ class ModuleWrapper:
         #
         # The SWIG .i file
         #
-        swig_interface_file = open(os.path.join(SWIG_OUTPUT_PATH, "%s.i" % self._module_name), "w")
-        # write header
-        swig_interface_file.write(LICENSE_HEADER)
-        # write module docstring
-        # for instante define GPDOCSTRING
-        docstring_macro = "%sDOCSTRING" % self._module_name.upper()
-        swig_interface_file.write('%%define %s\n' % docstring_macro)
-        swig_interface_file.write('"%s"\n' % self._module_docstring)
-        swig_interface_file.write('%enddef\n')
-        # module name
-        swig_interface_file.write('%%module (package="OCC.Core", docstring=%s) %s\n\n' % (docstring_macro, self._module_name))
-        # write windows pragmas to avoid compiler errors
-        win_pragmas = """
-%{
-#ifdef WNT
-#pragma warning(disable : 4716)
-#endif
-%}
+        if GENERATE_SWIG_FILES:
+            swig_interface_file = open(os.path.join(SWIG_OUTPUT_PATH, "%s.i" % self._module_name), "w")
+            # write header
+            swig_interface_file.write(LICENSE_HEADER)
+            # write module docstring
+            # for instante define GPDOCSTRING
+            docstring_macro = "%sDOCSTRING" % self._module_name.upper()
+            swig_interface_file.write('%%define %s\n' % docstring_macro)
+            swig_interface_file.write('"%s"\n' % self._module_docstring)
+            swig_interface_file.write('%enddef\n')
+            # module name
+            swig_interface_file.write('%%module (package="OCC.Core", docstring=%s) %s\n\n' % (docstring_macro, self._module_name))
+            # write windows pragmas to avoid compiler errors
+            swig_interface_file.write(WIN_PRAGMAS)
+            # common includes
+            includes = ["CommonIncludes", "ExceptionCatcher",
+                        "FunctionTransformers", "Operators", "OccHandle"]
+            for include in includes:
+                swig_interface_file.write("%%include ../common/%s.i\n" % include)
+            swig_interface_file.write("\n\n")
+            # Here we write required dependencies, headers, as well as
+            # other swig interface files
+            swig_interface_file.write("%{\n")
+            if self._module_name == "Adaptor3d": # occt bug in headr file, won't compile otherwise
+                swig_interface_file.write("#include<Adaptor2d_HCurve2d.hxx>\n")
+            if self._module_name == "AdvApp2Var": # windows compilation issues
+                swig_interface_file.write("#if defined(_WIN32)\n#include <windows.h>\n#endif\n")
+            if self._module_name in ["BRepMesh", "XBRepMesh"]: # wrong header order with gcc4 issue #63
+                swig_interface_file.write("#include<BRepMesh_Delaun.hxx>\n")
+            if self._module_name == "ShapeUpgrade":
+                swig_interface_file.write("#include<Precision.hxx>\n#include<ShapeUpgrade_UnifySameDomain.hxx>\n")
+            module_headers = glob.glob('%s/%s_*.hxx' % (OCE_INCLUDE_DIR, self._module_name))
+            module_headers += glob.glob('%s/%s.hxx' % (OCE_INCLUDE_DIR, self._module_name))
+            module_headers.sort()
 
-"""
-        swig_interface_file.write(win_pragmas)
-        # common includes
-        includes = ["CommonIncludes", "ExceptionCatcher",
-                    "FunctionTransformers", "Operators", "OccHandle"]
-        for include in includes:
-            swig_interface_file.write("%%include ../common/%s.i\n" % include)
-        swig_interface_file.write("\n\n")
-        # Here we write required dependencies, headers, as well as
-        # other swig interface files
-        swig_interface_file.write("%{\n")
-        if self._module_name == "Adaptor3d": # occt bug in headr file, won't compile otherwise
-            swig_interface_file.write("#include<Adaptor2d_HCurve2d.hxx>\n")
-        if self._module_name == "AdvApp2Var": # windows compilation issues
-            swig_interface_file.write("#if defined(_WIN32)\n#include <windows.h>\n#endif\n")
-        if self._module_name in ["BRepMesh", "XBRepMesh"]: # wrong header order with gcc4 issue #63
-            swig_interface_file.write("#include<BRepMesh_Delaun.hxx>\n")
-        if self._module_name == "ShapeUpgrade":
-            swig_interface_file.write("#include<Precision.hxx>\n#include<ShapeUpgrade_UnifySameDomain.hxx>\n")
-        module_headers = glob.glob('%s/%s_*.hxx' % (OCE_INCLUDE_DIR, self._module_name))
-        module_headers += glob.glob('%s/%s.hxx' % (OCE_INCLUDE_DIR, self._module_name))
-        module_headers.sort()
+            mod_header = open(os.path.join(HEADERS_OUTPUT_PATH, "%s_module.hxx" % self._module_name), "w")
+            mod_header.write(LICENSE_HEADER)
+            mod_header.write("#ifndef %s_HXX\n" % self._module_name.upper())
+            mod_header.write("#define %s_HXX\n\n" % self._module_name.upper())
+            mod_header.write("\n")
 
-        mod_header = open(os.path.join(HEADERS_OUTPUT_PATH, "%s_module.hxx" % self._module_name), "w")
-        mod_header.write(LICENSE_HEADER)
-        mod_header.write("#ifndef %s_HXX\n" % self._module_name.upper())
-        mod_header.write("#define %s_HXX\n\n" % self._module_name.upper())
-        mod_header.write("\n")
+            for module_header in filter_header_list(module_headers, HXX_TO_EXCLUDE_FROM_BEING_INCLUDED):
+                if not os.path.basename(module_header) in HXX_TO_EXCLUDE_FROM_BEING_INCLUDED:
+                    mod_header.write("#include<%s>\n" % os.path.basename(module_header))
+            mod_header.write("\n#endif // %s_HXX\n" % self._module_name.upper())
 
-        for module_header in filter_header_list(module_headers, HXX_TO_EXCLUDE_FROM_BEING_INCLUDED):
-            if not os.path.basename(module_header) in HXX_TO_EXCLUDE_FROM_BEING_INCLUDED:
-                mod_header.write("#include<%s>\n" % os.path.basename(module_header))
-        mod_header.write("\n#endif // %s_HXX\n" % self._module_name.upper())
+            swig_interface_file.write("#include<%s_module.hxx>\n" % self._module_name)
+            swig_interface_file.write("\n//Dependencies\n")
+            # Include all dependencies
+            for dep in PYTHON_MODULE_DEPENDENCY:
+                swig_interface_file.write("#include<%s_module.hxx>\n" % dep)
+            for add_dep in self._additional_dependencies:
+                swig_interface_file.write("#include<%s_module.hxx>\n" % add_dep)
 
-        swig_interface_file.write("#include<%s_module.hxx>\n" % self._module_name)
-        swig_interface_file.write("\n//Dependencies\n")
-        # Include all dependencies
-        for dep in PYTHON_MODULE_DEPENDENCY:
-            swig_interface_file.write("#include<%s_module.hxx>\n" % dep)
-        for add_dep in self._additional_dependencies:
-            swig_interface_file.write("#include<%s_module.hxx>\n" % add_dep)
+            swig_interface_file.write("%};\n")
+            for dep in PYTHON_MODULE_DEPENDENCY:
+                if is_module(dep):
+                    swig_interface_file.write("%%import %s.i\n" % dep)
+            #
+            # The Exceptions and decorator
+            #
+            swig_interface_file.write("\n%pythoncode {\n")
+            swig_interface_file.write("from enum import IntEnum\n")
+            swig_interface_file.write("from OCC.Core.Exception import *\n")
+            swig_interface_file.write("};\n\n")        
 
-        swig_interface_file.write("%};\n")
-        for dep in PYTHON_MODULE_DEPENDENCY:
-            if is_module(dep):
-                swig_interface_file.write("%%import %s.i\n" % dep)
-        #
-        # The Exceptions and decorator
-        #
-        swig_interface_file.write("\n%pythoncode {\n")
-        swig_interface_file.write("from OCC.Core.Exception import *\n};\n\n")        
-
-        # for NCollection, we add template classes that can be processed
-        # automatically with SWIG
-        if self._module_name == "NCollection":
-            swig_interface_file.write(NCOLLECTION_HEADER_TEMPLATE)
-        if self._module_name == "BVH":
-            swig_interface_file.write(BVH_HEADER_TEMPLATE)
-        if self._module_name == "Prs3d":
-            swig_interface_file.write(PRS3D_HEADER_TEMPLATE)
-        if self._module_name == "Graphic3d":
-            swig_interface_file.write(GRAPHIC3D_DEFINE_HEADER)
-        if self._module_name == "BRepAlgoAPI":
-            swig_interface_file.write(BREPALGOAPI_HEADER)
-        # write public enums
-        swig_interface_file.write(self._enums_str)
-        # write wrap_handles
-        swig_interface_file.write(self._wrap_handle_str)
-        # write type_defs
-        swig_interface_file.write(self._typedefs_str)
-        # write classes_definition
-        swig_interface_file.write(self._classes_str)
-        # write free_functions definition
-        #TODO: we should write free functions here,
-        # but it sometimes fail to compile
-        #swig_interface_file.write(self._free_functions_str)
-        swig_interface_file.close()
+            # for NCollection, we add template classes that can be processed
+            # automatically with SWIG
+            if self._module_name == "NCollection":
+                swig_interface_file.write(NCOLLECTION_HEADER_TEMPLATE)
+            if self._module_name == "BVH":
+                swig_interface_file.write(BVH_HEADER_TEMPLATE)
+            if self._module_name == "Prs3d":
+                swig_interface_file.write(PRS3D_HEADER_TEMPLATE)
+            if self._module_name == "Graphic3d":
+                swig_interface_file.write(GRAPHIC3D_DEFINE_HEADER)
+            if self._module_name == "BRepAlgoAPI":
+                swig_interface_file.write(BREPALGOAPI_HEADER)
+            # write public enums
+            swig_interface_file.write(self._enums_str)
+            # write wrap_handles
+            swig_interface_file.write(self._wrap_handle_str)
+            # write type_defs
+            swig_interface_file.write(self._typedefs_str)
+            # write classes_definition
+            swig_interface_file.write(self._classes_str)
+            # write free_functions definition
+            #TODO: we should write free functions here,
+            # but it sometimes fail to compile
+            #swig_interface_file.write(self._free_functions_str)
+            swig_interface_file.close()
 
         #
         # write pyi stub file
         #
         pyi_stub_file = open(os.path.join(SWIG_OUTPUT_PATH, "%s.pyi" % self._module_name), "w")
         # first write the header
+        pyi_stub_file.write("from enum import IntEnum\n")
         pyi_stub_file.write("from typing import overload, NewType, Optional, Tuple\n\n")
 
-        pyi_stub_file.write("from OCC.Core.%s import *\n" % CURRENT_MODULE)
+        #pyi_stub_file.write("from OCC.Core.%s import *\n" % CURRENT_MODULE)
         for dep in PYTHON_MODULE_DEPENDENCY:
             if is_module(dep):
                 pyi_stub_file.write("from OCC.Core.%s import *\n" % dep)
@@ -2509,6 +2547,8 @@ class ModuleWrapper:
         pyi_stub_file.write(self._enums_pyi_str)
         # then write classes and methods
         pyi_stub_file.write(self._classes_pyi_str)
+        # and we finally write the aliases for static methods
+        pyi_stub_file.write(CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES)
         pyi_stub_file.close()
 
 
@@ -2569,7 +2609,6 @@ if __name__ == '__main__':
         for module_to_process in sys.argv[1:]:
             process_module(module_to_process)
     else:
-        write__init__()
         process_all_toolkits()
     end_time = time.time()
     total_time = end_time - start_time
