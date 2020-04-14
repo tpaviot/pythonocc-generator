@@ -155,7 +155,8 @@ HXX_TO_EXCLUDE_FROM_CPPPARSER = ['NCollection_StlIterator.hxx',
                                  'BRepMesh_SphereRangeSplitter.hxx',
                                  'BRepMesh_TorusRangeSplitter.hxx',
                                  'BRepMesh_UVParamRangeSplitter.hxx',
-                                 'AdvApp2Var_Data_f2c.hxx'
+                                 'AdvApp2Var_Data_f2c.hxx',
+                                 'Convert_CosAndSinEvalFunction.hxx'  # strange, a method in a typedef, confusing
                                  ]
 
 # some includes fail at being compiled
@@ -376,6 +377,13 @@ class HClassName : public _Array1Type_, public Standard_Transient {
 
 """
 
+HARRAY1_TEMPLATE_PYI = """
+class HClassName(_Array1Type_, Standard_Transient):
+    def HClassName(self, theLower: int, theUpper: int) -> None: ...
+    def Array1(self) -> _Array1Type_: ...
+
+"""
+
 HARRAY2_TEMPLATE = """
 class HClassName : public _Array2Type_, public Standard_Transient {
   public:
@@ -391,6 +399,14 @@ class HClassName : public _Array2Type_, public Standard_Transient {
 
 """
 
+HARRAY2_TEMPLATE_PYI = """
+class HClassName(_Array2Type_, Standard_Transient):
+    def HClassName(self, theRowLow: int, theRowUpp: int, theColLow: int, theColUpp: int) -> None: ...
+    def HClassName(self, theOther: _Array2Type_) -> None: ...
+    def Array2(self) -> _Array2Type_: ...
+
+"""
+
 HSEQUENCE_TEMPLATE = """
 class HClassName : public _SequenceType_, public Standard_Transient {
   public:
@@ -402,6 +418,15 @@ class HClassName : public _SequenceType_, public Standard_Transient {
     _SequenceType_& ChangeSequence();
 };
 %make_alias(HClassName)
+
+"""
+
+HSEQUENCE_TEMPLATE_PYI = """
+class HClassName(_SequenceType_, Standard_Transient):
+    def __init__(self) -> None: ...
+    def __init__(self, other: _SequenceType_) -> None: ...
+    def Sequence(self) -> _SequenceType_: ...
+    def Append(self, theSequence: _SequenceType_) -> None: ...
 
 """
 
@@ -440,6 +465,34 @@ NCOLLECTION_ARRAY1_EXTEND_TEMPLATE = '''
     }
 };
 '''
+
+# the related pyi stub string
+NCOLLECTION_ARRAY1_EXTEND_TEMPLATE_PYI = '''
+class NCollection_Array1_Template_Instanciation:
+    @overload
+    def __init__(self): ...
+    @overload
+    def __init__(self, theLower: int, theUpper: int): ...
+    def __getitem__(self, index: int) -> Type_T: ...
+    def __setitem__(self, index: int, value: Type_T) -> None: ...
+    def __len__(self) -> int: ...
+    def __iter__(self) -> Iterator[Type_T]: ...
+    def next(self) -> Type_T: ...
+    __next__ = next
+    def Init(self, theValue: Type_T) -> None: ...
+    def Size(self) -> int: ...
+    def Length(self) -> int: ...
+    def IsEmpty(self) -> bool: ...
+    def Lower(self) -> int: ...
+    def Upper(self) -> int: ...
+    def IsDetectable(self) -> bool: ...
+    def IsAllocated(self) -> bool: ...
+    def First(self) -> Type_T: ...
+    def Last(self) -> Type_T: ...
+    def Value(self, theIndex: int) -> Type_T: ...
+    def SetValue(self, theIndex: int, theValue: Type_T) -> None: ...
+'''
+
 
 # We extend the NCollection_DataMap template with a Keys
 # method that returns a list of Keys
@@ -784,7 +837,7 @@ def adapt_header_file(header_content):
             # we keep only te RTTI that are defined in this module,
             # to avoid cyclic references in the SWIG files
             logging.info("Found HARRAY1 definition" + typename + ':' + base_typename)
-            ALL_HARRAY1[typename] = base_typename
+            ALL_HARRAY1[typename] = base_typename.strip()
     # Search for HARRAY2
     outer = re.compile("DEFINE_HARRAY2[\\s]*\\([\\w\\s]+\\,+[\\w\\s]+\\)")
     matches = outer.findall(header_content)
@@ -796,7 +849,7 @@ def adapt_header_file(header_content):
             # we keep only te RTTI that are defined in this module,
             # to avoid cyclic references in the SWIG files
             logging.info("Found HARRAY2 definition" + typename + ':' + base_typename)
-            ALL_HARRAY2[typename] = base_typename
+            ALL_HARRAY2[typename] = base_typename.strip()
    # Search for HSEQUENCE
     outer = re.compile("DEFINE_HSEQUENCE[\\s]*\\([\\w\\s]+\\,+[\\w\\s]+\\)")
     matches = outer.findall(header_content)
@@ -808,7 +861,7 @@ def adapt_header_file(header_content):
             # we keep only te RTTI that are defined in this module,
             # to avoid cyclic references in the SWIG files
             logging.info("Found HSEQUENCE definition" + typename + ':' + base_typename)
-            ALL_HSEQUENCE[typename] = base_typename
+            ALL_HSEQUENCE[typename] = base_typename.strip()
     # skip some defines that prevent header parsing
     header_content = header_content.replace('DEFINE_STANDARD_RTTI_INLINE',
                                             '//DEFINE_STANDARD_RTTI_INLINE')
@@ -878,10 +931,22 @@ def test_filter_typedefs():
     assert filter_typedefs(a_dict) == {'1': 'one'}
 
 
+def get_type_for_ncollection_array(ncollection_array: str) -> str:
+    """ input : NCollection_Array1<Standard_Real>
+    output : Standard_Real
+    """
+    return ncollection_array.split('<')[1].split('>')[0].strip()
+
+
+def test_get_type_for_ncollection_array() -> None:
+    assert get_type_for_ncollection_array("NCollection_Array1<Standard_Real>") == "Standard_Real"
+
+
 def process_templates_from_typedefs(list_of_typedefs):
     """
     """
     wrapper_str = "/* templates */\n"
+    pyi_str = ""
     for t in list_of_typedefs:
         template_name = t[1].replace(" ", "")
         template_type = t[0]
@@ -904,8 +969,11 @@ def process_templates_from_typedefs(list_of_typedefs):
                 # if a NCollection_Array1, extend this template to benefit from pythonic methods
                 # All "Array1" classes are considered as python arrays
                 # TODO : it should be a good thing to use decorators here, to avoid code duplication
+                basetype_hint = adapt_type_for_hint(get_type_for_ncollection_array(template_type))
                 if 'NCollection_Array1' in template_type:
                     wrapper_str += NCOLLECTION_ARRAY1_EXTEND_TEMPLATE.replace("NCollection_Array1_Template_Instanciation", template_type)
+                    str1 = NCOLLECTION_ARRAY1_EXTEND_TEMPLATE_PYI.replace("NCollection_Array1_Template_Instanciation", template_name)
+                    pyi_str += str1.replace("Type_T", "%s" % basetype_hint)
                 elif 'NCollection_DataMap' in template_type:
                     # NCollection_Datamap is similar to a Python dict,
                     # it's a (key, value) store. Defined as
@@ -932,7 +1000,7 @@ def process_templates_from_typedefs(list_of_typedefs):
                 typ = template_name.split('Iter')[0]
             wrapper_str += "%%template(%s) NCollection_TListIterator<%s>;\n" %(template_name, typ)
     wrapper_str += "/* end templates declaration */\n"
-    return wrapper_str
+    return wrapper_str, pyi_str
 
 def adapt_type_for_hint_typedef(typedef_type_str):
     typedef_type_str = typedef_type_str.replace(' *', '')
@@ -1004,12 +1072,15 @@ def process_typedefs(typedefs_dict):
         if ('<' not in type_to_define and
             ':' not in type_to_define and
             'struct' not in type_to_define and
-            ')' not in type_to_define):
+            ')' not in type_to_define and
+            'NCollection_Array1' not in type_to_define and  # because it has a special hint
+            type_to_define is not None):
             type_to_define = adapt_type_for_hint_typedef(type_to_define)
             typedef_pyi_str += "\n%s = NewType('%s', %s)" % (typedef_value, typedef_value, type_to_define)
         elif (')' not in typedef_value and
               '(' not in typedef_value and
-              ':' not in typedef_value):
+              ':' not in typedef_value and
+            'NCollection_Array1' not in type_to_define):
             typedef_pyi_str += "\n#the following typedef cannot be wrapped as is"
             typedef_pyi_str += "\n%s = NewType('%s', Any)" % (typedef_value, typedef_value)
 
@@ -1017,9 +1088,10 @@ def process_typedefs(typedefs_dict):
     typedef_str += "/* end typedefs declaration */\n\n"
     # then we process templates
     # at this stage, we get a list as follows
-    templates_str += process_templates_from_typedefs(templates)
+    templates_def, templates_pyi = process_templates_from_typedefs(templates)
+    templates_str += templates_def
     templates_str += "\n"
-    return templates_str + typedef_str, typedef_pyi_str
+    return templates_str + typedef_str, typedef_pyi_str + templates_pyi
 
 
 def process_enums(enums_list):
@@ -1470,6 +1542,7 @@ def adapt_type_for_hint(type_str):
 
     type_str = type_str.replace("Standard_Integer", "int")
     type_str = type_str.replace("Standard_Real", "float")
+    type_str = type_str.replace("Standard_ShortReal", "float")
     type_str = type_str.replace("Standard_Boolean", "bool")
     type_str = type_str.replace("Standard_Character", "str")
     type_str = type_str.replace("Standard_Byte", "str")
@@ -1531,32 +1604,48 @@ def adapt_type_hint_parameter_name(param_name_str):
     return new_param_name, success
 
 
-# def adapt_type_hint_default_value(default_value_str):
-#     """ default values such as Standard_True etc. must be
-#     converted to correct python values
-#     """
-#     if default_value_str == "Standard_True":
-#         new_default_value_str = "True"
-#         success = True
-#     elif default_value_str == "Standard_False":
-#         new_default_value_str = "False"
-#         success = True
-#     elif default_value_str == "Precision::Confusion()":
-#         new_default_value_str = "precision_Confusion()"
-#         success = True
-#     elif "opencascade::handle" in default_value_str:
-#         # case opencascade::handle<Message_ProgressIndicator>()
-#         # should be Message_ProgressIndicator()
-#         classname = get_classname_from_handle(default_value_str)
-#         if classname == "Message_ProgressIndicator":  # no constructor defined, abstract class
-#             new_default_value_str = "'Message_ProgressIndicator()'"
-#         else:
-#           new_default_value_str = classname + default_value_str.split('>')[1]
-#         success = True
-#     else:
-#         new_default_value_str = default_value_str
-#         success = True
-#     return new_default_value_str, success
+def adapt_type_hint_default_value(default_value_str):
+    """ default values such as Standard_True etc. must be
+    converted to correct python values
+    """
+    if default_value_str == "Standard_True":
+        new_default_value_str = "True"
+        success = True
+    elif default_value_str == "Standard_False":
+        new_default_value_str = "False"
+        success = True
+    elif "Precision::" in default_value_str:
+        new_default_value_str = default_value_str.replace("Precision::", "precision_")
+        success = True
+    elif default_value_str == "NULL":
+        new_default_value_str = "None"
+        success = True
+    elif "opencascade::handle" in default_value_str:
+        # case opencascade::handle<Message_ProgressIndicator>()
+        # should be Message_ProgressIndicator()
+        classname = get_classname_from_handle(default_value_str)
+        if classname == "Message_ProgressIndicator":  # no constructor defined, abstract class
+            new_default_value_str = "'Message_ProgressIndicator()'"
+        else:
+          new_default_value_str = classname + default_value_str.split('>')[1]
+        success = True
+    elif default_value_str.endswith('f'):  # some float values are defined as 0.0f or 0.1f
+        str_removed_final_f = default_value_str[:-1]
+        try:
+            float(str_removed_final_f)
+            is_float = True
+        except ValueError:
+            is_float = False
+        if is_float:
+            new_default_value_str = str_removed_final_f 
+            success = True
+        else:
+            new_default_value_str = default_value_str
+            success = True
+    else:
+        new_default_value_str = default_value_str
+        success = True
+    return new_default_value_str, success
 
 
 def process_function(f, overload=False):
@@ -1755,16 +1844,19 @@ def process_function(f, overload=False):
     # thus, some method may return a tuple
     types_returned = ["%s" % adapt_type_for_hint(return_type)]  # by default, nothing
     if overload:
-                str_typehint += "\t@overload\n"
+        str_typehint += "\t@overload\n"
     if "operator" not in function_name:
+        all_parameters_type_hint = ['self']  #by default, this is a class method not static
         if f["constructor"]:
             # add the overload decorator to handle
             # multiple constructors
-            str_typehint += "\tdef __init__(self"
+            str_typehint += "\tdef __init__("
         else:
             if f['static']:
                 str_typehint += "\t@staticmethod\n"
-            str_typehint += "\tdef %s(self" % function_name
+                all_parameters_type_hint = []  # if static, not self
+            str_typehint += "\tdef %s(" % function_name
+        
         if parameters_types_and_names:
             for par in parameters_types_and_names:
                 par_typ = adapt_type_for_hint(par[0])
@@ -1772,9 +1864,9 @@ def process_function(f, overload=False):
                     canceled = True
                     break
                 # check if there is some OutValue
-                popo = adapt_param_type_and_name(" ".join(par))
-                if 'OutValue' in popo:
-                    type_to_add = "%s" % adapt_type_for_hint(popo)
+                ov = adapt_param_type_and_name(" ".join(par))
+                if 'OutValue' in ov:
+                    type_to_add = "%s" % adapt_type_for_hint(ov)
                     if types_returned[0] == "None":
                         types_returned[0] = type_to_add
                     else:
@@ -1782,16 +1874,18 @@ def process_function(f, overload=False):
                     continue
                 # if there's a default value, the type becomes Optional[type] = value
                 if len(par) == 3:
-                    #def_value, adapt_type_hint_default_value_success = adapt_type_hint_default_value(par[2])
-                    #par_typ = "Optional[%s] = %s" % (par_typ, def_value)
-                    # forget about the default value, it's too complex, TODO
-                    par_typ = "Optional[%s]" % par_typ
+                    hint_def_value, adapt_type_hint_default_value_success = adapt_type_hint_default_value(par[2])
+                    if adapt_type_hint_default_value_success:
+                      par_typ = "Optional[%s] = %s" % (par_typ, hint_def_value)
+                    else:  # no default value
+                      par_typ = "Optional[%s]" % par_typ
                 par_nam, success = adapt_type_hint_parameter_name(par[1])
                 if not success:
                     canceled = True
                 if par_nam.endswith('_list'):  # it's a list
                     par_typ = "List[%s]" % par_typ
-                str_typehint += ', ' + "%s: %s" % (par_nam, par_typ)
+                all_parameters_type_hint.append("%s: %s" % (par_nam, par_typ))
+        str_typehint += ', '.join(all_parameters_type_hint)
         if len(types_returned) == 1:
             returned_type_hint = types_returned[0]
         elif len(types_returned) > 1:  # it's a tuple
@@ -2041,39 +2135,58 @@ def fix_type(type_str):
 
 
 def process_harray1():
-    wrapper_str = "/* harray1 classes */"
+    """ special wrapper for NCollection_HArray1
+    Returns both the definition and the hint
+    """
+    wrapper_str = "/* harray1 classes */\n"
+    pyi_str = "\n# harray1 classes\n"
     for HClassName in ALL_HARRAY1:
         if HClassName.startswith(CURRENT_MODULE + "_"):
             _Array1Type_ = ALL_HARRAY1[HClassName]
             wrapper_for_harray1 = HARRAY1_TEMPLATE.replace("HClassName", HClassName)
             wrapper_for_harray1 = wrapper_for_harray1.replace("_Array1Type_", _Array1Type_)
             wrapper_str += wrapper_for_harray1
-    wrapper_str += "\n"
-    return wrapper_str
+            # type hint
+            pyi_str_for_harray1 = HARRAY1_TEMPLATE_PYI.replace("HClassName", HClassName)
+            pyi_str_for_harray1 = pyi_str_for_harray1.replace("_Array1Type_", _Array1Type_)
+            pyi_str += pyi_str_for_harray1
+    return wrapper_str, pyi_str
 
 
 def process_harray2():
     wrapper_str = "/* harray2 classes */"
+    pyi_str = "# harray2 classes\n"
     for HClassName in ALL_HARRAY2:
         if HClassName.startswith(CURRENT_MODULE + "_"):
             _Array2Type_ = ALL_HARRAY2[HClassName]
             wrapper_for_harray2 = HARRAY2_TEMPLATE.replace("HClassName", HClassName)
             wrapper_for_harray2 = wrapper_for_harray2.replace("_Array2Type_", _Array2Type_)
             wrapper_str += wrapper_for_harray2
+            # type hint
+            pyi_str_for_harray2 = HARRAY2_TEMPLATE_PYI.replace("HClassName", HClassName)
+            pyi_str_for_harray2 = pyi_str_for_harray2.replace("_Array2Type_", _Array2Type_)
+            pyi_str += pyi_str_for_harray2
     wrapper_str += "\n"
-    return wrapper_str
+    return wrapper_str, pyi_str
 
 
 def process_hsequence():
     wrapper_str = "/* hsequence classes */"
+    pyi_str = "# hsequence classes\n"
     for HClassName in ALL_HSEQUENCE:
         if HClassName.startswith(CURRENT_MODULE + "_"):
             _SequenceType_ = ALL_HSEQUENCE[HClassName]
             wrapper_for_hsequence = HSEQUENCE_TEMPLATE.replace("HClassName", HClassName)
             wrapper_for_hsequence = wrapper_for_hsequence.replace("_SequenceType_", _SequenceType_)
             wrapper_str += wrapper_for_hsequence
+            # type hint
+            pyi_str_for_hsequence  = HSEQUENCE_TEMPLATE_PYI.replace("HClassName", HClassName)
+            pyi_str_for_hsequence = pyi_str_for_hsequence.replace("_SequenceType_", _SequenceType_)
+            pyi_str += pyi_str_for_hsequence
     wrapper_str += "\n"
-    return wrapper_str
+    pyi_str += "\n"
+    return wrapper_str, pyi_str
+
 
 def process_handles(classes_dict, exclude_classes, exclude_member_functions):
     """ Check wether a class has to be wrapped as a handle
@@ -2105,6 +2218,7 @@ def process_handles(classes_dict, exclude_classes, exclude_member_functions):
             wrap_handle_str += "%%wrap_handle(%s)\n" % HClassName
     wrap_handle_str += "/* end handles declaration */\n\n"
     return wrap_handle_str
+
 
 def process_classes(classes_dict, exclude_classes, exclude_member_functions):
     """ Generate the SWIG string for the class wrapper.
@@ -2148,8 +2262,12 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # for instance TopoDS is both a module and a class
         # then we rename the class with lowercase
         logging.info(class_name)
+        # the class type hint
+        class_name_for_pyi = class_name.split('<')[0]
+        
         if class_name == CURRENT_MODULE:
             class_def_str += "%%rename(%s) %s;\n" % (class_name.lower(), class_name)
+            class_name_for_pyi = class_name_for_pyi.lower()
         # then process the class itself
         if not class_can_have_default_constructor(klass):
             class_def_str += "%%nodefaultctor %s;\n" % class_name
@@ -2158,8 +2276,6 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             class_def_str += "%%ignore %s::~%s();\n" % (class_name, class_name)
         # then defines the wrapper
         class_def_str += "class %s" % class_name
-        # the class type hint
-        class_name_for_pyi = class_name.split('<')[0]
         class_pyi_str += "\nclass %s" % class_name_for_pyi  # type hints
         # inheritance process
         inherits_from = klass["inherits"]
@@ -2340,7 +2456,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             class_def_str += "@classnotwrapped\n"
             class_def_str += "class %s:\n\tpass\n\n" % excluded_class
             class_pyi_str += "\n#classnotwrapped\n"
-            class_pyi_str += "class %s:\n\tpass\n" % excluded_class
+            class_pyi_str += "class %s: ...\n" % excluded_class
         class_def_str += "}\n"
         class_def_str += "/* end python proxy for excluded classes */\n"
     return class_def_str, class_pyi_str
@@ -2420,10 +2536,19 @@ class ModuleWrapper:
         self._classes_str, self._classes_pyi_str = process_classes(classes,
                                                                    exclude_classes,
                                                                    exclude_member_functions)
-        # special classes defined by the HARRAY1 and HARRAY2 macro
-        self._classes_str += process_harray1()
-        self._classes_str += process_harray2()
-        self._classes_str += process_hsequence()
+        # special classes for NCollection_HArray1, NCollection_HArray2 and NCollection_HSequence
+        harray1_def_str, harray1_pyi_str = process_harray1()
+        self._classes_str += harray1_def_str
+        self._classes_pyi_str += harray1_pyi_str
+
+        harray2_def_str, harray2_pyi_str = process_harray2()
+        self._classes_str += harray2_def_str
+        self._classes_pyi_str += harray2_pyi_str
+
+        hsequence_def_str, hsequence_pyi_str = process_hsequence()
+        self._classes_str += hsequence_def_str
+        self._classes_pyi_str += hsequence_pyi_str
+
         # free functions
         self._free_functions_str, self._free_functions_pyi_str = process_methods(free_functions)
         # other dependencies
@@ -2598,19 +2723,20 @@ def run_unit_tests():
     test_adapt_param_type_and_name()
     test_adapt_default_value()
     test_check_dependency()
+    test_get_type_for_ncollection_array()
 
 
 if __name__ == '__main__':
     # do it each time, does not take too much time, prevent regressions
     run_unit_tests()
     logging.info(get_log_header())
-    start_time = time.time()
+    start_time = time.perf_counter()
     if len(sys.argv) > 1:
         for module_to_process in sys.argv[1:]:
             process_module(module_to_process)
     else:
         process_all_toolkits()
-    end_time = time.time()
+    end_time = time.perf_counter()
     total_time = end_time - start_time
     # footer
     logging.info(get_log_footer(total_time))
