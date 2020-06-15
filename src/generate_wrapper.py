@@ -131,12 +131,9 @@ HXX_TO_EXCLUDE_FROM_CPPPARSER = ['NCollection_StlIterator.hxx',
                                  # this file has to be fixed
                                  # there's a missing include
                                  'Aspect_VKeySet.hxx',
-                                 'TPrsStd_AISPresentation.hxx',
-                                 'TPrsStd_AISViewer.hxx',
                                  'StepToTopoDS_Tool.hxx',
                                  'AIS_DataMapOfSelStat.hxx',
                                  'BVH_IndexedBoxSet.hxx',
-                                 'AIS_Axis.hxx',
                                  'BRepApprox_SurfaceTool.hxx',
                                  'BRepBlend_BlendTool.hxx',
                                  'BRepBlend_HCurveTool.hxx',
@@ -166,12 +163,9 @@ HXX_TO_EXCLUDE_FROM_BEING_INCLUDED = ['AIS_DataMapOfSelStat.hxx', # TODO : repor
                                       # file has to be fixed, missing include
                                       'NCollection_CellFilter.hxx',
                                       'Aspect_VKeySet.hxx',
-                                      'TPrsStd_AISPresentation.hxx',
                                       'Interface_ValueInterpret.hxx',
-                                      'TPrsStd_AISViewer.hxx',
                                       'StepToTopoDS_Tool.hxx',
                                       'BVH_IndexedBoxSet.hxx',
-                                      'AIS_Axis.hxx',
                                       # report the 3 following to upstream, buggy
                                       # error: ‘ChFiDS_ChamfMode’ does not name a type;
                                       'ChFiKPart_ComputeData_ChPlnPln.hxx',

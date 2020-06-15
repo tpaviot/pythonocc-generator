@@ -845,12 +845,9 @@ OCE_MODULES = [
                 'VrmlData_TextureTransform', 'VrmlData_Faceted'],
                 {'VrmlData_IndexedFaceSet': ['GetNormal']}), # Fixes undefined ref
            ('RWGltf', ['CDF', 'PCDM', 'TDF', 'TDocStd', 'Graphic3d', 'Geom',
-                       'TShort', 'Aspect'], ['RWGltf_GltfSharedIStream', 'RWGltf_TriangulationReader',
-                       'RWGltf_GltfLatePrimitiveArray', 'RWGltf_PrimitiveArrayReader', 'RWGltf_CafReader']
-           ),
+                       'TShort', 'Aspect'], ['RWGltf_GltfSharedIStream']),
            ('RWObj', ['CDF', 'PCDM', 'TDF', 'TDocStd', 'Graphic3d', 'Geom',
-                       'TShort', 'Aspect', 'Bnd', 'Quantity', 'Message', 'Media'],
-              ['RWObj', 'RWObj_MtlReader', 'RWObj_CafReader', 'RWObj_TriangulationReader', 'RWObj_Reader']),
+                       'TShort', 'Aspect', 'Bnd', 'Quantity', 'Message', 'Media'], []),
            ###
            ### OCAF
            ###
