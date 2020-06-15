@@ -51,7 +51,7 @@ PYTHONOCC_CORE_PATH = config.get('pythonocc-core', 'path')
 SWIG_OUTPUT_PATH = os.path.join(PYTHONOCC_CORE_PATH, 'src', 'SWIG_files', 'wrapper')
 HEADERS_OUTPUT_PATH = os.path.join(PYTHONOCC_CORE_PATH, 'src', 'SWIG_files', 'headers')
 
-GENERATE_SWIG_FILES = False  # if set to False, skip .i generator, to avoid recompile everything
+GENERATE_SWIG_FILES = True  # if set to False, skip .i generator, to avoid recompile everything
 
 ###################################################
 # Set logger, to log both to a file and to stdout #
