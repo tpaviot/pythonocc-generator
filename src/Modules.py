@@ -847,7 +847,8 @@ OCE_MODULES = [
            ('RWGltf', ['CDF', 'PCDM', 'TDF', 'TDocStd', 'Graphic3d', 'Geom',
                        'TShort', 'Aspect'], ['RWGltf_GltfSharedIStream']),
            ('RWObj', ['CDF', 'PCDM', 'TDF', 'TDocStd', 'Graphic3d', 'Geom',
-                       'TShort', 'Aspect', 'Bnd', 'Quantity', 'Message', 'Media'], []),
+                       'TShort', 'Aspect', 'Bnd', 'Quantity', 'Message', 'Media'],
+            ['RWObj_MtlReader']),
            ###
            ### OCAF
            ###
