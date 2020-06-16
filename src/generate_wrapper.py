@@ -922,7 +922,7 @@ def adapt_header_file(header_content):
                                             '//Standard_DEPRECATED')
     header_content = header_content.replace('DECLARE_TOBJOCAF_PERSISTENCE',
                                             '//DECLARE_TOBJOCAF_PERSISTENCE')
-    # remove stuff that prevent CppHeaderPArser to work correctly    
+    # remove stuff that prevent CppHeaderPArser to work correctly
     header_content = header_content.replace('DEFINE_STANDARD_ALLOC', '')
     header_content = header_content.replace('Standard_EXPORT', '')
     header_content = header_content.replace('Standard_NODISCARD', '')
@@ -1004,7 +1004,7 @@ def process_templates_from_typedefs(list_of_typedefs):
         template_name = t[1].replace(" ", "")
         template_type = t[0]
         if "unsigned" not in template_type and "const" not in template_type:
-          template_type = template_type.replace(" ", "")
+            template_type = template_type.replace(" ", "")
         # we must include
         if not (template_type.endswith("::Iterator") or template_type.endswith("::Type")):  #it's not an iterator
             # check that there's no forbidden template
@@ -1023,19 +1023,22 @@ def process_templates_from_typedefs(list_of_typedefs):
                 # All "Array1" classes are considered as python arrays
                 # TODO : it should be a good thing to use decorators here, to avoid code duplication
                 basetype_hint = adapt_type_for_hint(get_type_for_ncollection_array(template_type))
+
                 if 'NCollection_Array1' in template_type:
                     wrapper_str += NCOLLECTION_ARRAY1_EXTEND_TEMPLATE.replace("NCollection_Array1_Template_Instanciation", template_type)
                     str1 = NCOLLECTION_ARRAY1_EXTEND_TEMPLATE_PYI.replace("NCollection_Array1_Template_Instanciation", template_name)
                     pyi_str += str1.replace("Type_T", "%s" % basetype_hint)
+
                 elif 'NCollection_List' in template_type:
                     wrapper_str += NCOLLECTION_LIST_EXTEND_TEMPLATE.replace("NCollection_List_Template_Instanciation", template_type)
                     str1 = NCOLLECTION_LIST_EXTEND_TEMPLATE_PYI.replace("NCollection_List_Template_Instanciation", template_name)
                     pyi_str += str1.replace("Type_T", "%s" % basetype_hint)
+
                 elif 'NCollection_Sequence' in template_type:
                     wrapper_str += NCOLLECTION_SEQUENCE_EXTEND_TEMPLATE.replace("NCollection_Sequence_Template_Instanciation", template_type)
                     str1 = NCOLLECTION_SEQUENCE_EXTEND_TEMPLATE_PYI.replace("NCollection_Sequence_Template_Instanciation", template_name)
                     pyi_str += str1.replace("Type_T", "%s" % basetype_hint)
-                
+
                 elif 'NCollection_DataMap' in template_type:
                     # NCollection_Datamap is similar to a Python dict,
                     # it's a (key, value) store. Defined as
@@ -1050,6 +1053,7 @@ def process_templates_from_typedefs(list_of_typedefs):
                         ncollection_datamap_extent = NCOLLECTION_DATAMAP_EXTEND_TEMPLATE.replace("NCollection_DataMap_Template_Instanciation", template_type)
                         ncollection_datamap_extent = ncollection_datamap_extent.replace("NCollection_DataMap_Template_Name", template_name)
                         wrapper_str += ncollection_datamap_extent
+
         elif template_name.endswith("Iter") or "_ListIteratorOf" in template_name:  # it's a lst iterator, we use another way to wrap the template
         # #%template(TopTools_ListIteratorOfListOfShape) NCollection_TListIterator<TopTools_ListOfShape>;
             if "IteratorOf" in template_name:
@@ -1131,15 +1135,9 @@ def process_typedefs(typedefs_dict):
         check_dependency(filtered_typedef_dict[typedef_value].split()[0])
         # Define a new type, only for aliases
         type_to_define = filtered_typedef_dict[typedef_value]
-        if ('<' not in type_to_define and
-            ':' not in type_to_define and
-            'struct' not in type_to_define and
-            ')' not in type_to_define and
-            'NCollection_Array1' not in type_to_define and  # because it has a special hint
-            'NCollection_List' not in type_to_define and  # because it has a special hint
-            'NCollection_DataMap' not in type_to_define and  # because it has a special hint
-            'NCollection_Sequence' not in type_to_define and  # because it has a special hint
-            type_to_define is not None):
+        match_1 = ['<', ':', 'struct', ')', 'NCollection_Array1', 'NCollection_List',
+                   'NCollection_DataMap', 'NCollection_Sequence']
+        if all([match not in type_to_define for match in match_1]) and type_to_define is not None:
             type_to_define = adapt_type_for_hint_typedef(type_to_define)
             typedef_pyi_str += "\n%s = NewType('%s', %s)" % (typedef_value, typedef_value, type_to_define)
         elif (')' not in typedef_value and
@@ -1175,7 +1173,7 @@ def process_enums(enums_list):
     };
 
     In SWIG, this will be wrapped in the interface file as
-    
+
     enum TopAbs_Orientation {
       TopAbs_FORWARD = 0,
       TopAbs_REVERSED = 1,
@@ -1232,7 +1230,7 @@ def process_enums(enums_list):
         enum_python_proxies += alias_str
         enum_pyi_str += alias_str
         enum_str += "};\n\n"
-        
+
     enum_python_proxies += "};\n"
     enum_str += "/* end public enums declaration */\n\n"
     enum_python_proxies += "/* end python proxy for enums */\n\n"
@@ -1478,7 +1476,7 @@ def process_function_docstring(f):
             if "defaultValue" in param:
                 parameters_string += ",optional\n"
                 def_value = adapt_default_value(param["defaultValue"])
-                parameters_string += "\tdefault value is %s" % def_value           
+                parameters_string += "\tdefault value is %s" % def_value
             parameters_string += "\n"
     # return types:
     returns_string = 'Returns\n-------\n'
@@ -1628,7 +1626,7 @@ def adapt_type_for_hint(type_str):
         logging.warning("\t[TypeHint] Skipping unknown type, %s not in module list" % type_str.split('_')[0])
         return False
     if type_str.count('<') >= 1:  # at least one <, it's a template
-        logging.warning("\t[TypeHint] Skipping type %s, seems to be a template" % type_str) 
+        logging.warning("\t[TypeHint] Skipping type %s, seems to be a template" % type_str)
         return False
     return type_str
 
@@ -1660,10 +1658,9 @@ def adapt_type_hint_parameter_name(param_name_str):
         new_param_name = param_name_str
         success = True
     if '[' in new_param_name:
-        # something like 
         param_name, snd_part = new_param_name.split('[')
         param_name = param_name.replace(')', '')
-        number = snd_part.split(']')[0]
+        #number = snd_part.split(']')[0]
         if param_name == "":
             success = False
         else:
@@ -1695,7 +1692,7 @@ def adapt_type_hint_default_value(default_value_str):
         if classname == "Message_ProgressIndicator":  # no constructor defined, abstract class
             new_default_value_str = "'Message_ProgressIndicator()'"
         else:
-          new_default_value_str = classname + default_value_str.split('>')[1]
+            new_default_value_str = classname + default_value_str.split('>')[1]
         success = True
     elif default_value_str.endswith('f'):  # some float values are defined as 0.0f or 0.1f
         str_removed_final_f = default_value_str[:-1]
@@ -1705,7 +1702,7 @@ def adapt_type_hint_default_value(default_value_str):
         except ValueError:
             is_float = False
         if is_float:
-            new_default_value_str = str_removed_final_f 
+            new_default_value_str = str_removed_final_f
             success = True
         else:
             new_default_value_str = default_value_str
@@ -1772,7 +1769,7 @@ def process_function(f, overload=False):
 
     # at this point, we can increment the method counter
     NB_TOTAL_METHODS += 1
-    
+
     # special case : Standard_OStream or Standard_IStream is the only parameter
     if len(f["parameters"]) == 1:
         param = f["parameters"][0]
@@ -1810,9 +1807,9 @@ def process_function(f, overload=False):
             parent_class_name = parent_class_name.lower()
         if not "<" in parent_class_name:
             CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES += "%s_%s = %s.%s\n" % (parent_class_name,
-                                                                       function_name,
-                                                                       parent_class_name,
-                                                                       function_name)
+                                                                              function_name,
+                                                                              parent_class_name,
+                                                                              function_name)
     # Case where primitive values are accessed by reference
     # one method Get* that returns the object
     # one method Set* that sets the object
@@ -1830,10 +1827,9 @@ def process_function(f, overload=False):
             getter_params_only_names.append(param["name"])
             # process hints
             type_for_hint = adapt_type_for_hint(adapt_param_type(param["type"]))
-            getter_param_hints.append("%s: %s" % (param["name"], 
+            getter_param_hints.append("%s: %s" % (param["name"],
                                                   type_for_hint))
-            
-            
+
         setter_params_type_and_names = getter_params_type_and_names + ['%s value' % modified_return_type]
         # the setter hint
         hint_output_type = adapt_type_for_hint(modified_return_type)
@@ -1858,7 +1854,7 @@ def process_function(f, overload=False):
                                                             ', '.join(getter_param_hints),
                                                             hint_output_type)
         setter_hint_str = "\tdef Set%s(%s) -> None: ...\n" % (function_name,
-                                                            ', '.join(setter_param_hints))
+                                                              ', '.join(setter_param_hints))
 
         # finally returns the method definition and hint
         type_hint_str = getter_hint_str + setter_hint_str
@@ -1924,7 +1920,7 @@ def process_function(f, overload=False):
                 str_typehint += "\t@staticmethod\n"
                 all_parameters_type_hint = []  # if static, not self
             str_typehint += "\tdef %s(" % function_name
-        
+
         if parameters_types_and_names:
             for par in parameters_types_and_names:
                 par_typ = adapt_type_for_hint(par[0])
@@ -1944,9 +1940,9 @@ def process_function(f, overload=False):
                 if len(par) == 3:
                     hint_def_value, adapt_type_hint_default_value_success = adapt_type_hint_default_value(par[2])
                     if adapt_type_hint_default_value_success:
-                      par_typ = "Optional[%s] = %s" % (par_typ, hint_def_value)
+                        par_typ = "Optional[%s] = %s" % (par_typ, hint_def_value)
                     else:  # no default value
-                      par_typ = "Optional[%s]" % par_typ
+                        par_typ = "Optional[%s]" % par_typ
                 par_nam, success = adapt_type_hint_parameter_name(par[1])
                 if not success:
                     canceled = True
@@ -1998,7 +1994,7 @@ def process_constructors(constructors_list):
     # if there are more than one constructor, then the __init__ method
     # has to be tagged as overloaded using the @overload decorator
     need_overload = False
-    if number_of_constructors > 1 :
+    if number_of_constructors > 1:
         need_overload = True
         logging.info("\t[TypeHint] More than 1 constructor, @overload decorator needed.")
     # then process the constructors
@@ -2248,7 +2244,7 @@ def process_hsequence():
             wrapper_for_hsequence = wrapper_for_hsequence.replace("_SequenceType_", _SequenceType_)
             wrapper_str += wrapper_for_hsequence
             # type hint
-            pyi_str_for_hsequence  = HSEQUENCE_TEMPLATE_PYI.replace("HClassName", HClassName)
+            pyi_str_for_hsequence = HSEQUENCE_TEMPLATE_PYI.replace("HClassName", HClassName)
             pyi_str_for_hsequence = pyi_str_for_hsequence.replace("_SequenceType_", _SequenceType_)
             pyi_str += pyi_str_for_hsequence
     wrapper_str += "\n"
@@ -2299,7 +2295,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
     global NB_TOTAL_CLASSES
     if exclude_classes == ['*']:  # don't wrap any class
         # that is to say we add all classes to the list of exclude_member_functions
-        new_exclude_classes= []
+        new_exclude_classes = []
         for klass in classes_dict:
             class_name_to_exclude = klass.split('::')[0]
             class_name_to_exclude = class_name_to_exclude.split('<')[0]
@@ -2332,7 +2328,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         logging.info(class_name)
         # the class type hint
         class_name_for_pyi = class_name.split('<')[0]
-        
+
         if class_name == CURRENT_MODULE:
             class_def_str += "%%rename(%s) %s;\n" % (class_name.lower(), class_name)
             class_name_for_pyi = class_name_for_pyi.lower()
@@ -2427,7 +2423,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             class_def_str += '\t\t%s(const %s arg0);\n' % (class_name, class_name)
         methods_to_process = filter_member_functions(class_name, class_public_methods, members_functions_to_exclude, klass["abstract"])
         # amons all methods, we first process constructors, than the others
-        constructors, other_methods =  methods_to_process
+        constructors, other_methods = methods_to_process
         # first constructors
         constructors_definitions, constructors_type_hints = process_constructors(constructors)
         class_def_str += constructors_definitions
@@ -2692,7 +2688,7 @@ class ModuleWrapper:
             swig_interface_file.write("\n%pythoncode {\n")
             swig_interface_file.write("from enum import IntEnum\n")
             swig_interface_file.write("from OCC.Core.Exception import *\n")
-            swig_interface_file.write("};\n\n")        
+            swig_interface_file.write("};\n\n")
 
             # for NCollection, we add template classes that can be processed
             # automatically with SWIG
