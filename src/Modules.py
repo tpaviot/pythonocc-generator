@@ -910,7 +910,7 @@ OCE_MODULES = [
     ### TKXCAF
     ('XCAFApp', ['CDF', 'CDM', 'PCDM', 'LDOM', 'TDF', 'Resource', 'Message'], []),
     ('XCAFDoc', ['Resource', 'Message', 'CDF', 'CDM', 'PCDM', 'TDF'],
-     ['XCAFDoc_DimTolTool', 'XCAFDoc_GeomTolerance']),
+      ['XCAFDoc_GeomTolerance']),
     ('XCAFPrs', ['TopTools', 'Message', 'TShort', 'Poly', 'Aspect',
                  'V3d', 'Select3D', 'Geom', 'HLRAlgo', 'Bnd',
                  'SelectBasics', 'Prs3d', 'Media',
@@ -918,8 +918,7 @@ OCE_MODULES = [
                  'TDataXtd', 'Graphic3d', 'SelectMgr', 'TopoDS', 'PrsMgr',
                  'CDF', 'CDM', 'PCDM', 'StdSelect'], []),
     ('XCAFDimTolObjects', ['Message', 'CDF', 'CDM', 'PCDM', 'LDOM', 'TDF',
-                           'Resource', 'TopLoc'], [],
-     {'XCAFDimTolObjects_DimensionObject' : ['GetPoints']}),
+                           'Resource', 'TopLoc'], []),
     ('XCAFView', [], []),
     ('XCAFNoteObjects', ['Message'], []),
     ### TKCAF
