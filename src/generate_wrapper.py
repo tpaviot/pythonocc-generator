@@ -20,6 +20,7 @@
 import configparser
 import datetime
 import glob
+import hashlib  # to compute md5 function signatures
 import keyword  # to prevent using python language keywords
 import logging
 from operator import itemgetter
@@ -1556,10 +1557,17 @@ def test_adapt_default_value():
     pass#assert adapt_default_value(": : MeshDim_3D") == "MeshDim_3D"
 
 
-def filter_member_functions(class_name, class_public_methods, member_functions_to_exclude, class_is_abstract):
+def filter_member_functions(class_name,
+                            class_public_methods,
+                            member_functions_to_exclude,
+                            class_is_abstract):
     """ This functions removes member function to exclude from
     the class methods list. Some of the members functions have to be removed
     because they can't be wrapped (usually, this results in a linkage error)
+
+    The member function to exclude are defined by their names or their
+    md5 signature. The latter allows selecting which method to exclude
+    if there are several different signatures for one same method name.
     """
     # split wrapped methods into twoo lists
     constructors = []
@@ -1567,10 +1575,13 @@ def filter_member_functions(class_name, class_public_methods, member_functions_t
     member_functions_to_process = []
     for public_method in class_public_methods:
         method_name = public_method["name"]
-        if method_name in member_functions_to_exclude:
+        public_method_signature = get_function_md5_signature(public_method)
+        if ((method_name in member_functions_to_exclude) or
+           ("".join([method_name, "::", public_method_signature]) in member_functions_to_exclude)):
+            logging.info("    skipped method %s::%s" % (class_name, public_method_signature))
             continue
         if class_is_abstract and public_method["constructor"]:
-            logging.warning("Constructor skipped for abstract class %s" % class_name)
+            logging.info("Constructor skipped for abstract class %s" % class_name)
             continue
         if method_name == "ShallowCopy":  # specific to 0.17.1 and Mingw
             continue
@@ -1589,7 +1600,7 @@ def adapt_type_for_hint(type_str):
     Returns False if there's no possible type
     """
     if type_str == "0":  # huu ? in XCAFDoc, skip it
-        logging.warning("\t[TypeHint] Skipping unknown type, 0")
+        logging.warning("    [TypeHint] Skipping unknown type, 0")
         return False
     if "void" in type_str or type_str in [""]:
         return "None"
@@ -1598,7 +1609,7 @@ def adapt_type_for_hint(type_str):
     if "char *" in type_str:
         return "str"
     if not "_" in type_str:  # TODO these are special cases, e.g. nested classes
-        logging.warning("\t[TypeHint] Skipping type %s, should contain _" % type_str)
+        logging.warning("    [TypeHint] Skipping type %s, should contain _" % type_str)
         return False  # returns a boolean to prevent type hint creation, the type will not be found
     # we only keep what is
     for tp in type_str.split(" "):
@@ -1620,13 +1631,13 @@ def adapt_type_for_hint(type_str):
     if type_str.startswith("opencascade::handle<"):
         type_str = type_str[20:].split(">")[0].strip()
     if ":" in type_str:
-        logging.warning("\t[TypeHint] Skip type %s, because of trailing :" % type_str)
+        logging.warning("    [TypeHint] Skip type %s, because of trailing :" % type_str)
         return False
     if "_" in type_str and not is_module(type_str.split('_')[0]):
-        logging.warning("\t[TypeHint] Skipping unknown type, %s not in module list" % type_str.split('_')[0])
+        logging.warning("    [TypeHint] Skipping unknown type, %s not in module list" % type_str.split('_')[0])
         return False
     if type_str.count('<') >= 1:  # at least one <, it's a template
-        logging.warning("\t[TypeHint] Skipping type %s, seems to be a template" % type_str)
+        logging.warning("    [TypeHint] Skipping type %s, seems to be a template" % type_str)
         return False
     return type_str
 
@@ -1713,6 +1724,20 @@ def adapt_type_hint_default_value(default_value_str):
     return new_default_value_str, success
 
 
+def get_function_md5_signature(f):
+    """ compute md5 signature
+    """
+    function_signature = f['debug']
+    # remove spaces, capital letters etc.
+    # this id done to prevent the function signature to change
+    # between two different releases of cppheaderparser
+    # remove all white spaces
+    function_signature = "".join(function_signature.split())
+    # then lower
+    function_signature = function_signature.lower()
+    return hashlib.md5(bytes(function_signature, encoding='utf8')).hexdigest()
+
+
 def process_function(f, overload=False):
     """ Process function f and returns a SWIG compliant string.
     If process_docstrings is set to True, the documentation string
@@ -1721,6 +1746,8 @@ def process_function(f, overload=False):
     overload: False by default, True if other method with the same name exists
     """
     global NB_TOTAL_METHODS, CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES
+    # compute signature md5
+    function_signature_md5 = get_function_md5_signature(f)
     if f["template"]:
         return False, ""
     # first, adapt function name, if needed
@@ -1782,8 +1809,9 @@ def process_function(f, overload=False):
     if function_name == "DumpJson":
         str_function = TEMPLATE_DUMPJSON
         return str_function, ""
-    # enable autocompactargs feature to enable compilation with swig>3.0.3
+    # enable autocompactargs feature to enable compilation with swig>3.0.3    
     str_function = '\t\t/****************** %s ******************/\n' % function_name
+    str_function += '\t\t/**** md5 signature: %s ****/\n' % function_signature_md5
     str_function += '\t\t%%feature("compactdefaultargs") %s;\n' % function_name
     str_function += process_function_docstring(f)
     str_function += "\t\t"
@@ -1815,7 +1843,7 @@ def process_function(f, overload=False):
     # one method Set* that sets the object
     if return_type in ['Standard_Integer &', 'Standard_Real &', 'Standard_Boolean &',
                        'Standard_Integer&', 'Standard_Real&', 'Standard_Boolean&']:
-        logging.info('\tCreating Get and Set methods for method %s' % function_name)
+        logging.info('    Creating Get and Set methods for method %s' % function_name)
         modified_return_type = return_type.split(" ")[0]
         # we compute the parameters type and name, seperated with comma
         getter_params_type_and_names = []
@@ -1996,7 +2024,7 @@ def process_constructors(constructors_list):
     need_overload = False
     if number_of_constructors > 1:
         need_overload = True
-        logging.info("\t[TypeHint] More than 1 constructor, @overload decorator needed.")
+        logging.info("    [TypeHint] More than 1 constructor, @overload decorator needed.")
     # then process the constructors
     str_functions = ""
     type_hints = ""
@@ -2062,7 +2090,7 @@ def class_can_have_default_constructor(klass):
         return False
     # class must not be an abstract class
     if klass["abstract"]:
-        logging.info("\tClass %s is abstract, using %%nodefaultctor directive." % klass["name"])
+        logging.info("    Class %s is abstract, using %%nodefaultctor." % klass["name"])
         return False
     # check if the class has at least one public constructor defined
     has_one_public_constructor = False
@@ -2134,7 +2162,7 @@ def build_inheritance_tree(classes_dict):
             upper_class_name_2 = upper_classes[1]["class"]
             class_2_module = upper_class_name_2.split("_")[0]
             if class_1_module == upper_class_name_2 == CURRENT_MODULE:
-                logging.warning("Tthis is a special case, where the 2 ancestors belong the same module. Class %s skipped." % class_name)
+                logging.warning("This is a special case, where the 2 ancestors belong the same module. Class %s skipped." % class_name)
             if class_1_module == CURRENT_MODULE:
                 inheritance_dict[class_name] = upper_class_name_1
             elif class_2_module == CURRENT_MODULE:
@@ -2377,7 +2405,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             # skip anon structs, for instance in AdvApp2Var_SysBase
             if "anon-struct" in nested_class_name:
                 continue
-            logging.info("\tWrap nested class %s::%s" % (class_name, nested_class_name))
+            logging.info("    Wrap nested class %s::%s" % (class_name, nested_class_name))
             class_def_str += "\t\tclass " + nested_class_name + " {};\n"
         ####### class enums
         if class_enums_list:
@@ -2503,7 +2531,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # they used to be skipped, but it's better to explicitely
         # raise a MethodNotWrappedError exception
         for excluded_method_name in members_functions_to_exclude:
-            if excluded_method_name != 'Handle':
+            if excluded_method_name != 'Handle' and not '::' in excluded_method_name:
                 class_def_str += '\n\t@methodnotwrapped\n'
                 class_def_str += '\tdef %s(self):\n\t\tpass\n' % excluded_method_name
         class_def_str += '\t}\n};\n\n'
