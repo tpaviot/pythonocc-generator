@@ -773,7 +773,7 @@ def check_is_persistent(class_name):
 
 def filter_header_list(header_list, exclusion_list):
     """ From a header list, remove hxx to HXX_TO_EXCLUDE
-    The files to be excluded is specificed in the exlusion list
+    The files to be excluded are specified in the exclusion list
     """
     for header_to_remove in exclusion_list:
         if os.path.join(OCE_INCLUDE_DIR, header_to_remove) in header_list:
@@ -888,8 +888,6 @@ def adapt_header_file(header_content):
             # @TODO find inheritance name
             typename = match.split('(')[1].split(',')[0]
             base_typename = match.split(',')[1].split(')')[0]
-            # we keep only te RTTI that are defined in this module,
-            # to avoid cyclic references in the SWIG files
             logging.info("Found HARRAY1 definition" + typename + ':' + base_typename)
             ALL_HARRAY1[typename] = base_typename.strip()
     # Search for HARRAY2
@@ -900,8 +898,6 @@ def adapt_header_file(header_content):
             # @TODO find inheritance name
             typename = match.split('(')[1].split(',')[0]
             base_typename = match.split(',')[1].split(')')[0]
-            # we keep only te RTTI that are defined in this module,
-            # to avoid cyclic references in the SWIG files
             logging.info("Found HARRAY2 definition" + typename + ':' + base_typename)
             ALL_HARRAY2[typename] = base_typename.strip()
    # Search for HSEQUENCE
@@ -912,8 +908,6 @@ def adapt_header_file(header_content):
             # @TODO find inheritance name
             typename = match.split('(')[1].split(',')[0]
             base_typename = match.split(',')[1].split(')')[0]
-            # we keep only te RTTI that are defined in this module,
-            # to avoid cyclic references in the SWIG files
             logging.info("Found HSEQUENCE definition" + typename + ':' + base_typename)
             ALL_HSEQUENCE[typename] = base_typename.strip()
     # skip some defines that prevent header parsing
@@ -1013,11 +1007,11 @@ def process_templates_from_typedefs(list_of_typedefs):
             for forbidden_template in TEMPLATES_TO_EXCLUDE:
                 if forbidden_template in template_type:
                     wrap_template = False
-            # sometimes the template name is weird (parenthesis, commma etc.)
+            # sometimes the template name is weird (parenthesis, comma etc.)
             # don't consider this
             if not "_" in template_name:
                 wrap_template = False
-                logging.warning("Template: " + template_name + "skipped because name does'nt contain _.")
+                logging.warning("Template: " + template_name + "skipped because name doesn't contain _.")
             if wrap_template:
                 wrapper_str += "%%template(%s) %s;\n" %(template_name, template_type)
                 # if a NCollection_Array1, extend this template to benefit from pythonic methods
@@ -1045,9 +1039,9 @@ def process_templates_from_typedefs(list_of_typedefs):
                     # it's a (key, value) store. Defined as
                     # template < class TheKeyType,
                     # class TheItemType,
-                    #class Hasher = NCollection_DefaultHasher<TheKeyType> >
-                    # some occt method return such an object, but the iterator can't be accessed
-                    # through Python. Se we extend this class with a Keys() methd that iterates over
+                    # class Hasher = NCollection_DefaultHasher<TheKeyType> >
+                    # some occt methods return such an object, but the iterator can't be accessed
+                    # through Python. Se we extend this class with a Keys() method that iterates over
                     # NCollection_DataMap keys and returns a Python list of key objects.
                     # Note : works for standard_Integer keys only so far
                     if '<Standard_Integer' in template_type:
@@ -1113,7 +1107,7 @@ def process_typedefs(typedefs_dict):
                 continue
             module = h_typ.split("_")[0]
             if module != CURRENT_MODULE:
-                # need to be added to the list of dependend object
+                # need to be added to the list of dependent object
                 if (module not in PYTHON_MODULE_DEPENDENCY) and (is_module(module)):
                     PYTHON_MODULE_DEPENDENCY.append(module)
 
@@ -1356,7 +1350,7 @@ def check_dependency(item):
     if module == 'Font':  # forget about Font dependencies, issues with FreeType
         return True
     if module != CURRENT_MODULE:
-        # need to be added to the list of dependend object
+        # need to be added to the list of dependent object
         if (module not in PYTHON_MODULE_DEPENDENCY) and (is_module(module)):
             PYTHON_MODULE_DEPENDENCY.append(module)
     return module
@@ -1448,7 +1442,7 @@ def process_function_docstring(f):
     ret = []
     # first process parameters
     parameters_string = ''
-    if f["parameters"]:  # at leats one element in the least
+    if f["parameters"]:  # at least one element in the list, i.e. at least one parameter
         # we add a "Parameters section"
         parameters_string += "\nParameters\n----------\n"
         for param in f["parameters"]:
@@ -1569,7 +1563,7 @@ def filter_member_functions(class_name,
     md5 signature. The latter allows selecting which method to exclude
     if there are several different signatures for one same method name.
     """
-    # split wrapped methods into twoo lists
+    # split wrapped methods into two lists
     constructors = []
     other_methods = []
     member_functions_to_process = []
@@ -1655,7 +1649,7 @@ def get_classname_from_handle(handle_name):
 def adapt_type_hint_parameter_name(param_name_str):
     """ some parameter names may conflict with python keyword,
     for instance with, False etc.
-    Returns the modified name, and wether to take it into accound"""
+    Returns the modified name, and whether to take it into account """
     if keyword.iskeyword(param_name_str):
         new_param_name = param_name_str + "_"
         success = True
@@ -1671,7 +1665,6 @@ def adapt_type_hint_parameter_name(param_name_str):
     if '[' in new_param_name:
         param_name, snd_part = new_param_name.split('[')
         param_name = param_name.replace(')', '')
-        #number = snd_part.split(']')[0]
         if param_name == "":
             success = False
         else:
@@ -1845,7 +1838,7 @@ def process_function(f, overload=False):
                        'Standard_Integer&', 'Standard_Real&', 'Standard_Boolean&']:
         logging.info('    Creating Get and Set methods for method %s' % function_name)
         modified_return_type = return_type.split(" ")[0]
-        # we compute the parameters type and name, seperated with comma
+        # compute the parameters type and name, separated with comma
         getter_params_type_and_names = []
         getter_params_only_names = []
         getter_param_hints = ['self']
@@ -2017,7 +2010,7 @@ def process_constructors(constructors_list):
     for c in constructors_list:
         if not c['constructor']:
             raise AssertioError("This method is not a constructor")
-    # then we cound the number of available constructors
+    # then we count the number of available constructors
     number_of_constructors = len(constructors_list)
     # if there are more than one constructor, then the __init__ method
     # has to be tagged as overloaded using the @overload decorator
@@ -2066,7 +2059,7 @@ def process_methods(methods_list):
 
 def must_ignore_default_destructor(klass):
     """ Some classes, like for instance BRepFeat_MakeCylindricalHole
-    has a protected destructor that must explicitely be ignored
+    has a protected destructor that must explicitly be ignored
     This is done by the directive
     %ignore Class::~Class() just before the wrapper definition
     """
@@ -2120,7 +2113,7 @@ def class_can_have_default_constructor(klass):
 
 def build_inheritance_tree(classes_dict):
     """ From the classes dict, return a list of classes
-    with the class ordered from the most abtract to
+    with the class ordered from the most abstract to
     the more specialized. The more abstract will be
     processed first.
     """
@@ -2144,7 +2137,7 @@ def build_inheritance_tree(classes_dict):
             level_0_classes.append(class_name)
         # if class has one or more ancestors
         # for class with one or two ancestors, let's process them
-        # the same. Anyway, whan there are two ancestors (only a few cases),
+        # the same. Anyway, if there are two ancestors (only a few cases),
         # one of the two ancestors come from another module.
         elif nbr_upper_classes == 1:
             upper_class_name = upper_classes[0]["class"]
@@ -2281,10 +2274,10 @@ def process_hsequence():
 
 
 def process_handles(classes_dict, exclude_classes, exclude_member_functions):
-    """ Check wether a class has to be wrapped as a handle
+    """ Check whether a class has to be wrapped as a handle
     using the wrap_handle swig macro.
     This code is a bit redundant with process_classes, but this step
-    appeared to be placed before typedef ans templates definition
+    appeared to be placed before typedef and templates definition
     """
     wrap_handle_str = "/* handles */\n"
     if exclude_classes == ['*']:  # don't wrap any class
@@ -2433,7 +2426,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             else:
                 temp = "\t\t%s %s;\n" % (fix_type(property_value['type']), property_value['name'])
             properties_str += temp
-        # @TODO : classe typedefs (for instance BRepGProp_MeshProps)
+        # @TODO : wrap class typedefs (for instance BRepGProp_MeshProps)
         class_def_str += properties_str
         # process methods here
         class_public_methods = klass['methods']['public']
@@ -2527,8 +2520,8 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         class_def_str += '%%extend %s {\n' % class_name
         class_def_str += '\t%' + 'pythoncode {\n'
         class_def_str += '\t__repr__ = _dumps_object\n'
-        # we process methods that are excluded fro mthe wrapper
-        # they used to be skipped, but it's better to explicitely
+        # we process methods that are excluded from the wrapper
+        # they used to be skipped, but it's better to explicitly
         # raise a MethodNotWrappedError exception
         for excluded_method_name in members_functions_to_exclude:
             if excluded_method_name != 'Handle' and not '::' in excluded_method_name:
