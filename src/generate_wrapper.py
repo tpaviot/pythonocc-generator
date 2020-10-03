@@ -1082,11 +1082,22 @@ def adapt_type_for_hint_typedef(typedef_type_str):
         typedef_type_str = "int"
     return typedef_type_str
 
+def str_in(list_of_patterns, a_string):
+    """ a utility function that returns True if any of the item
+    of the list patterns is in the a_string """
+    for patt in list_of_patterns:
+        if patt in a_string:
+          return True
+    return False
+
 def process_typedefs(typedefs_dict):
     """ Take a typedef dictionary and returns a SWIG definition string
     """
     templates_str = ""
     typedef_pyi_str = ""  # NewTypes related to typedef aliases
+    # pythoncode for typedef aliases, to be inserted at the end of the swig interface file
+    typedef_aliases_str = "/* class aliases */\n%pythoncode {\n"
+
     typedef_str = "/* typedefs */\n"
     templates = []
     # careful, there might be some strange things returned by CppHeaderParser
@@ -1123,13 +1134,31 @@ def process_typedefs(typedefs_dict):
         # %{include "NCollection_Array1.hxx"}
         # %template(TColStd_Array1OfReal) NCollection_Array1<Standard_Real>;
         # we then check if > or < are in the typedef string then we process it.
-        if ("<" in "%s" % filtered_typedef_dict[typedef_value] or
-                ">" in "%s" % filtered_typedef_dict[typedef_value]):
-            templates.append([filtered_typedef_dict[typedef_value], typedef_value])
-        typedef_str += "typedef %s %s;\n" % (filtered_typedef_dict[typedef_value], typedef_value)
-        check_dependency(filtered_typedef_dict[typedef_value].split()[0])
+        typedef_type = filtered_typedef_dict[typedef_value]
+        typedef_str += "typedef %s %s;\n" % (typedef_type, typedef_value)
+        #
+        # Check if the typedef is a template
+        #
+        if str_in(["<", ">"], "%s" % typedef_type):
+            templates.append([typedef_type, typedef_value])
+        #
+        # Check if it's just an alias
+        #
+        elif not str_in(["*", ":", " ", "Standard"], "%s" % typedef_type):
+            # we create the aliase in python
+            # e.g.
+            # BRepOffsetAPI_= BRepAlgoAPI_Vut
+            # only if the type is a module class (exclude char, Standard_Real etc.)
+            #
+            typedef_module_name = typedef_type.split('_')[0] 
+            if is_module(typedef_module_name):
+                if CURRENT_MODULE == typedef_module_name:
+                  typedef_aliases_str += "%s=%s\n" % (typedef_value, typedef_type)
+                else:
+                  typedef_aliases_str += "%s=OCC.Core.%s.%s\n" % (typedef_value, typedef_module_name, typedef_type)
+        check_dependency(typedef_type.split()[0])
         # Define a new type, only for aliases
-        type_to_define = filtered_typedef_dict[typedef_value]
+        type_to_define = typedef_type
         match_1 = ['<', ':', 'struct', ')', 'NCollection_Array1', 'NCollection_List',
                    'NCollection_DataMap', 'NCollection_Sequence']
         if all([match not in type_to_define for match in match_1]) and type_to_define is not None:
@@ -1152,7 +1181,9 @@ def process_typedefs(typedefs_dict):
     templates_def, templates_pyi = process_templates_from_typedefs(templates)
     templates_str += templates_def
     templates_str += "\n"
-    return templates_str + typedef_str, typedef_pyi_str + templates_pyi
+    # close aliases
+    typedef_aliases_str +="}\n"
+    return templates_str + typedef_str, typedef_pyi_str + templates_pyi, typedef_aliases_str
 
 
 def process_enums(enums_list):
@@ -2616,7 +2647,7 @@ class ModuleWrapper:
         self._wrap_handle_str = process_handles(classes, exclude_classes,
                                                 exclude_member_functions)
         # templates and typedefs
-        self._typedefs_str, self._typedefs_pyi_str = process_typedefs(typedefs)
+        self._typedefs_str, self._typedefs_pyi_str, self._typedef_aliases_str = process_typedefs(typedefs)
         #classes
         self._classes_str, self._classes_pyi_str = process_classes(classes,
                                                                    exclude_classes,
@@ -2731,6 +2762,8 @@ class ModuleWrapper:
             swig_interface_file.write(self._typedefs_str)
             # write classes_definition
             swig_interface_file.write(self._classes_str)
+            # write classes aliases
+            swig_interface_file.write(self._typedef_aliases_str)
             # write free_functions definition
             #TODO: we should write free functions here,
             # but it sometimes fail to compile
