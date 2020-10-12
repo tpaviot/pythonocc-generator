@@ -62,7 +62,7 @@ TOOLKIT_Visualisation = {'TKService': ['Aspect', 'Image', 'InterfaceGraphic',
                          'TKV3d': ['AIS', 'DsgPrs', 'Graphic3d', 'Prs3d', 'PrsMgr',
                                    'Select3D', 'SelectBasics', 'SelectMgr', 'StdPrs',
                                    'StdSelect', 'V3d'],
-                         # TKOpenGl not wrapped
+                         #'TKOpenGl': ['OpenGl'],  # not wrapped
                          'TKMeshVS': ['MeshVS']}
 
 
@@ -402,7 +402,7 @@ OCE_MODULES = [
                  'Geom', 'Geom2dAdaptor', 'AppParCurves', 'Bnd',
                  'IntTools', 'BRep', 'TShort', 'Poly'], [],
      {'BOPAlgo_PaveFiller': ['Iterator'],
-      'BOPAlgo_Tools': ['MakeBlocks', 'FillMap']}),
+      'BOPAlgo_Tools': ['MakeBlocks', 'FillMap', 'TreatCompound']}),
     ('BOPTools',
      ['Extrema', 'Adaptor2d', 'Approx', 'Adaptor3d',
       'GeomAdaptor', 'IntPatch', 'TopLoc', 'Geom2dAdaptor',
@@ -707,7 +707,7 @@ OCE_MODULES = [
     ('DsgPrs', [], ['*']),
     ('StdSelect', ['Bnd', 'TShort', 'HLRAlgo', 'Poly', 'TopTools',
                    'Quantity', 'TopTools', 'Message', 'Media'], []),
-    # MeshVS
+    # TKMeshVS
     ('MeshVS', ['TopTools', 'Message', 'TShort',
                 'Geom', 'HLRAlgo', 'Poly',
                 'TColQuantity', 'TopoDS', 'V3d',
