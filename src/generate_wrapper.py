@@ -32,9 +32,9 @@ import subprocess
 import sys
 import time
 
-from Modules import *
-
 import CppHeaderParser
+
+from Modules import *
 
 ##############################################
 # Load configuration file and setup settings #
@@ -868,18 +868,13 @@ def adapt_header_file(header_content):
     matches = outer.findall(header_content)
     if matches:
         for match in matches:
-            # @TODO find inheritance name
-            header_content = header_content.replace('DEFINE_STANDARD_HANDLE',
-                                                    '//DEFINE_STANDARD_HANDLE')
             ALL_STANDARD_HANDLES.append(match.split('(')[1].split(',')[0])
     # Search for RTTIEXT
     outer = re.compile("DEFINE_STANDARD_RTTIEXT[\\s]*\\([\\w\\s]+\\,+[\\w\\s]+\\)")
     matches = outer.findall(header_content)
     if matches:
         for match in matches:
-            # @TODO find inheritance name
-            header_content = header_content.replace('DEFINE_STANDARD_RTTIEXT',
-                                                    '//DEFINE_STANDARD_RTTIEXT')
+            pass
     # Search for HARRAY1
     outer = re.compile("DEFINE_HARRAY1[\\s]*\\([\\w\\s]+\\,+[\\w\\s]+\\)")
     matches = outer.findall(header_content)
@@ -911,6 +906,10 @@ def adapt_header_file(header_content):
             logging.info("Found HSEQUENCE definition" + typename + ':' + base_typename)
             ALL_HSEQUENCE[typename] = base_typename.strip()
     # skip some defines that prevent header parsing
+    header_content = header_content.replace('DEFINE_STANDARD_HANDLE',
+                                            '//DEFINE_STANDARD_HANDLE')
+    header_content = header_content.replace('DEFINE_STANDARD_RTTIEXT',
+                                            '//DEFINE_STANDARD_RTTIEXT')
     header_content = header_content.replace('DEFINE_STANDARD_RTTI_INLINE',
                                             '//DEFINE_STANDARD_RTTI_INLINE')
     header_content = header_content.replace('Standard_DEPRECATED',
@@ -1087,7 +1086,7 @@ def str_in(list_of_patterns, a_string):
     of the list patterns is in the a_string """
     for patt in list_of_patterns:
         if patt in a_string:
-          return True
+            return True
     return False
 
 def process_typedefs(typedefs_dict):
@@ -1145,7 +1144,7 @@ def process_typedefs(typedefs_dict):
         # Check if it's just an alias
         #
         elif not str_in(["*", ":", " ", "Standard"], "%s" % typedef_type):
-            # we create the aliase in python
+            # we create the alias in python
             # e.g.
             # BRepOffsetAPI_= BRepAlgoAPI_Vut
             # only if the type is a module class (exclude char, Standard_Real etc.)
@@ -1153,9 +1152,9 @@ def process_typedefs(typedefs_dict):
             typedef_module_name = typedef_type.split('_')[0] 
             if is_module(typedef_module_name):
                 if CURRENT_MODULE == typedef_module_name:
-                  typedef_aliases_str += "%s=%s\n" % (typedef_value, typedef_type)
+                    typedef_aliases_str += "%s=%s\n" % (typedef_value, typedef_type)
                 else:
-                  typedef_aliases_str += "%s=OCC.Core.%s.%s\n" % (typedef_value, typedef_module_name, typedef_type)
+                    typedef_aliases_str += "%s=OCC.Core.%s.%s\n" % (typedef_value, typedef_module_name, typedef_type)
         check_dependency(typedef_type.split()[0])
         # Define a new type, only for aliases
         type_to_define = typedef_type
@@ -1833,7 +1832,7 @@ def process_function(f, overload=False):
     if function_name == "DumpJson":
         str_function = TEMPLATE_DUMPJSON
         return str_function, ""
-    # enable autocompactargs feature to enable compilation with swig>3.0.3    
+    # enable autocompactargs feature to enable compilation with swig>3.0.3
     str_function = '\t\t/****************** %s ******************/\n' % function_name
     str_function += '\t\t/**** md5 signature: %s ****/\n' % function_signature_md5
     str_function += '\t\t%%feature("compactdefaultargs") %s;\n' % function_name
