@@ -154,7 +154,7 @@ HXX_TO_EXCLUDE_FROM_CPPPARSER = ['NCollection_StlIterator.hxx',
                                  'BRepMesh_TorusRangeSplitter.hxx',
                                  'BRepMesh_UVParamRangeSplitter.hxx',
                                  'AdvApp2Var_Data_f2c.hxx',
-                                 'Convert_CosAndSinEvalFunction.hxx'  # strange, a method in a typedef, confusing
+                                 'Convert_CosAndSinEvalFunction.hxx',  # strange, a method in a typedef, confusing
                                  ]
 
 # some includes fail at being compiled
@@ -220,7 +220,9 @@ TYPEDEF_TO_EXCLUDE = ['Handle_Standard_Transient',
                       'Graphic3d_MapOfObject',
                       'Storage_PArray',
                       'Interface_StaticSatisfies',
-                      'IMeshData::ICurveArrayAdaptor'
+                      'IMeshData::ICurveArrayAdaptor',
+                      'Prs3d_ShapeTool',  # circular import
+                      'StdSelect_ViewerSelector3d'  # circular import
                      ]
 
 # Following are standard integer typedefs. They have to be replaced
@@ -278,7 +280,9 @@ TEMPLATES_TO_EXCLUDE = ['gp_TrsfNLerp',
                         'BOPTools_PairSelector',
                         'BOPTools_BoxSet',
                         'BOPTools_BoxSelector',
-                        'BOPTools_PairSelector'
+                        'BOPTools_PairSelector',
+                        'BVH_Box',
+                        'Prs3d_Point'
                         ]
 
 ##########################
@@ -301,7 +305,6 @@ INTPOLYH_HEADER_TEMPLATE = '''
 '''
 
 BVH_HEADER_TEMPLATE = '''
-%include "BVH_Box.hxx";
 %include "BVH_PrimitiveSet.hxx";
 '''
 
@@ -912,10 +915,14 @@ def adapt_header_file(header_content):
                                             '//DEFINE_STANDARD_RTTIEXT')
     header_content = header_content.replace('DEFINE_STANDARD_RTTI_INLINE',
                                             '//DEFINE_STANDARD_RTTI_INLINE')
+    header_content = header_content.replace('NCOLLECTION_HSEQUENCE',
+                                            '//NCOLLECTION_HSEQUENCE')
     header_content = header_content.replace('Standard_DEPRECATED',
                                             '//Standard_DEPRECATED')
     header_content = header_content.replace('DECLARE_TOBJOCAF_PERSISTENCE',
                                             '//DECLARE_TOBJOCAF_PERSISTENCE')
+    header_content = header_content.replace('DEFINE_DERIVED_ATTRIBUTE',
+                                            '//DEFINE_DERIVED_ATTRIBUTE')
     # remove stuff that prevent CppHeaderPArser to work correctly
     header_content = header_content.replace('DEFINE_STANDARD_ALLOC', '')
     header_content = header_content.replace('Standard_EXPORT', '')
@@ -1141,12 +1148,12 @@ def process_typedefs(typedefs_dict):
         if str_in(["<", ">"], "%s" % typedef_type):
             templates.append([typedef_type, typedef_value])
         #
-        # Check if it's just an alias
+        # Check if it's just a class alias
         #
         elif not str_in(["*", ":", " ", "Standard"], "%s" % typedef_type):
             # we create the alias in python
             # e.g.
-            # BRepOffsetAPI_= BRepAlgoAPI_Vut
+            # BRepOffsetAPI_= BRepAlgoAPI_Cut
             # only if the type is a module class (exclude char, Standard_Real etc.)
             #
             typedef_module_name = typedef_type.split('_')[0] 
@@ -1183,6 +1190,32 @@ def process_typedefs(typedefs_dict):
     # close aliases
     typedef_aliases_str +="}\n"
     return templates_str + typedef_str, typedef_pyi_str + templates_pyi, typedef_aliases_str
+
+
+def adapt_enum_value(enum_value):
+    """ Take for example Graphic3d_TextureSetBits.hxx
+
+    //! Standard texture units combination bits.
+    enum Graphic3d_TextureSetBits
+    {
+      Graphic3d_TextureSetBits_NONE              = 0,
+      Graphic3d_TextureSetBits_BaseColor         = (unsigned int )(1 << int(Graphic3d_TextureUnit_BaseColor)),
+      Graphic3d_TextureSetBits_Emissive          = (unsigned int )(1 << int(Graphic3d_TextureUnit_Emissive)),
+      Graphic3d_TextureSetBits_Occlusion         = (unsigned int )(1 << int(Graphic3d_TextureUnit_Occlusion)),
+      Graphic3d_TextureSetBits_Normal            = (unsigned int )(1 << int(Graphic3d_TextureUnit_Normal)),
+      Graphic3d_TextureSetBits_MetallicRoughness = (unsigned int )(1 << int(Graphic3d_TextureUnit_MetallicRoughness)),
+    };
+
+    The values (unsigned int )(1 << int(Graphic3d_TextureUnit_BaseColor)) cannot be processed as is by SWIG.
+    We transform them to Graphic3d_TextureUnit_BaseColor
+    """
+    if isinstance(enum_value, int):
+        return enum_value
+    elif 'int (' in enum_value:
+        to_return = enum_value.split('int ( ')[1].split(')')[0].strip()
+        return to_return
+    else:  # do nothing
+        return enum_value
 
 
 def process_enums(enums_list):
@@ -1244,9 +1277,10 @@ def process_enums(enums_list):
             enum_python_proxies += "\nclass %s(IntEnum):\n" % enum_name
             enum_pyi_str += "\nclass %s(IntEnum):\n" % enum_name
         for enum_value in enum["values"]:
-            enum_str += "\t%s = %s,\n" % (enum_value["name"], enum_value["value"])
+            adapted_enum_value = adapt_enum_value(enum_value["value"])
+            enum_str += "\t%s = %s,\n" % (enum_value["name"], adapted_enum_value)
             if python_proxy:
-                enum_python_proxies += "\t%s = %s\n" % (enum_value["name"], enum_value["value"])
+                enum_python_proxies += "\t%s = %s\n" % (enum_value["name"], adapted_enum_value)
                 enum_pyi_str += "\t%s: int = ...\n" % enum_value["name"]
                 # then, in both proxy and stub files, we create the alias for each named enum,
                 # for instance
@@ -1820,15 +1854,30 @@ def process_function(f, overload=False):
     # at this point, we can increment the method counter
     NB_TOTAL_METHODS += 1
 
+    #
     # special case : Standard_OStream or Standard_IStream is the only parameter
-    if len(f["parameters"]) == 1:
-        param = f["parameters"][0]
-        param_type = param["type"].replace("&", "").strip()
-        if 'Standard_OStream' in '%s' % param_type:
+    # or the second parameter is a Message_ProgressIndicator with a default value
+    #
+    number_of_parameters = len(f["parameters"])
+    if number_of_parameters == 1 or number_of_parameters == 2:
+        first_parameter = f["parameters"][0]
+        param_type_1st_param = first_parameter["type"]
+
+        param_type_2nd_param = None  # by default, no second argument
+        if number_of_parameters == 2: # we check the type of the second argument
+            second_parameter = f["parameters"][1]
+            param_type_2nd_param = second_parameter["type"]
+            param_type_2nd_is_Message_ProgressRange = "Message_ProgressRange" in param_type_2nd_param
+
+        if ('Standard_OStream' in '%s' % param_type_1st_param and
+            (param_type_2nd_param is None or param_type_2nd_is_Message_ProgressRange)):
             str_function = TEMPLATE_OSTREAM % (function_name, function_name)
             return str_function, ""
-        if ('std::istream &' in '%s' % param_type) or ('Standard_IStream' in param_type):
+
+        if ((('std::istream &' in '%s' % param_type_1st_param) or ('Standard_IStream' in param_type_1st_param)) and
+            (param_type_2nd_param is None or param_type_2nd_is_Message_ProgressRange)):
             return TEMPLATE_ISTREAM % (function_name, function_name), ""
+
     if function_name == "DumpJson":
         str_function = TEMPLATE_DUMPJSON
         return str_function, ""
