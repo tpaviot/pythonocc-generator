@@ -52,13 +52,12 @@ install:
   - conda update -q conda
   # Useful for debugging any issues with conda
   - conda info -a
-  # download/install occt 7.4.0 from dlr-sc channel
-  - conda config --add channels https://conda.anaconda.org/dlr-sc
+  - conda config --add channels conda-forge
   # create a test environment
   - conda create -n test_pythonocc_generator python=$PYTHON
   # switch to this environment
   - source activate test_pythonocc_generator
-  - conda install opencascade=7.4.0
+  - conda install occt=7.5.0
   # install required dependencies ply and cppheaderparser
   - pip install -r requirements.txt
 
