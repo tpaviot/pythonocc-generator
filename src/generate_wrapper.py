@@ -1157,7 +1157,7 @@ def process_typedefs(typedefs_dict):
             # BRepOffsetAPI_= BRepAlgoAPI_Cut
             # only if the type is a module class (exclude char, Standard_Real etc.)
             #
-            typedef_module_name = typedef_type.split('_')[0] 
+            typedef_module_name = typedef_type.split('_')[0]
             if is_module(typedef_module_name):
                 if CURRENT_MODULE == typedef_module_name:
                     typedef_aliases_str += "%s=%s\n" % (typedef_value, typedef_type)
@@ -1189,7 +1189,7 @@ def process_typedefs(typedefs_dict):
     templates_str += templates_def
     templates_str += "\n"
     # close aliases
-    typedef_aliases_str +="}\n"
+    typedef_aliases_str += "}\n"
     return templates_str + typedef_str, typedef_pyi_str + templates_pyi, typedef_aliases_str
 
 
@@ -1648,7 +1648,7 @@ def filter_member_functions(class_name,
         method_name = public_method["name"]
         public_method_signature = get_function_md5_signature(public_method)
         if ((method_name in member_functions_to_exclude) or
-           ("".join([method_name, "::", public_method_signature]) in member_functions_to_exclude)):
+                ("".join([method_name, "::", public_method_signature]) in member_functions_to_exclude)):
             logging.info("    skipped method %s::%s" % (class_name, public_method_signature))
             continue
         if class_is_abstract and public_method["constructor"]:
@@ -1883,12 +1883,12 @@ def process_function(f, overload=False):
             param_type_2nd_is_Message_ProgressRange = "Message_ProgressRange" in param_type_2nd_param
 
         if ('Standard_OStream' in '%s' % param_type_1st_param and
-            (param_type_2nd_param is None or param_type_2nd_is_Message_ProgressRange)):
+                (param_type_2nd_param is None or param_type_2nd_is_Message_ProgressRange)):
             str_function = TEMPLATE_OSTREAM % (function_name, function_name)
             return str_function, ""
 
         if ((('std::istream &' in '%s' % param_type_1st_param) or ('Standard_IStream' in param_type_1st_param)) and
-            (param_type_2nd_param is None or param_type_2nd_is_Message_ProgressRange)):
+                (param_type_2nd_param is None or param_type_2nd_is_Message_ProgressRange)):
             return TEMPLATE_ISTREAM % (function_name, function_name), ""
 
     if function_name == "DumpJson":
@@ -2101,7 +2101,7 @@ def process_constructors(constructors_list):
     # first, assume that all methods are constructors
     for c in constructors_list:
         if not c['constructor']:
-            raise AssertioError("This method is not a constructor")
+            raise AssertionError("This method is not a constructor")
     # then we count the number of available constructors
     number_of_constructors = len(constructors_list)
     # if there are more than one constructor, then the __init__ method
