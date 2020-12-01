@@ -259,7 +259,8 @@ NODEFAULTCTOR = ['IFSelect_SelectBase', 'IFSelect_SelectControl', 'IFSelect_Sele
                  'SelectMgr_CompositionFilter',
                  'BRepMeshData_Wire', 'BRepMeshData_PCurve', 'BRepMeshData_Face',
                  'BRepMeshData_Edge', 'BRepMeshData_Curve',
-                 'Graphic3d_BvhCStructureSet' ## Windows specific
+                 'Graphic3d_BvhCStructureSet',
+                 'PrsDim_Dimension'
                  ]
 
 
@@ -1263,6 +1264,11 @@ def process_enums(enums_list):
     enum_pyi_str = ""
     # loop over enums
     for enum in enums_list:
+        number_of_string_aliases = 0
+        # count the number of lines such
+        # as Quantity_NOC_GREEN1 = Quantity_NOC_GREEN
+        # in this case, the integers must ne be incremented
+        # in the wrapper otherwise ther's an offset
         alias_str = ""
         python_proxy = True
         if "name" not in enum:
@@ -1278,6 +1284,13 @@ def process_enums(enums_list):
             enum_pyi_str += "\nclass %s(IntEnum):\n" % enum_name
         for enum_value in enum["values"]:
             adapted_enum_value = adapt_enum_value(enum_value["value"])
+            if CURRENT_MODULE == 'Quantity':
+                # special case for Quantity_Color
+                if isinstance(adapted_enum_value, str):
+                    #if adapted_enum_value.isalpha():
+                    number_of_string_aliases += 1
+                else:
+                    adapted_enum_value -= number_of_string_aliases
             enum_str += "\t%s = %s,\n" % (enum_value["name"], adapted_enum_value)
             if python_proxy:
                 enum_python_proxies += "\t%s = %s\n" % (enum_value["name"], adapted_enum_value)
