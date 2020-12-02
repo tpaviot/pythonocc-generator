@@ -58,8 +58,8 @@ TOOLKIT_Modeling = {'TKBRep': ['BRep', 'BRepAdaptor', 'BRepLProp', 'BRepTools', 
 
 
 TOOLKIT_Visualisation = {'TKService': ['Aspect', 'Image', 'InterfaceGraphic',
-                                       'Media', 'TColQuantity'],
-                         'TKV3d': ['AIS', 'DsgPrs', 'Graphic3d', 'Prs3d', 'PrsMgr',
+                                       'Media', 'TColQuantity', 'Graphic3d'],
+                         'TKV3d': ['AIS', 'DsgPrs', 'Prs3d', 'PrsMgr',
                                    'Select3D', 'SelectBasics', 'SelectMgr', 'StdPrs',
                                    'StdSelect', 'V3d', 'PrsDim'],
                          #'TKOpenGl': ['OpenGl'],  # not wrapped
@@ -68,7 +68,7 @@ TOOLKIT_Visualisation = {'TKService': ['Aspect', 'Image', 'InterfaceGraphic',
 
 TOOLKIT_DataExchange = {'TKBinXCAF': ['BinMXCAFDoc', 'BinXCAFDrivers'],
                         'TKIGES': ['IGESControl', 'IGESData', 'IGESToBRep'],
-                        'TKRWMesh' : ['RWGltf', 'RWObj'],
+                        'TKRWMesh' : ['RWGltf', 'RWObj', 'RWMesh'],
                         'TKSTEP': ['GeomToStep', 'RWStepAP203', 'RWStepAP214',
                                    'RWStepAP242', 'STEPConstruct', 'STEPControl',
                                    'STEPEdit', 'STEPSelections', 'StepAP203',
@@ -870,6 +870,9 @@ OCE_MODULES = [
      ['VrmlData_InBuffer', 'VrmlData_ArrayVec3d', 'VrmlData_Texture',
       'VrmlData_TextureTransform', 'VrmlData_Faceted'],
      {'VrmlData_IndexedFaceSet': ['GetNormal']}), # Fixes undefined ref
+    #
+    # TKRWMesh
+    #
     ('RWGltf', ['CDF', 'PCDM', 'TDF', 'TDocStd', 'Graphic3d', 'Geom',
                 'TShort', 'Aspect', 'TDataStd', 'TPrsStd',
                 'AIS', 'V3d', 'BRep', 'BRepAdaptor',
@@ -881,6 +884,10 @@ OCE_MODULES = [
     ('RWObj', ['CDF', 'PCDM', 'TDF', 'TDocStd', 'Graphic3d', 'Geom',
                'TShort', 'Aspect', 'Bnd', 'Quantity', 'Message', 'Media'],
      ['RWObj_MtlReader']),
+    ('RWMesh', ['Select3D', 'Bnd', 'XCAFDoc', 'TPrsStd', 'Geom', 'AIS',
+                'V3d', 'TDataXtd', 'TDataStd', 'Media', 'CDF', 'Aspect', 'Prs3d',
+                'TopTools', 'TNaming', 'StdSelect', 'SelectMgr', 'PCDM',
+                'TShort'], []),
     ###
     ### OCAF
     ###
