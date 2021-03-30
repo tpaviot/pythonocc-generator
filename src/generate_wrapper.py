@@ -866,6 +866,11 @@ def adapt_header_file(header_content):
     otherwise CppHeaderParser is confused ;
     * all define RTTI moved
     """
+    # no need to deal with Deprecated headers
+    if (("Deprecated alias to moved class" in header_content) or 
+        ("Alias to moved class" in header_content)):
+        return ""  # return empty header
+
     global ALL_STANDARD_HANDLES, ALL_HARRAY1, ALL_HARRAY2, ALL_HSEQUENCE
     # search for STANDARD_HANDLE
     outer = re.compile("DEFINE_STANDARD_HANDLE[\\s]*\\([\\w\\s]+\\,+[\\w\\s]+\\)")
