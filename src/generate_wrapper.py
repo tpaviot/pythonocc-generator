@@ -128,7 +128,6 @@ HEADER_DEPENDENCY = []
 HXX_TO_EXCLUDE_FROM_CPPPARSER = ['NCollection_StlIterator.hxx',
                                  'NCollection_CellFilter.hxx',
                                  'Standard_CLocaleSentry.hxx',
-                                 'TColStd_PackedMapOfInteger.hxx',
                                  # this file has to be fixed
                                  # there's a missing include
                                  'Aspect_VKeySet.hxx',
