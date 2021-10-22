@@ -2565,7 +2565,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # Important special case: For pickling of TopoDS_Shape, we do need WriteToString
         #                         and ReadFromString.
         if class_name == "BRepTools":
-            class_def_str += """                    
+            class_def_str += """
                     %feature("autodoc", "Serializes TopoDS_Shape to string. If full_precision is False, the default precision of std::stringstream is used which regularly causes rounding.") WriteToString;
                     %extend{
                         static std::string WriteToString(const TopoDS_Shape & shape, bool full_precision = true) {
@@ -2594,7 +2594,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             global CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES
             CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES += "breptools_WriteToString = breptools.WriteToString\n"
             CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES += "breptools_ReadFromString = breptools.ReadFromString\n"
-            
+
         # a special wrapper template for TDF_Label
         # We add a special method for recovering label names
         if class_name == "TDF_Label":
