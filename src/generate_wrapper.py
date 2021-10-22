@@ -2561,10 +2561,10 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         class_pyi_str = class_pyi_str.replace('pass\n\t@overload', '@overload')
         class_pyi_str = class_pyi_str.replace('pass\n\tdef', 'def')
         class_pyi_str = class_pyi_str.replace('pass\n\t@staticmethod', '@staticmethod')
-        
-        # Important special case: For pickling of TopoDS_Shape, we do need WriteToString 
+
+        # Important special case: For pickling of TopoDS_Shape, we do need WriteToString
         #                         and ReadFromString.
-        if class_name == "BRepTools":                              
+        if class_name == "BRepTools":
             class_def_str += """                    
                     %feature("autodoc", "Serializes TopoDS_Shape to string") WriteToString;
                     %extend{
@@ -2623,12 +2623,12 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         if class_name == 'TopoDS_Shape':
             class_def_str += '%extend TopoDS_Shape {\n%pythoncode {\n'
             class_def_str += '\tdef __getstate__(self):\n'
-            class_def_str += '\t\tfrom .BRepTools import breptools_WriteToString\n'            
-            class_def_str += '\t\tstr_shape = breptools_WriteToString(self)\n'            
+            class_def_str += '\t\tfrom .BRepTools import breptools_WriteToString\n'
+            class_def_str += '\t\tstr_shape = breptools_WriteToString(self)\n'
             class_def_str += '\t\treturn str_shape\n'
             class_def_str += '\tdef __setstate__(self, state):\n'
-            class_def_str += '\t\tfrom .BRepTools import breptools_ReadFromString\n'                                    
-            class_def_str += '\t\tthe_shape = breptools_ReadFromString(state)\n'            
+            class_def_str += '\t\tfrom .BRepTools import breptools_ReadFromString\n'
+            class_def_str += '\t\tthe_shape = breptools_ReadFromString(state)\n'
             class_def_str += '\t\tself.this = the_shape.this\n'
             class_def_str += '\t}\n};\n'
         # for each class, overload the __repr__ method to avoid things like:
