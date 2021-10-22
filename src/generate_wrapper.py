@@ -2561,6 +2561,36 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         class_pyi_str = class_pyi_str.replace('pass\n\t@overload', '@overload')
         class_pyi_str = class_pyi_str.replace('pass\n\tdef', 'def')
         class_pyi_str = class_pyi_str.replace('pass\n\t@staticmethod', '@staticmethod')
+        
+        # Important special case: For pickling of TopoDS_Shape, we do need WriteToString 
+        #                         and ReadFromString.
+        if class_name == "BRepTools":                              
+            class_def_str += """                    
+                    %feature("autodoc", "Serializes TopoDS_Shape to string") WriteToString;
+                    %extend{
+                        static std::string WriteToString(const TopoDS_Shape & shape) {
+                        std::stringstream s;
+                        BRepTools::Write(shape, s);
+                        return s.str();}
+                    };
+                    %feature("autodoc", "Deserializes TopoDS_Shape from string") ReadFromString;
+                    %extend{
+                        static TopoDS_Shape ReadFromString(const std::string & src) {
+                        std::stringstream s(src);
+                        TopoDS_Shape shape;
+                        BRep_Builder b;
+                        BRepTools::Read(shape, s, b);
+                        return shape;}
+                    };
+            """
+            class_pyi_str += "\t@staticmethod\n"
+            class_pyi_str += "\tdef WriteToString(Sh: TopoDS_Shape) -> str: ...\n"
+            class_pyi_str += "\t@staticmethod\n"
+            class_pyi_str += "\tdef ReadFromString(s: str) -> TopoDS_Shape: ...\n"
+            global CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES
+            CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES += "breptools_WriteToString = breptools.WriteToString\n"
+            CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES += "breptools_ReadFromString = breptools.ReadFromString\n"
+            
         # a special wrapper template for TDF_Label
         # We add a special method for recovering label names
         if class_name == "TDF_Label":
@@ -2588,25 +2618,17 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         if check_has_related_handle(class_name) or class_name == "Standard_Transient":
             # Extend class by GetHandle method
             class_def_str += '%%make_alias(%s)\n\n' % class_name
-
+    
         # We add pickling for TopoDS_Shapes
         if class_name == 'TopoDS_Shape':
             class_def_str += '%extend TopoDS_Shape {\n%pythoncode {\n'
             class_def_str += '\tdef __getstate__(self):\n'
-            class_def_str += '\t\tfrom .BRepTools import BRepTools_ShapeSet\n'
-            class_def_str += '\t\tss = BRepTools_ShapeSet()\n'
-            class_def_str += '\t\tss.Add(self)\n'
-            class_def_str += '\t\tstr_shape = ss.WriteToString()\n'
-            class_def_str += '\t\tindx = ss.Locations().Index(self.Location())\n'
-            class_def_str += '\t\treturn str_shape, indx\n'
+            class_def_str += '\t\tfrom .BRepTools import breptools_WriteToString\n'            
+            class_def_str += '\t\tstr_shape = breptools_WriteToString(self)\n'            
+            class_def_str += '\t\treturn str_shape\n'
             class_def_str += '\tdef __setstate__(self, state):\n'
-            class_def_str += '\t\tfrom .BRepTools import BRepTools_ShapeSet\n'
-            class_def_str += '\t\ttopods_str, indx = state\n'
-            class_def_str += '\t\tss = BRepTools_ShapeSet()\n'
-            class_def_str += '\t\tss.ReadFromString(topods_str)\n'
-            class_def_str += '\t\tthe_shape = ss.Shape(ss.NbShapes())\n'
-            class_def_str += '\t\tlocation = ss.Locations().Location(indx)\n'
-            class_def_str += '\t\tthe_shape.Location(location)\n'
+            class_def_str += '\t\tfrom .BRepTools import breptools_ReadFromString\n'                                    
+            class_def_str += '\t\tthe_shape = breptools_ReadFromString(state)\n'            
             class_def_str += '\t\tself.this = the_shape.this\n'
             class_def_str += '\t}\n};\n'
         # for each class, overload the __repr__ method to avoid things like:
