@@ -2771,7 +2771,7 @@ class ModuleWrapper:
             if self._module_name in ["BRepMesh", "XBRepMesh"]: # wrong header order with gcc4 issue #63
                 swig_interface_file.write("#include<BRepMesh_Delaun.hxx>\n")
             if self._module_name == "ShapeUpgrade":
-                swig_interface_file.write("#include<Precision.hxx>\n#include<ShapeUpgrade_UnifySameDomain.hxx>\n")
+                swig_interface_file.write("#include<Precision.hxx>\n#include<TopoDS_Edge.hxx>\n#include<ShapeUpgrade_UnifySameDomain.hxx>\n")
             module_headers = glob.glob('%s/%s_*.hxx' % (OCE_INCLUDE_DIR, self._module_name))
             module_headers += glob.glob('%s/%s.hxx' % (OCE_INCLUDE_DIR, self._module_name))
             module_headers.sort()
