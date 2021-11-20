@@ -1618,6 +1618,8 @@ def adapt_default_value(def_value):
     def_value = def_value.replace(' ', '')
     def_value = def_value.replace('"', "'")
     def_value = def_value.replace("''", '""')
+    if def_value == "0L":  # only in VrmlData
+        def_value = "0"
     return def_value
 
 
@@ -1792,6 +1794,9 @@ def adapt_type_hint_default_value(default_value_str):
         else:
             new_default_value_str = default_value_str
             success = True
+    elif default_value_str == "0L":
+        new_default_value_str = "0"
+        success = True
     else:
         new_default_value_str = default_value_str
         success = True
