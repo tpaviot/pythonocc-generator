@@ -1298,13 +1298,13 @@ def process_enums(enums_list):
             enum_str += "\t%s = %s,\n" % (enum_value["name"], adapted_enum_value)
             if python_proxy:
                 enum_python_proxies += "\t%s = %s\n" % (enum_value["name"], adapted_enum_value)
-                enum_pyi_str += "\t%s: int = ...\n" % enum_value["name"]
+                enum_pyi_str += "    %s: int = ...\n" % enum_value["name"]
                 # then, in both proxy and stub files, we create the alias for each named enum,
                 # for instance
                 # gp_IntrisicXYZ = gp_EulerSequence.gp_IntrinsicXYZ
                 alias_str += "%s = %s.%s\n" % (enum_value["name"], enum_name, enum_value["name"])
         enum_python_proxies += alias_str
-        enum_pyi_str += alias_str
+        enum_pyi_str += "\n" + alias_str
         enum_str += "};\n\n"
 
     enum_python_proxies += "};\n"
@@ -1618,6 +1618,8 @@ def adapt_default_value(def_value):
     def_value = def_value.replace(' ', '')
     def_value = def_value.replace('"', "'")
     def_value = def_value.replace("''", '""')
+    if def_value == "0L":  # only in VrmlData
+        def_value = "0"
     return def_value
 
 
@@ -1792,6 +1794,9 @@ def adapt_type_hint_default_value(default_value_str):
         else:
             new_default_value_str = default_value_str
             success = True
+    elif default_value_str == "0L":
+        new_default_value_str = "0"
+        success = True
     else:
         new_default_value_str = default_value_str
         success = True
@@ -1967,10 +1972,10 @@ def process_function(f, overload=False):
                                                  function_name,
                                                  getter_params_only_names_str_csv)
         # process type hint for this case
-        getter_hint_str = "\tdef Get%s(%s) -> %s: ...\n" % (function_name,
+        getter_hint_str = "    def Get%s(%s) -> %s: ...\n" % (function_name,
                                                             ', '.join(getter_param_hints),
                                                             hint_output_type)
-        setter_hint_str = "\tdef Set%s(%s) -> None: ...\n" % (function_name,
+        setter_hint_str = "    def Set%s(%s) -> None: ...\n" % (function_name,
                                                               ', '.join(setter_param_hints))
 
         # finally returns the method definition and hint
@@ -2025,18 +2030,18 @@ def process_function(f, overload=False):
     # thus, some method may return a tuple
     types_returned = ["%s" % adapt_type_for_hint(return_type)]  # by default, nothing
     if overload:
-        str_typehint += "\t@overload\n"
+        str_typehint += "    @overload\n"
     if "operator" not in function_name:
         all_parameters_type_hint = ['self']  #by default, this is a class method not static
         if f["constructor"]:
             # add the overload decorator to handle
             # multiple constructors
-            str_typehint += "\tdef __init__("
+            str_typehint += "    def __init__("
         else:
             if f['static']:
-                str_typehint += "\t@staticmethod\n"
+                str_typehint += "    @staticmethod\n"
                 all_parameters_type_hint = []  # if static, not self
-            str_typehint += "\tdef %s(" % function_name
+            str_typehint += "    def %s(" % function_name
 
         if parameters_types_and_names:
             for par in parameters_types_and_names:
@@ -2476,7 +2481,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
                 class_pyi_str += ", %s" % inheritance_name_2
             class_pyi_str += ")"
         class_pyi_str += ":\n"
-        class_pyi_str += "\tpass\n"  # TODO CHANGE
+        class_pyi_str += "    pass\n"  # TODO CHANGE
         class_def_str += " {\n"
         # process class typedefs here
         typedef_str = '\tpublic:\n'
@@ -2558,9 +2563,9 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # should be
         # class gp_Ax22d:
         #    def Location
-        class_pyi_str = class_pyi_str.replace('pass\n\t@overload', '@overload')
-        class_pyi_str = class_pyi_str.replace('pass\n\tdef', 'def')
-        class_pyi_str = class_pyi_str.replace('pass\n\t@staticmethod', '@staticmethod')
+        class_pyi_str = class_pyi_str.replace('pass\n    @overload', '@overload')
+        class_pyi_str = class_pyi_str.replace('pass\n    def', 'def')
+        class_pyi_str = class_pyi_str.replace('pass\n    @staticmethod', '@staticmethod')
 
         # Important special case: For pickling of TopoDS_Shape, we do need WriteToString
         #                         and ReadFromString.
