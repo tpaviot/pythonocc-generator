@@ -1370,6 +1370,8 @@ def adapt_param_type_and_name(param_type_and_name):
         adapted_param_type_and_name = "Standard_Boolean &OutValue"
     elif 'FairCurve_AnalysisCode &' in param_type_and_name:
         adapted_param_type_and_name = 'FairCurve_AnalysisCode &OutValue'
+    elif 'TopAbs_Orientation &' in param_type_and_name:
+        adapted_param_type_and_name = 'TopAbs_Orientation &OutValue'
     else:
         adapted_param_type_and_name = param_type_and_name
     if "& &" in adapted_param_type_and_name:
