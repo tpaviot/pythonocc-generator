@@ -1837,7 +1837,7 @@ def filter_member_functions(
     # split wrapped methods into two lists
     constructors = []
     other_methods = []
-    member_functions_to_process = []
+
     for public_method in class_public_methods:
         method_name = public_method["name"]
         public_method_signature = get_function_md5_signature(public_method)
@@ -1943,7 +1943,7 @@ def adapt_type_hint_parameter_name(param_name_str):
         new_param_name = param_name_str
         success = True
     if "[" in new_param_name:
-        param_name, snd_part = new_param_name.split("[")
+        param_name = new_param_name.split("[")[0]
         param_name = param_name.replace(")", "")
         if param_name == "":
             success = False
