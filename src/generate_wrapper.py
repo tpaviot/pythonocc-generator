@@ -766,35 +766,7 @@ WIN_PRAGMAS = """
 ###########################
 # Template for byref enum #
 ###########################
-BYREF_ENUM_TEMPLATE = """
-/*
-%s & function transformation
-*/
-%%typemap(argout) %s &OutValue {
-    PyObject *o, *o2, *o3;
-    o = PyInt_FromLong(*$1);
-    if ((!$result) || ($result == Py_None)) {
-        $result = o;
-    } else {
-        if (!PyTuple_Check($result)) {
-            PyObject *o2 = $result;
-            $result = PyTuple_New(1);
-            PyTuple_SetItem($result,0,o2);
-        }
-        o3 = PyTuple_New(1);
-        PyTuple_SetItem(o3,0,o);
-        o2 = $result;
-        $result = PySequence_Concat(o2,o3);
-        Py_DECREF(o2);
-        Py_DECREF(o3);
-    }
-}
-
-%%typemap(in,numinputs=0) %s &OutValue(%s temp) {
-    $1 = &temp;
-}
-
-"""
+BYREF_ENUM_TEMPLATE = "ENUM_OUTPUT_TYPEMAPS(%s);\n"
 
 
 def get_log_header():
@@ -3245,10 +3217,7 @@ class ModuleWrapper:
                 os.path.join(COMMON_OUTPUT_PATH, "EnumTemplates.i"), "w"
             )
             for enum_name in ALL_BYREF_ENUMS:
-                print(enum_name)
-                enum_template_interface_file.write(
-                    BYREF_ENUM_TEMPLATE % (enum_name, enum_name, enum_name, enum_name)
-                )
+                enum_template_interface_file.write(BYREF_ENUM_TEMPLATE % enum_name)
             enum_template_interface_file.close()
         #
         # write pyi stub file
