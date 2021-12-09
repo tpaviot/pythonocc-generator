@@ -659,7 +659,7 @@ OCE_MODULES = [
       'HLRAlgo', 'Poly', 'V3d'],
      ['Graphic3d_UniformValue', 'Graphic3d_UniformValueType',
       'Graphic3d_UniformValueTypeID', 'Graphic3d_Buffer',
-      'Graphic3d_IndexBuffer', 'Graphic3d_TransformPers', 'Graphic3d_TextureSet',
+      'Graphic3d_IndexBuffer', 'Graphic3d_TextureSet',
       'Graphic3d_CubeMapOrder', 'Graphic3d_CubeMapPacked', 'Graphic3d_BvhCStructureSetTrsfPers'],
      {'Graphic3d_ShaderVariable': ['Create'],
       'Graphic3d_ValueInterface': ['As'],

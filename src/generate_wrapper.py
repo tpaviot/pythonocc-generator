@@ -2769,7 +2769,8 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         for n in nested_classes:
             nested_class_name = n["name"]
             # skip anon structs, for instance in AdvApp2Var_SysBase
-            if "anon-struct" in nested_class_name:
+            # or Graphic3d_TransformPers
+            if "anon" in nested_class_name:
                 continue
             logging.info(
                 "    Wrap nested class %s::%s" % (class_name, nested_class_name)
