@@ -2130,7 +2130,9 @@ def process_function(f, overload=False):
         return_type = "virtual " + return_type
     if f["static"] and "static" not in return_type:
         return_type = "static " + return_type
-    if f["static"]:
+    if f["static"] and f["parent"] is None:
+        return_type = "static " + return_type
+    if f["static"] and f["parent"] is not None:
         parent_class_name = f["parent"]["name"]
         if parent_class_name == CURRENT_MODULE:
             parent_class_name = parent_class_name.lower()
