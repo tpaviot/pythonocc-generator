@@ -16,7 +16,7 @@
 #
 # OpenCASCADE Toolkits: each ToolKit is a list of modules
 #
-TOOLKIT_Foundation = {'TKernel': ['FSD', 'MMgt', 'Message', 'NCollection', 'OSD', 'Plugin',
+TOOLKIT_Foundation = {'TKernel': ['FSD', 'Message', 'NCollection', 'OSD', 'Plugin',
                                   'Quantity', 'Resource', 'Standard', 'StdFail', 'Storage',
                                   'TColStd', 'TCollection', 'TShort', 'Units', 'UnitsAPI'],
                       'TKMath': ['BSplCLib', 'BSplSLib', 'BVH', 'Bnd', 'CSLib', 'Convert',
@@ -124,8 +124,7 @@ OCE_MODULES = [
     ###
     ### TKernel
     ('FSD', [], ['*']),
-    ('MMgt', [], []),
-    ('Message', [], ['Message_ProgressScope'],
+    ('Message', [], ['Message_ProgressScope', 'Message_LazyProgressScope'],
      {'Message': ['Send', 'SendAlarm', 'SendInfo', 'SendTrace',
                   'SendWarning', 'SendFail'],
       'Message_Messenger': ['Send', 'SendAlarm', 'SendInfo', 'SendTrace',
@@ -214,7 +213,7 @@ OCE_MODULES = [
       'ProjLib_ProjectedCurve': ['Load']}),
     ('GeomProjLib', [], []),
     ('GCPnts', ['Geom', 'Geom2d', 'Message'],
-     ['GCPnts_DistFunction', 'GCPnts_DistFunction2d']),
+     ['GCPnts_DistFunction', 'GCPnts_DistFunction2d', 'GCPnts_TCurveTypes']),
     ('CPnts', ['Geom', 'Geom2d', 'Message'], []),
     ('Approx', ['FEmTool', 'Adaptor2d', 'Message'], []),
     ('AppParCurves', ['Message'], []),
@@ -247,15 +246,15 @@ OCE_MODULES = [
     ('TopoDS', [], [],),
     ('TopExp', ['Message', 'TopLoc'], []),
     ('TopTools', ['Message'], []),
-    ('BRep', ['TShort', 'Message'], []),
+    ('BRep', ['TShort', 'Message', 'Bnd'], []),
     ('BRepLProp', ['GeomAdaptor', 'Geom', 'Geom2d', 'TopLoc',
                    'Adaptor3d', 'TopoDS', 'Adaptor2d',
                    'Geom2dAdaptor', 'Message'], []),
-    ('BRepAdaptor', ['TopLoc', 'Geom2d', 'Message'], []),
+    ('BRepAdaptor', ['TopLoc', 'Geom2d', 'Message', 'Adaptor2d'], []),
     ('BRepTools', ['TShort', 'Poly'], [],
      {'BRepTools_ReShape': ['Merge'],
       'BRepTools_History': ['BRepTools_History', 'Merge']}),
-    ('BinTools', ['Message', 'CDF'], [],
+    ('BinTools', ['Message', 'CDF'], ['BinTools_IStream', 'BinTools_OStream'],
      {'BinTools_Curve2dSet': ['Dump']}), # Fixes undefined ref
     ### TKGeomAlgo
     ('Hatch', [], []),
@@ -282,7 +281,7 @@ OCE_MODULES = [
     ('IntCurve', ['Geom2d', 'Message'], []),
     ('TopTrans', [], []),
     ('Intf', [], []),
-    ('ApproxInt', ['Adaptor3d', 'Geom', 'Adaptor2d', 'Geom2d', 'Message'], []),
+    ('ApproxInt', ['Adaptor3d', 'Geom', 'Adaptor2d', 'Geom2d', 'Message', 'AppParCurves', 'Bnd'], []),
     ('GccAna', [], []),
     ('GccEnt', [], []),
     ('GccInt', [], []),
@@ -361,14 +360,14 @@ OCE_MODULES = [
       'BRepBuilderAPI_CellFilter': ['Remove']}),
     ('BRepApprox',
      ['TopLoc', 'TopoDS', 'FEmTool', 'GeomAdaptor',
-      'Geom2dAdaptor', 'Adaptor3d', 'Adaptor2d', 'Message'], [],
+      'Geom2dAdaptor', 'Adaptor3d', 'Adaptor2d', 'Message', 'Bnd', 'IntPatch'], [],
      {'BRepApprox_ResConstraintOfMyGradientbisOfTheComputeLineOfApprox': ['Error'],
       'BRepApprox_ResConstraintOfMyGradientOfTheComputeLineBezierOfApprox': ['Error'],
       'BRepApprox_Approx': ['Perform'],
       'BRepApprox_TheImpPrmSvSurfacesOfApprox': ['FillInitialVectorOfSolution']}),
     ### TKPrim
-    ('BRepPrim', ['TopLoc', 'Message', 'Poly', 'TShort'], []),
-    ('BRepSweep', ['Geom', 'Geom2d', 'TShort', 'Poly', 'Message'], []),
+    ('BRepPrim', ['TopLoc', 'Message', 'Poly', 'TShort', 'Bnd'], []),
+    ('BRepSweep', ['Geom', 'Geom2d', 'TShort', 'Poly', 'Message', 'Bnd'], []),
     ('Sweep', [], []),
     ('BRepPrimAPI',
      ['TopLoc', 'Geom2d', 'BRep', 'Message', 'BRepTools', 'Bnd', 'Poly', 'TShort'], []),
@@ -407,7 +406,8 @@ OCE_MODULES = [
                  'Geom', 'Geom2dAdaptor', 'AppParCurves', 'Bnd',
                  'IntTools', 'BRep', 'TShort', 'Poly'], [],
      {'BOPAlgo_PaveFiller': ['Iterator'],
-      'BOPAlgo_Tools': ['MakeBlocks', 'FillMap', 'TreatCompound']}),
+      'BOPAlgo_Tools': ['MakeBlocks', 'FillMap', 'TreatCompound'],
+      'BOPAlgo_ParallelAlgo': ['Perform']}),
     ('BOPTools',
      ['Extrema', 'Adaptor2d', 'Approx', 'Adaptor3d',
       'GeomAdaptor', 'IntPatch', 'TopLoc', 'Geom2dAdaptor',
@@ -547,7 +547,7 @@ OCE_MODULES = [
                   'TShort', 'Intf', 'TopOpeBRepTool',
                   'Poly', 'Extrema', 'BRepTools', 'IntCurveSurface',
                   'Geom2d', 'Geom2dAdaptor', 'BRepAdaptor',
-                  'GeomAdaptor', 'Adaptor2d'], [],
+                  'GeomAdaptor', 'Adaptor2d', 'Geom'], [],
      {'BRepAlgo_DSAccess': ['IsDeleted']}),
     ('BRepFill', ['FEmTool', 'TColGeom2d', 'PLib', 'TopLoc',
                   'Plate', 'AdvApp2Var', 'TColGeom',
@@ -568,7 +568,7 @@ OCE_MODULES = [
                    'Intf', 'IntSurf', 'TopOpeBRepTool',
                    'Law', 'Extrema', 'IntCurveSurface',
                    'Geom2dAdaptor', 'Adaptor2d', 'Adaptor3d'], []),
-    ('Blend', ['Geom2d', 'Message'], []),
+    ('Blend', ['Geom2d', 'Message', 'Adaptor2d'], []),
     ('BRepBlend',
      ['AppParCurves', 'TCollection', 'PLib', 'FEmTool',
       'Convert', 'Geom', 'Geom2d', 'Message',
@@ -642,7 +642,7 @@ OCE_MODULES = [
      ['Aspect_CircularGrid',
       'Aspect_NeutralWindow', 'Aspect_RectangularGrid', 'Aspect_FrustumLRBT'],
      {'Aspect_DisplayConnection': ['Aspect_DisplayConnection', 'GetAtom', 'GetDisplay',
-                                   'GetDisplayName', 'Init', 'IsOwnDisplay'],
+                                   'GetDisplayName', 'Init', 'IsOwnDisplay', 'GetAtomX', 'GetDefaultVisualInfoX', 'SetDefaultVisualInfo'],
       'Aspect_Window': ['NativeHandle', 'NativeParentHandle']}),
     ('Media', ['Geom', 'Bnd', 'Quantity', 'Aspect'], []),
     ('Image', [], ['*']),
@@ -669,7 +669,9 @@ OCE_MODULES = [
       'Graphic3d_Layer': ['FrustumCullingBVHBuilder', 'Graphic3d_Layer',  # to avoid circular dep #60
                           'SetFrustumCullingBVHBuilder'],
       'Graphic3d_BvhCStructureSet': ['Graphic3d_BvhCStructureSet', 'Add', 'Clear', 'GetStructureById', 'Remove'],
-      'Graphic3d_MediaTextureSet' : ['SetCallback']}),
+      'Graphic3d_MediaTextureSet' : ['SetCallback'],
+      'Graphic3d_GraduatedTrihedron' :['SetCubicAxesCallback'],
+      'Graphic3d_ShaderObject': ['CreateFromSource::e558d4a90914c3a4f724c61a93250117']}),
     ('Select3D', ['TShort', 'TColQuantity', 'Aspect',
                   'Graphic3d', 'Quantity', 'Message', 'TopLoc', 'V3d', 'TopTools',
                   'Poly', 'HLRAlgo', 'Prs3d', 'TopoDS', 'Media',
@@ -743,7 +745,7 @@ OCE_MODULES = [
     ###
     ## TKStl
     ('StlAPI', ['Message', 'TopLoc'], []),
-    ('RWStl', ['TShort'], ['RWStl_Reader']),
+    ('RWStl', ['TShort', 'Bnd'], ['RWStl_Reader']),
     ### TKSTEPBase
     ('StepData', ['MoniTool', 'TopoDS', 'Message'],
      ['StepData_FreeFormEntity', 'StepData_UndefinedEntity'],
@@ -879,7 +881,7 @@ OCE_MODULES = [
                 'HLRAlgo', 'Geom2d', 'StdPrs', 'Prs3d', 'Select3D',
                 'TopTools', 'TNaming', 'StdSelect', 'TopoDS',
                 'TDataXtd', 'Adaptor2d', 'Media', 'SelectMgr', 'Adaptor3d',
-                'GeomAdaptor'],
+                'GeomAdaptor', 'Bnd'],
      ['RWGltf_GltfSharedIStream']),
     ('RWObj', ['CDF', 'PCDM', 'TDF', 'TDocStd', 'Graphic3d', 'Geom',
                'TShort', 'Aspect', 'Bnd', 'Quantity', 'Message', 'Media',
@@ -924,7 +926,7 @@ OCE_MODULES = [
      {'BinMDataStd' : ['SetAttributeID']}),
     ('BinMDocStd', ['Resource', 'TDF'], []),
     ('BinMFunction', ['Resource', 'TDF'], []),
-    ('BinObjMgt', [], []),
+    ('BinObjMgt', ['CDF'], ['BinObjMgt_Position']),
     ### TKBinTObj
     ('BinTObjDrivers', ['Resource', 'PCDM', 'LDOM', 'CDF', 'TDF'], []),
     ### TKBinXCAF'
@@ -934,7 +936,7 @@ OCE_MODULES = [
     ### TKXml
     ('XmlDrivers', ['Resource', 'PCDM', 'TDF', 'CDF'], []),
     ('XmlMDataXtd', ['Resource'], []),
-    ('XmlMNaming', ['Message', 'Resource', 'TopLoc'], []),
+    ('XmlMNaming', ['Message', 'Resource', 'TopLoc', 'PCDM', 'CDF'], []),
     ('XmlMPrsStd', ['Resource'], []),
     ### TKXmlL
     ('XmlLDrivers', ['Resource', 'TDF', 'CDF'], []),
@@ -972,7 +974,7 @@ OCE_MODULES = [
     ('XCAFView', [], []),
     ('XCAFNoteObjects', ['Message'], []),
     ### TKCAF
-    ('TDataXtd', ['TopTools', 'TCollection', 'Message', 'TopLoc', 'TShort'], []),
+    ('TDataXtd', ['TopTools', 'TCollection', 'Message', 'TopLoc', 'TShort', 'Bnd'], []),
     ('TNaming', ['TCollection', 'Message'], []),
     ('TPrsStd', ['TDF', 'gp', 'HLRAlgo', 'TopTools', 'TCollection', 'Geom',
                  'TDataStd', 'Aspect', 'TNaming', 'Select3D',

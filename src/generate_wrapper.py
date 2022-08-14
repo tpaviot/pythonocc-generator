@@ -1,5 +1,5 @@
 #!/usr/bin/python
-##Copyright 2008-2019 Thomas Paviot (tpaviot@gmail.com)
+##Copyright 2008-2022 Thomas Paviot (tpaviot@gmail.com)
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -99,7 +99,7 @@ for tk in ALL_TOOLKITS:
     TOOLKITS.update(tk)
 
 LICENSE_HEADER = """/*
-Copyright 2008-2020 Thomas Paviot (tpaviot@gmail.com)
+Copyright 2008-2022 Thomas Paviot (tpaviot@gmail.com)
 
 This file is part of pythonOCC.
 pythonOCC is free software: you can redistribute it and/or modify
@@ -246,6 +246,10 @@ STANDARD_INTEGER_TYPEDEF = [
     "MeshVS_DisplayModeFlags",
     "XCAFPrs_DocumentExplorerFlags",
 ]
+
+# enums to skip
+ENUMS_TO_EXLUDE = ["ShapeMapGroup"]  # bug in RWGtlf.i
+
 # The list of all enums defined in oce
 ALL_ENUMS = []
 
@@ -319,6 +323,7 @@ TEMPLATES_TO_EXCLUDE = [
     "BOPTools_PairSelector",
     "BVH_Box",
     "Prs3d_Point",
+    "OSD_StreamBuffer",  # occt762
 ]
 
 ##########################
@@ -1405,7 +1410,7 @@ def process_enums(enums_list):
     """
     enum_str = "/* public enums */\n"
 
-    enum_python_proxies = "/* python proy classes for enums */\n"
+    enum_python_proxies = "/* python proxy classes for enums */\n"
     enum_python_proxies += "%pythoncode {\n"
 
     enum_pyi_str = ""
@@ -1425,6 +1430,11 @@ def process_enums(enums_list):
             enum_name = enum["name"]
             if not enum_name in ALL_ENUMS:
                 ALL_ENUMS.append(enum_name)
+
+        if enum_name in ENUMS_TO_EXLUDE:
+            logging.info(f"Skipping Enum: {enum_name}")
+            continue
+
         logging.info(f"Enum: {enum_name}")
         enum_str += "enum %s {\n" % enum_name
         if python_proxy:
@@ -1812,9 +1822,9 @@ def adapt_default_value(def_value):
     return def_value
 
 
-def adapt_default_value_parmlist(parm):
+def adapt_default_value_parmlist(param):
     """adapts default value to be used in swig parameter list"""
-    def_value = parm["defaultValue"]
+    def_value = param["defaultValue"]
     def_value = def_value.replace(" ", "")
     return def_value
 
@@ -1877,6 +1887,10 @@ def adapt_type_for_hint(type_str):
         return "int"
     if "char *" in type_str:
         return "str"
+    if "bool" in type_str:
+        return "bool"
+    if "float" in type_str:
+        return "float"
     if not "_" in type_str:  # TODO these are special cases, e.g. nested classes
         logging.warning("    [TypeHint] Skipping type %s, should contain _" % type_str)
         return False  # returns a boolean to prevent type hint creation, the type will not be found
@@ -3123,10 +3137,21 @@ class ModuleWrapper:
             # Here we write required dependencies, headers, as well as
             # other swig interface files
             swig_interface_file.write("%{\n")
-            if (
-                self._module_name == "Adaptor3d"
-            ):  # occt bug in headr file, won't compile otherwise
-                swig_interface_file.write("#include<Adaptor2d_HCurve2d.hxx>\n")
+            ## modifiers for occt762
+            if self._module_name in ["Blend", "BlendFunc", "Contap"]:
+                swig_interface_file.write("#include<Adaptor2d_Curve2d.hxx>\n")
+            if self._module_name == "BRepAdaptor":
+                swig_interface_file.write(
+                    "#include<Adaptor2d_Curve2d.hxx>\n#include<Adaptor2d_OffsetCurve.hxx>\n"
+                )
+            if self._module_name == "HLRTopoBRep":
+                swig_interface_file.write(
+                    "#include<BRepAdaptor_Curve2d.hxx>\n#include<Adaptor2d_Curve2d.hxx>\n"
+                )
+            if self._module_name == "BRepTopAdaptor":
+                swig_interface_file.write("#include<BRepAdaptor_Curve2d.hxx>\n")
+            if self._module_name == "Aspect":
+                swig_interface_file.write("#include<Standard_Atomic.hxx>\n")
             if self._module_name == "AdvApp2Var":  # windows compilation issues
                 swig_interface_file.write(
                     "#if defined(_WIN32)\n#include <windows.h>\n#endif\n"
