@@ -20,7 +20,7 @@ How to create a local copy of the repository?
 
     $ git clone git://github.com/tpaviot/pythonocc-generator.git
 
-How to stay up to date with latest developements?
+How to stay up to date with latest developments?
 -------------------------------------------------
 
     $ cd pythonocc-generator
