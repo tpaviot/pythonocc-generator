@@ -253,7 +253,8 @@ OCE_MODULES = [
     ('BRepAdaptor', ['TopLoc', 'Geom2d', 'Message', 'Adaptor2d'], []),
     ('BRepTools', ['TShort', 'Poly'], [],
      {'BRepTools_ReShape': ['Merge'],
-      'BRepTools_History': ['BRepTools_History', 'Merge']}),
+      'BRepTools_History': ['BRepTools_History', 'Merge'],
+      'BRepTools_PurgeLocations': ['ModifiedShape']}),
     ('BinTools', ['Message', 'CDF'], ['BinTools_IStream', 'BinTools_OStream'],
      {'BinTools_Curve2dSet': ['Dump']}), # Fixes undefined ref
     ### TKGeomAlgo
