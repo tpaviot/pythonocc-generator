@@ -165,7 +165,7 @@ The .i files are created automaticallyt using 2 python modules and a configurati
 
 * generate_wrapper.py is used to specify **how** should it be wrapped and **do** it
 
-Each of the following section adress these 3 points in detail.
+Each of the following section address these 3 points in detail.
 
 ## 2.2. Modules.py: choose what to be wrapped
 
@@ -205,7 +205,7 @@ instance, {'Standard_MMgrOpt': 'SetCallBackFunction', 'Standard': 'Free'}). This
 Standard_MMgrOpt won't be available from the wrapper, but all the other methods will be available. These methods are
 excluded for the same reason as the previous classes.
 
-Remember that all classes and methods should be wrapped. There's not reason to exlude a priori one class or one member function. The exclusion mechanism has been developped to fix compilation issues.
+Remember that all classes and methods should be wrapped. There's not reason to exclude a priori one class or one member function. The exclusion mechanism has been developed to fix compilation issues.
 
 ### 2.2.2. Examples
 
@@ -217,7 +217,7 @@ Let's take the simplest example: the wrapper definition for the 'gp' module. It 
 This means that all classes, and all member functions, will be made available for the wrapper. 
 
 For instance, let's go on with the 'gp' module definition:
-````python
+```python
 ('gp', [], [],
             {'gp_Torus': 'Coefficients'}),
 ```
@@ -237,9 +237,9 @@ The ['math_SingleTab'] list excludes the 'math_SingleTab' class from the wrapper
 The 'IsConvex' method of the math_NewtonMinimum class is excluded from the wrapper. Why ? because if included, it will cause a compilation error. The same for the 'StateNumber' method for 'math_NewtonFunctionSetRoot' and the 'IsDone' method of 'math_GlobOptMin'.
 
 
-**Note 1**: try to remove one of the class from the exlusion list. You might see the compilation fail (according to the OS you're running, the compilation may be different).
+**Note 1**: try to remove one of the class from the exclusion list. You might see the compilation fail (according to the OS you're running, the compilation may be different).
 
-**Note 2**: it would obviously be better to *understand* the compilation error, and to fix it, rather than excluding a class. Hopefully, only a few classes need to be exluded and, so far, I guess that no one ever noticed that some of these methods are unavailable. Please report any success in understanding the compilation issues (dont' report the compilation issues themselves).
+**Note 2**: it would obviously be better to *understand* the compilation error, and to fix it, rather than excluding a class. Hopefully, only a few classes need to be excluded and, so far, I guess that no one ever noticed that some of these methods are unavailable. Please report any success in understanding the compilation issues (don't report the compilation issues themselves).
 
 ## 2.3. Configuration file: where to create files
 
@@ -253,6 +253,6 @@ The 'IsConvex' method of the math_NewtonMinimum class is excluded from the wrapp
 
 Some other important tips.
 
-# 3. Making your own wrapper
+# 3. Misc
 
-This section describes how to upgrade the wrapper for an oce version change.
+Source code is formatted with black (https://black.readthedocs.io/) using default settings.

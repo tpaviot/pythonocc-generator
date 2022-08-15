@@ -1,5 +1,5 @@
 #!/usr/bin/python
-##Copyright 2008-2019 Thomas Paviot (tpaviot@gmail.com)
+##Copyright 2008-2022 Thomas Paviot (tpaviot@gmail.com)
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -46,7 +46,7 @@ PYTHONOCC_VERSION = config.get("pythonocc-core", "version")
 # oce headers location
 OCE_INCLUDE_DIR = config.get("OCE", "include_dir")
 if not os.path.isdir(OCE_INCLUDE_DIR):
-    raise AssertionError("OCE include dir %s not found." % OCE_INCLUDE_DIR)
+    raise AssertionError(f"OCE include dir {OCE_INCLUDE_DIR} not found.")
 # swig output path
 PYTHONOCC_CORE_PATH = config.get("pythonocc-core", "path")
 COMMON_OUTPUT_PATH = os.path.join(PYTHONOCC_CORE_PATH, "src", "SWIG_files", "common")
@@ -79,6 +79,8 @@ log.addHandler(console_handler)
 ####################
 # Global variables #
 ####################
+# 7.6.2 online doc is not available, point to 7.6.0
+DOC_URL = "https://www.opencascade.com/doc/occt-7.6.0/refman/html"
 
 ##################
 # For statistics #
@@ -99,7 +101,7 @@ for tk in ALL_TOOLKITS:
     TOOLKITS.update(tk)
 
 LICENSE_HEADER = """/*
-Copyright 2008-2020 Thomas Paviot (tpaviot@gmail.com)
+Copyright 2008-2022 Thomas Paviot (tpaviot@gmail.com)
 
 This file is part of pythonOCC.
 pythonOCC is free software: you can redistribute it and/or modify
@@ -246,6 +248,10 @@ STANDARD_INTEGER_TYPEDEF = [
     "MeshVS_DisplayModeFlags",
     "XCAFPrs_DocumentExplorerFlags",
 ]
+
+# enums to skip
+ENUMS_TO_EXLUDE = ["ShapeMapGroup"]  # bug in RWGtlf.i
+
 # The list of all enums defined in oce
 ALL_ENUMS = []
 
@@ -312,13 +318,15 @@ TEMPLATES_TO_EXCLUDE = [
     "Graphic3d_UniformValue",
     "NCollection_Shared",
     "NCollection_Handle",
-    "NCollection_DelMapNode" "BOPTools_BoxSet",
+    "NCollection_DelMapNode",
+    "BOPTools_BoxSet",
     "BOPTools_PairSelector",
     "BOPTools_BoxSet",
     "BOPTools_BoxSelector",
     "BOPTools_PairSelector",
     "BVH_Box",
     "Prs3d_Point",
+    "OSD_StreamBuffer",  # occt762
 ]
 
 ##########################
@@ -876,8 +884,8 @@ def case_sensitive_glob(wildcard):
 
 def get_all_module_headers(module_name):
     """Returns a list with all header names"""
-    mh = case_sensitive_glob(os.path.join(OCE_INCLUDE_DIR, "%s.hxx" % module_name))
-    mh += case_sensitive_glob(os.path.join(OCE_INCLUDE_DIR, "%s_*.hxx" % module_name))
+    mh = case_sensitive_glob(os.path.join(OCE_INCLUDE_DIR, f"{module_name}.hxx"))
+    mh += case_sensitive_glob(os.path.join(OCE_INCLUDE_DIR, f"{module_name}_*.hxx"))
     mh = filter_header_list(mh, HXX_TO_EXCLUDE_FROM_BEING_INCLUDED)
     headers_list = list(map(os.path.basename, mh))
     # sort alphabetical order
@@ -902,11 +910,11 @@ def check_has_related_handle(class_name):
     if check_is_persistent(class_name):
         return False
 
-    filename = os.path.join(OCE_INCLUDE_DIR, "Handle_%s.hxx" % class_name)
+    filename = os.path.join(OCE_INCLUDE_DIR, f"Handle_{class_name}.hxx")
     other_possible_filename = filename
     if class_name.startswith("Graphic3d"):
         other_possible_filename = os.path.join(
-            OCE_INCLUDE_DIR, "%s_Handle.hxx" % class_name
+            OCE_INCLUDE_DIR, f"{class_name}_Handle.hxx"
         )
     return (
         os.path.exists(filename)
@@ -936,7 +944,6 @@ def adapt_header_file(header_content):
     ):
         return ""  # return empty header
 
-    global ALL_STANDARD_HANDLES, ALL_HARRAY1, ALL_HARRAY2, ALL_HSEQUENCE
     # search for STANDARD_HANDLE
     outer = re.compile("DEFINE_STANDARD_HANDLE[\\s]*\\([\\w\\s]+\\,+[\\w\\s]+\\)")
     matches = outer.findall(header_content)
@@ -1022,22 +1029,23 @@ def adapt_header_file(header_content):
             if class_name == "" or not class_name[0].isupper():
                 continue
             header_content = header_content.replace(
-                match, "opencascade::handle<%s>" % class_name
+                match, f"opencascade::handle<{class_name}>"
             )
     return header_content
 
 
 def parse_header(header_filename):
     """Use CppHeaderParser module to parse header_filename"""
-    header_content = open(header_filename, "r", encoding="ISO-8859-1").read()
-    adapted_header_content = adapt_header_file(header_content)
-    try:
-        cpp_header = CppHeaderParser.CppHeader(adapted_header_content, "string")
-    except CppHeaderParser.CppParseError as e:
-        print(e)
-        print("Filename : %s" % header_filename)
-        print("FileContent :\n", adapted_header_content)
-        sys.exit(1)
+    with open(header_filename, "r", encoding="utf-8") as header_content:
+        # header_content = open(header_filename, "r", encoding="ISO-8859-1").read()
+        adapted_header_content = adapt_header_file(header_content.read())
+        try:
+            cpp_header = CppHeaderParser.CppHeader(adapted_header_content, "string")
+        except CppHeaderParser.CppParseError as e:
+            print(e)
+            print(f"Filename : {header_filename}")
+            print("FileContent :\n", adapted_header_content)
+            sys.exit(1)
     return cpp_header
 
 
@@ -1105,7 +1113,7 @@ def process_templates_from_typedefs(list_of_typedefs):
                     + "skipped because name doesn't contain _."
                 )
             if wrap_template:
-                wrapper_str += "%%template(%s) %s;\n" % (template_name, template_type)
+                wrapper_str += f"%template({template_name}) {template_type};\n"
                 # if a NCollection_Array1, extend this template to benefit from pythonic methods
                 # All "Array1" classes are considered as python arrays
                 # TODO : it should be a good thing to use decorators here, to avoid code duplication
@@ -1120,7 +1128,7 @@ def process_templates_from_typedefs(list_of_typedefs):
                     str1 = NCOLLECTION_ARRAY1_EXTEND_TEMPLATE_PYI.replace(
                         "NCollection_Array1_Template_Instanciation", template_name
                     )
-                    pyi_str += str1.replace("Type_T", "%s" % basetype_hint)
+                    pyi_str += str1.replace("Type_T", f"{basetype_hint}")
 
                 elif "NCollection_List" in template_type:
                     wrapper_str += NCOLLECTION_LIST_EXTEND_TEMPLATE.replace(
@@ -1129,7 +1137,7 @@ def process_templates_from_typedefs(list_of_typedefs):
                     str1 = NCOLLECTION_LIST_EXTEND_TEMPLATE_PYI.replace(
                         "NCollection_List_Template_Instanciation", template_name
                     )
-                    pyi_str += str1.replace("Type_T", "%s" % basetype_hint)
+                    pyi_str += str1.replace("Type_T", f"{basetype_hint}")
 
                 elif "NCollection_Sequence" in template_type:
                     wrapper_str += NCOLLECTION_SEQUENCE_EXTEND_TEMPLATE.replace(
@@ -1138,7 +1146,7 @@ def process_templates_from_typedefs(list_of_typedefs):
                     str1 = NCOLLECTION_SEQUENCE_EXTEND_TEMPLATE_PYI.replace(
                         "NCollection_Sequence_Template_Instanciation", template_name
                     )
-                    pyi_str += str1.replace("Type_T", "%s" % basetype_hint)
+                    pyi_str += str1.replace("Type_T", f"{basetype_hint}")
 
                 elif "NCollection_DataMap" in template_type:
                     # NCollection_Datamap is similar to a Python dict,
@@ -1171,12 +1179,11 @@ def process_templates_from_typedefs(list_of_typedefs):
                     typ = (template_type.split("<")[1]).split(">")[0]
                 else:
                     h_typ = (template_type.split("<")[2]).split(">")[0]
-                    typ = "opencascade::handle<%s>" % h_typ
+                    typ = f"opencascade::handle<{h_typ}>"
             elif template_name.endswith("Iter"):
                 typ = template_name.split("Iter")[0]
-            wrapper_str += "%%template(%s) NCollection_TListIterator<%s>;\n" % (
-                template_name,
-                typ,
+            wrapper_str += (
+                f"%template({template_name}) NCollection_TListIterator<{typ}>;\n"
             )
     wrapper_str += "/* end templates declaration */\n"
     return wrapper_str, pyi_str
@@ -1261,16 +1268,16 @@ def process_typedefs(typedefs_dict):
         # %template(TColStd_Array1OfReal) NCollection_Array1<Standard_Real>;
         # we then check if > or < are in the typedef string then we process it.
         typedef_type = filtered_typedef_dict[typedef_value]
-        typedef_str += "typedef %s %s;\n" % (typedef_type, typedef_value)
+        typedef_str += f"typedef {typedef_type} {typedef_value};\n"
         #
         # Check if the typedef is a template
         #
-        if str_in(["<", ">"], "%s" % typedef_type):
+        if str_in(["<", ">"], f"{typedef_type}"):
             templates.append([typedef_type, typedef_value])
         #
         # Check if it's just a class alias
         #
-        elif not str_in(["*", ":", " ", "Standard"], "%s" % typedef_type):
+        elif not str_in(["*", ":", " ", "Standard"], f"{typedef_type}"):
             # we create the alias in python
             # e.g.
             # BRepOffsetAPI_= BRepAlgoAPI_Cut
@@ -1279,13 +1286,9 @@ def process_typedefs(typedefs_dict):
             typedef_module_name = typedef_type.split("_")[0]
             if is_module(typedef_module_name):
                 if CURRENT_MODULE == typedef_module_name:
-                    typedef_aliases_str += "%s=%s\n" % (typedef_value, typedef_type)
+                    typedef_aliases_str += f"{typedef_value}={typedef_type}\n"
                 else:
-                    typedef_aliases_str += "%s=OCC.Core.%s.%s\n" % (
-                        typedef_value,
-                        typedef_module_name,
-                        typedef_type,
-                    )
+                    typedef_aliases_str += f"{typedef_value}=OCC.Core.{typedef_module_name}.{typedef_type}\n"
         check_dependency(typedef_type.split()[0])
         # Define a new type, only for aliases
         type_to_define = typedef_type
@@ -1304,10 +1307,8 @@ def process_typedefs(typedefs_dict):
             and type_to_define is not None
         ):
             type_to_define = adapt_type_for_hint_typedef(type_to_define)
-            typedef_pyi_str += "\n%s = NewType('%s', %s)" % (
-                typedef_value,
-                typedef_value,
-                type_to_define,
+            typedef_pyi_str += (
+                f"\n{typedef_value} = NewType('{typedef_value}', {type_to_define})"
             )
         elif (
             ")" not in typedef_value
@@ -1319,10 +1320,7 @@ def process_typedefs(typedefs_dict):
             and "NCollection_Sequence" not in type_to_define
         ):
             typedef_pyi_str += "\n#the following typedef cannot be wrapped as is"
-            typedef_pyi_str += "\n%s = NewType('%s', Any)" % (
-                typedef_value,
-                typedef_value,
-            )
+            typedef_pyi_str += f"\n{typedef_value} = NewType('{typedef_value}', Any)"
 
     typedef_pyi_str += "\n"
     typedef_str += "/* end typedefs declaration */\n\n"
@@ -1405,7 +1403,7 @@ def process_enums(enums_list):
     """
     enum_str = "/* public enums */\n"
 
-    enum_python_proxies = "/* python proy classes for enums */\n"
+    enum_python_proxies = "/* python proxy classes for enums */\n"
     enum_python_proxies += "%pythoncode {\n"
 
     enum_pyi_str = ""
@@ -1425,11 +1423,16 @@ def process_enums(enums_list):
             enum_name = enum["name"]
             if not enum_name in ALL_ENUMS:
                 ALL_ENUMS.append(enum_name)
+
+        if enum_name in ENUMS_TO_EXLUDE:
+            logging.info(f"Skipping Enum: {enum_name}")
+            continue
+
         logging.info(f"Enum: {enum_name}")
-        enum_str += "enum %s {\n" % enum_name
+        enum_str += f"enum {enum_name}" + " {\n"
         if python_proxy:
-            enum_python_proxies += "\nclass %s(IntEnum):\n" % enum_name
-            enum_pyi_str += "\nclass %s(IntEnum):\n" % enum_name
+            enum_python_proxies += f"\nclass {enum_name}(IntEnum):\n"
+            enum_pyi_str += f"\nclass {enum_name}(IntEnum):\n"
         for enum_value in enum["values"]:
             adapted_enum_value = adapt_enum_value(enum_value["value"])
             if CURRENT_MODULE == "Quantity":
@@ -1690,11 +1693,9 @@ def get_module_docstring(module_name):
     used, for instance, for the gp package:
     https://www.opencascade.com/doc/occt-7.4.0/refman/html/package_gp.html
     """
-    module_docstring = "%s module, see official documentation at\n" % module_name
-    module_docstring += (
-        "https://www.opencascade.com/doc/occt-7.4.0/refman/html/package_%s.html"
-        % module_name.lower()
-    )
+    minus_module_name = module_name.lower()
+    module_docstring = f"{module_name} module, see official documentation at\n"
+    module_docstring += f"{DOC_URL}/package_{minus_module_name}.html"
     return module_docstring
 
 
@@ -1741,14 +1742,14 @@ def process_function_docstring(f):
             if "defaultValue" in param:
                 parameters_string += ",optional\n"
                 def_value = adapt_default_value(param["defaultValue"])
-                parameters_string += "\tdefault value is %s" % def_value
+                parameters_string += f"\tdefault value is {def_value}"
             parameters_string += "\n"
     # return types:
     returns_string = "Returns\n-------\n"
     method_return_type = adapt_return_type(f["rtnType"])
     if len(ret) >= 1:  # at least on by ref parameter
         for r in ret:
-            returns_string += "%s\n" % r
+            returns_string += f"{r}\n"
     elif method_return_type != "void":
         method_return_type = method_return_type.replace("&", "")
         # ret = ret.replace("virtual", "")
@@ -1756,7 +1757,7 @@ def process_function_docstring(f):
         method_return_type = method_return_type.replace(": static ", "")
         method_return_type = method_return_type.replace("static ", "")
         method_return_type = method_return_type.strip()
-        returns_string += "%s\n" % method_return_type
+        returns_string += f"{method_return_type}\n"
     else:
         returns_string += "None\n"
     # process doxygen strings
@@ -1798,7 +1799,7 @@ def process_function_docstring(f):
         doxygen_string = doxygen_string.strip() + "\n"
     # concatenate everything
     final_string = doxygen_string + parameters_string + "\n" + returns_string
-    string_to_return += '%s") %s;\n' % (final_string, function_name)
+    string_to_return += f'{final_string}") {function_name};\n'
     return string_to_return
 
 
@@ -1812,9 +1813,9 @@ def adapt_default_value(def_value):
     return def_value
 
 
-def adapt_default_value_parmlist(parm):
+def adapt_default_value_parmlist(param):
     """adapts default value to be used in swig parameter list"""
-    def_value = parm["defaultValue"]
+    def_value = param["defaultValue"]
     def_value = def_value.replace(" ", "")
     return def_value
 
@@ -1845,12 +1846,10 @@ def filter_member_functions(
             "".join([method_name, "::", public_method_signature])
             in member_functions_to_exclude
         ):
-            logging.info(
-                "    skipped method %s::%s" % (class_name, public_method_signature)
-            )
+            logging.info(f"    skipped method {class_name}::{public_method_signature}")
             continue
         if class_is_abstract and public_method["constructor"]:
-            logging.info("Constructor skipped for abstract class %s" % class_name)
+            logging.info(f"Constructor skipped for abstract class {class_name}")
             continue
         if method_name == "ShallowCopy":  # specific to 0.17.1 and Mingw
             continue
@@ -1877,8 +1876,12 @@ def adapt_type_for_hint(type_str):
         return "int"
     if "char *" in type_str:
         return "str"
+    if "bool" in type_str:
+        return "bool"
+    if "float" in type_str:
+        return "float"
     if not "_" in type_str:  # TODO these are special cases, e.g. nested classes
-        logging.warning("    [TypeHint] Skipping type %s, should contain _" % type_str)
+        logging.warning(f"    [TypeHint] Skipping type {type_str}, should contain _")
         return False  # returns a boolean to prevent type hint creation, the type will not be found
     # we only keep what is
     for tp in type_str.split(" "):
@@ -1900,7 +1903,7 @@ def adapt_type_for_hint(type_str):
     if type_str.startswith("opencascade::handle<"):
         type_str = type_str[20:].split(">")[0].strip()
     if ":" in type_str:
-        logging.warning("    [TypeHint] Skip type %s, because of trailing :" % type_str)
+        logging.warning(f"    [TypeHint] Skip type {type_str}, because of trailing :")
         return False
     if "_" in type_str and not is_module(type_str.split("_")[0]):
         logging.warning(
@@ -1910,7 +1913,7 @@ def adapt_type_for_hint(type_str):
         return False
     if type_str.count("<") >= 1:  # at least one <, it's a template
         logging.warning(
-            "    [TypeHint] Skipping type %s, seems to be a template" % type_str
+            f"    [TypeHint] Skipping type {type_str}, seems to be a template"
         )
         return False
     return type_str
@@ -2095,14 +2098,14 @@ def process_function(f, overload=False):
                 "Message_ProgressRange" in param_type_2nd_param
             )
 
-        if "Standard_OStream" in "%s" % param_type_1st_param and (
+        if "Standard_OStream" in f"{param_type_1st_param}" and (
             param_type_2nd_param is None or param_type_2nd_is_Message_ProgressRange
         ):
             str_function = TEMPLATE_OSTREAM % (function_name, function_name)
             return str_function, ""
 
         if (
-            ("std::istream &" in "%s" % param_type_1st_param)
+            ("std::istream &" in f"{param_type_1st_param}")
             or ("Standard_IStream" in param_type_1st_param)
         ) and (param_type_2nd_param is None or param_type_2nd_is_Message_ProgressRange):
             return TEMPLATE_ISTREAM % (function_name, function_name), ""
@@ -2111,9 +2114,9 @@ def process_function(f, overload=False):
         str_function = TEMPLATE_DUMPJSON
         return str_function, ""
     # enable autocompactargs feature to enable compilation with swig>3.0.3
-    str_function = "\t\t/****************** %s ******************/\n" % function_name
-    str_function += "\t\t/**** md5 signature: %s ****/\n" % function_signature_md5
-    str_function += '\t\t%%feature("compactdefaultargs") %s;\n' % function_name
+    str_function = f"\t\t/****************** {function_name} ******************/\n"
+    str_function += f"\t\t/**** md5 signature: {function_signature_md5} ****/\n"
+    str_function += f'\t\t%feature("compactdefaultargs") {function_name};\n'
     str_function += process_function_docstring(f)
     str_function += "\t\t"
     # return type
@@ -2130,7 +2133,9 @@ def process_function(f, overload=False):
         return_type = "virtual " + return_type
     if f["static"] and "static" not in return_type:
         return_type = "static " + return_type
-    if f["static"]:
+    if f["static"] and f["parent"] is None:
+        return_type = "static " + return_type
+    if f["static"] and f["parent"] is not None:
         parent_class_name = f["parent"]["name"]
         if parent_class_name == CURRENT_MODULE:
             parent_class_name = parent_class_name.lower()
@@ -2152,7 +2157,7 @@ def process_function(f, overload=False):
         "Standard_Real&",
         "Standard_Boolean&",
     ]:
-        logging.info("    Creating Get and Set methods for method %s" % function_name)
+        logging.info(f"    Creating Get and Set methods for method {function_name}")
         modified_return_type = return_type.split(" ")[0]
         # compute the parameters type and name, separated with comma
         getter_params_type_and_names = []
@@ -2170,11 +2175,11 @@ def process_function(f, overload=False):
             getter_param_hints.append("%s: %s" % (param["name"], type_for_hint))
 
         setter_params_type_and_names = getter_params_type_and_names + [
-            "%s value" % modified_return_type
+            f"{modified_return_type} value"
         ]
         # the setter hint
         hint_output_type = adapt_type_for_hint(modified_return_type)
-        hint_value = ["value: %s" % hint_output_type]
+        hint_value = [f"value: {hint_output_type}"]
         setter_param_hints = getter_param_hints + hint_value
 
         getter_params_type_and_names_str_csv = ",".join(getter_params_type_and_names)
@@ -2207,9 +2212,9 @@ def process_function(f, overload=False):
         # finally returns the method definition and hint
         type_hint_str = getter_hint_str + setter_hint_str
         return str_function, type_hint_str
-    str_function += "%s " % return_type
+    str_function += f"{return_type} "
     # function name
-    str_function += "%s" % function_name
+    str_function += f"{function_name}"
     # process parameters
     parameters_types_and_names = []
     parameters_definition_strs = []
@@ -2246,7 +2251,7 @@ def process_function(f, overload=False):
 
         if "defaultValue" in param:
             def_value = adapt_default_value_parmlist(param)
-            param_string += " = %s" % def_value
+            param_string += f" = {def_value}"
             # we add the default value to the end of the list param_type_and_name
             param_type_and_name.append(def_value)
 
@@ -2280,7 +2285,7 @@ def process_function(f, overload=False):
             if f["static"]:
                 str_typehint += "    @staticmethod\n"
                 all_parameters_type_hint = []  # if static, not self
-            str_typehint += "    def %s(" % function_name
+            str_typehint += f"    def {function_name}("
 
         if parameters_types_and_names:
             for par in parameters_types_and_names:
@@ -2304,15 +2309,15 @@ def process_function(f, overload=False):
                         adapt_type_hint_default_value_success,
                     ) = adapt_type_hint_default_value(par[2])
                     if adapt_type_hint_default_value_success:
-                        par_typ = "Optional[%s] = %s" % (par_typ, hint_def_value)
+                        par_typ = f"Optional[{par_typ}] = {hint_def_value}"
                     else:  # no default value
-                        par_typ = "Optional[%s]" % par_typ
+                        par_typ = f"Optional[{par_typ}]"
                 par_nam, success = adapt_type_hint_parameter_name(par[1])
                 if not success:
                     canceled = True
                 if par_nam.endswith("_list"):  # it's a list
-                    par_typ = "List[%s]" % par_typ
-                all_parameters_type_hint.append("%s: %s" % (par_nam, par_typ))
+                    par_typ = f"List[{par_typ}]"
+                all_parameters_type_hint.append(f"{par_nam}: {par_typ}")
         str_typehint += ", ".join(all_parameters_type_hint)
         if len(types_returned) == 1:
             returned_type_hint = types_returned[0]
@@ -2320,7 +2325,7 @@ def process_function(f, overload=False):
             returned_type_hint = "Tuple[%s]" % (", ".join(types_returned))
         else:
             raise AssertionError("Method should at least have one returned type.")
-        str_typehint += ") -> %s: ...\n" % returned_type_hint
+        str_typehint += f") -> {returned_type_hint}: ...\n"
     else:
         str_typehint = ""
     if canceled:
@@ -2503,8 +2508,7 @@ def build_inheritance_tree(classes_dict):
             class_2_module = upper_class_name_2.split("_")[0]
             if class_1_module == upper_class_name_2 == CURRENT_MODULE:
                 logging.warning(
-                    "This is a special case, where the 2 ancestors belong the same module. Class %s skipped."
-                    % class_name
+                    f"This is a special case, where the 2 ancestors belong the same module. Class {class_name} skipped."
                 )
             if class_1_module == CURRENT_MODULE:
                 inheritance_dict[class_name] = upper_class_name_1
@@ -2519,9 +2523,9 @@ def build_inheritance_tree(classes_dict):
             # prevent multiple inheritance: OCE only has single
             # inheritance
             logging.warning(
-                "Class %s has %i ancestors and is skipped."
-                % (class_name, nbr_upper_classes)
+                f"Class {class_name} has {nbr_upper_classes} ancestors and is skipped."
             )
+
     # then, after that, we process both dictionaries, list so
     # that we reorder class.
     # first, we build something called the inheritance_depth.
@@ -2643,7 +2647,7 @@ def process_hsequence():
     return wrapper_str, pyi_str
 
 
-def process_handles(classes_dict, exclude_classes, exclude_member_functions):
+def process_handles(classes_dict, exclude_classes):
     """Check whether a class has to be wrapped as a handle
     using the wrap_handle swig macro.
     This code is a bit redundant with process_classes, but this step
@@ -2661,16 +2665,16 @@ def process_handles(classes_dict, exclude_classes, exclude_member_functions):
             # we go on with the next one to be processed
             continue
         if check_has_related_handle(class_name) or class_name == "Standard_Transient":
-            wrap_handle_str += "%%wrap_handle(%s)\n" % class_name
+            wrap_handle_str += f"%wrap_handle({class_name})\n"
     for HClassName in ALL_HARRAY1:
         if HClassName.startswith(CURRENT_MODULE + "_"):
-            wrap_handle_str += "%%wrap_handle(%s)\n" % HClassName
+            wrap_handle_str += f"%wrap_handle({HClassName})\n"
     for HClassName in ALL_HARRAY2:
         if HClassName.startswith(CURRENT_MODULE + "_"):
-            wrap_handle_str += "%%wrap_handle(%s)\n" % HClassName
+            wrap_handle_str += f"%wrap_handle({HClassName})\n"
     for HClassName in ALL_HSEQUENCE:
         if HClassName.startswith(CURRENT_MODULE + "_"):
-            wrap_handle_str += "%%wrap_handle(%s)\n" % HClassName
+            wrap_handle_str += f"%wrap_handle({HClassName})\n"
     wrap_handle_str += "/* end handles declaration */\n\n"
     return wrap_handle_str
 
@@ -2703,7 +2707,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         class_name = klass["name"]
         # header
         stars = "".join(["*" for i in range(len(class_name) + 9)])
-        class_def_str += "/%s\n* class %s *\n%s/\n" % (stars, class_name, stars)
+        class_def_str += f"/{stars}\n* class {class_name} *\n{stars}/\n"
         #
         if class_name in exclude_classes:
             # if the class has to be excluded,
@@ -2725,29 +2729,29 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             class_name_for_pyi = class_name_for_pyi.lower()
         # then process the class itself
         if not class_can_have_default_constructor(klass):
-            class_def_str += "%%nodefaultctor %s;\n" % class_name
+            class_def_str += f"%nodefaultctor {class_name};\n"
         if must_ignore_default_destructor(klass):
             # check if the destructor is protected or private
-            class_def_str += "%%ignore %s::~%s();\n" % (class_name, class_name)
+            class_def_str += f"%ignore {class_name}::~{class_name}();\n"
         # then defines the wrapper
-        class_def_str += "class %s" % class_name
-        class_pyi_str += "\nclass %s" % class_name_for_pyi  # type hints
+        class_def_str += f"class {class_name}"
+        class_pyi_str += f"\nclass {class_name_for_pyi}"  # type hints
         # inheritance process
         inherits_from = klass["inherits"]
         if inherits_from:  # at least 1 ancestor
             inheritance_name = inherits_from[0]["class"]
             check_dependency(inheritance_name)
             inheritance_access = inherits_from[0]["access"]
-            class_def_str += " : %s %s" % (inheritance_access, inheritance_name)
+            class_def_str += f" : {inheritance_access} {inheritance_name}"
             class_pyi_str += "("
             if not "::" in inheritance_name and not "<" in inheritance_name:
-                class_pyi_str += "%s" % inheritance_name
+                class_pyi_str += f"{inheritance_name}"
             if len(inherits_from) == 2:  ## 2 ancestors
                 inheritance_name_2 = inherits_from[1]["class"]
                 check_dependency(inheritance_name_2)
                 inheritance_access_2 = inherits_from[1]["access"]
-                class_def_str += ", %s %s" % (inheritance_access_2, inheritance_name_2)
-                class_pyi_str += ", %s" % inheritance_name_2
+                class_def_str += f", {inheritance_access_2} {inheritance_name_2}"
+                class_pyi_str += f", {inheritance_name_2}"
             class_pyi_str += ")"
         class_pyi_str += ":\n"
         class_pyi_str += "    pass\n"  # TODO CHANGE
@@ -2772,9 +2776,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             # or Graphic3d_TransformPers
             if "anon" in nested_class_name:
                 continue
-            logging.info(
-                "    Wrap nested class %s::%s" % (class_name, nested_class_name)
-            )
+            logging.info(f"    Wrap nested class {class_name}::{nested_class_name}")
             class_def_str += "\t\tclass " + nested_class_name + " {};\n"
         ####### class enums
         if class_enums_list:
@@ -2828,7 +2830,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # to create python classes that inherit from OCE ones!
         if class_name in ["TopoDS_Shape", "TopoDS_Vertex"]:
             class_def_str += '\t\t%feature("autodoc", "1");\n'
-            class_def_str += "\t\t%s(const %s arg0);\n" % (class_name, class_name)
+            class_def_str += f"\t\t{class_name}(const {class_name} arg0);\n"
         methods_to_process = filter_member_functions(
             class_name,
             class_public_methods,
@@ -2929,7 +2931,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         class_def_str += "\n"
         if check_has_related_handle(class_name) or class_name == "Standard_Transient":
             # Extend class by GetHandle method
-            class_def_str += "%%make_alias(%s)\n\n" % class_name
+            class_def_str += f"%make_alias({class_name})\n\n"
 
         # We add pickling for TopoDS_Shapes
         if class_name == "TopoDS_Shape":
@@ -2947,7 +2949,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # >>> print(box)
         # <OCC.TopoDS.TopoDS_Shape; proxy of <Swig Object of type 'TopoDS_Shape *' at 0x02
         # BCF770> >
-        class_def_str += "%%extend %s {\n" % class_name
+        class_def_str += f"%extend {class_name} " + "{\n"
         class_def_str += "\t%" + "pythoncode {\n"
         class_def_str += "\t__repr__ = _dumps_object\n"
         # we process methods that are excluded from the wrapper
@@ -2956,7 +2958,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         for excluded_method_name in members_functions_to_exclude:
             if excluded_method_name != "Handle" and not "::" in excluded_method_name:
                 class_def_str += "\n\t@methodnotwrapped\n"
-                class_def_str += "\tdef %s(self):\n\t\tpass\n" % excluded_method_name
+                class_def_str += f"\tdef {excluded_method_name}(self):\n\t\tpass\n"
         class_def_str += "\t}\n};\n\n"
         # increment global number of classes
         NB_TOTAL_CLASSES += 1
@@ -2969,9 +2971,9 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         class_def_str += "%pythoncode {\n"
         for excluded_class in exclude_classes:
             class_def_str += "@classnotwrapped\n"
-            class_def_str += "class %s:\n\tpass\n\n" % excluded_class
+            class_def_str += f"class {excluded_class}:\n\tpass\n\n"
             class_pyi_str += "\n#classnotwrapped\n"
-            class_pyi_str += "class %s: ...\n" % excluded_class
+            class_pyi_str += f"class {excluded_class}: ...\n"
         class_def_str += "}\n"
         class_def_str += "/* end python proxy for excluded classes */\n"
     return class_def_str, class_pyi_str
@@ -3000,8 +3002,8 @@ def parse_module(module_name):
     SWIG files. This parser returns :
     module_enums, module_typedefs, module_classes
     """
-    module_headers = glob.glob("%s/%s_*.hxx" % (OCE_INCLUDE_DIR, module_name))
-    module_headers += glob.glob("%s/%s.hxx" % (OCE_INCLUDE_DIR, module_name))
+    module_headers = glob.glob(f"{OCE_INCLUDE_DIR}/{module_name}_*.hxx")
+    module_headers += glob.glob(f"{OCE_INCLUDE_DIR}/{module_name}.hxx")
     # filter those headers
     module_headers = filter_header_list(module_headers, HXX_TO_EXCLUDE_FROM_CPPPARSER)
     cpp_headers = map(parse_header, module_headers)
@@ -3040,7 +3042,7 @@ class ModuleWrapper:
         else:
             PYTHON_MODULE_DEPENDENCY = []
 
-        logging.info("## Processing module %s" % module_name)
+        logging.info(f"## Processing module {module_name}")
         self._module_name = module_name
         self._module_docstring = get_module_docstring(module_name)
         # parse
@@ -3048,9 +3050,7 @@ class ModuleWrapper:
         # enums
         self._enums_str, self._enums_pyi_str = process_enums(enums)
         # handles
-        self._wrap_handle_str = process_handles(
-            classes, exclude_classes, exclude_member_functions
-        )
+        self._wrap_handle_str = process_handles(classes, exclude_classes)
         # templates and typedefs
         (
             self._typedefs_str,
@@ -3116,15 +3116,26 @@ class ModuleWrapper:
                 "OccHandle",
             ]
             for include in includes:
-                swig_interface_file.write("%%include ../common/%s.i\n" % include)
+                swig_interface_file.write(f"%include ../common/{include}.i\n")
             swig_interface_file.write("\n\n")
             # Here we write required dependencies, headers, as well as
             # other swig interface files
             swig_interface_file.write("%{\n")
-            if (
-                self._module_name == "Adaptor3d"
-            ):  # occt bug in headr file, won't compile otherwise
-                swig_interface_file.write("#include<Adaptor2d_HCurve2d.hxx>\n")
+            ## modifiers for occt762
+            if self._module_name in ["Blend", "BlendFunc", "Contap"]:
+                swig_interface_file.write("#include<Adaptor2d_Curve2d.hxx>\n")
+            if self._module_name == "BRepAdaptor":
+                swig_interface_file.write(
+                    "#include<Adaptor2d_Curve2d.hxx>\n#include<Adaptor2d_OffsetCurve.hxx>\n"
+                )
+            if self._module_name == "HLRTopoBRep":
+                swig_interface_file.write(
+                    "#include<BRepAdaptor_Curve2d.hxx>\n#include<Adaptor2d_Curve2d.hxx>\n"
+                )
+            if self._module_name == "BRepTopAdaptor":
+                swig_interface_file.write("#include<BRepAdaptor_Curve2d.hxx>\n")
+            if self._module_name == "Aspect":
+                swig_interface_file.write("#include<Standard_Atomic.hxx>\n")
             if self._module_name == "AdvApp2Var":  # windows compilation issues
                 swig_interface_file.write(
                     "#if defined(_WIN32)\n#include <windows.h>\n#endif\n"
@@ -3169,14 +3180,14 @@ class ModuleWrapper:
             swig_interface_file.write("\n//Dependencies\n")
             # Include all dependencies
             for dep in PYTHON_MODULE_DEPENDENCY:
-                swig_interface_file.write("#include<%s_module.hxx>\n" % dep)
+                swig_interface_file.write(f"#include<{dep}_module.hxx>\n")
             for add_dep in self._additional_dependencies:
-                swig_interface_file.write("#include<%s_module.hxx>\n" % add_dep)
+                swig_interface_file.write(f"#include<{add_dep}_module.hxx>\n")
 
             swig_interface_file.write("%};\n")
             for dep in PYTHON_MODULE_DEPENDENCY:
                 if is_module(dep):
-                    swig_interface_file.write("%%import %s.i\n" % dep)
+                    swig_interface_file.write(f"%import {dep}.i\n")
             #
             # The Exceptions and decorator
             #
@@ -3233,7 +3244,7 @@ class ModuleWrapper:
         # pyi_stub_file.write("from OCC.Core.%s import *\n" % CURRENT_MODULE)
         for dep in PYTHON_MODULE_DEPENDENCY:
             if is_module(dep):
-                pyi_stub_file.write("from OCC.Core.%s import *\n" % dep)
+                pyi_stub_file.write(f"from OCC.Core.{dep} import *\n")
         # we create NewTypes for some typedef which are just aliases. For instance, Prs3d_Presentation
         # type is not defined in Python, whereas it's just an alias for Graphic3d_Structure. Then we define
         # Prs3d_Presentation = NewType("Prs3d_Presentation", Graphic3d_Structure)
@@ -3259,7 +3270,6 @@ def process_module(module_name):
                 modules_exclude_member_functions = module[3]
             else:
                 modules_exclude_member_functions = {}
-            # print("Next to be processed : %s " % module_name)
             ModuleWrapper(
                 module_name,
                 module_additionnal_dependencies,
@@ -3267,7 +3277,7 @@ def process_module(module_name):
                 modules_exclude_member_functions,
             )
     if not module_exist:
-        raise NameError("Module %s not defined" % module_name)
+        raise NameError(f"Module {module_name} not defined")
 
 
 def process_toolkit(toolkit_name):
@@ -3275,7 +3285,7 @@ def process_toolkit(toolkit_name):
     For instance : TKernel, TKMath etc.
     """
     modules_list = TOOLKITS[toolkit_name]
-    logging.info("Processing toolkit %s ===" % toolkit_name)
+    logging.info(f"Processing toolkit {toolkit_name} ===")
     for module in sorted(modules_list):
         process_module(module)
 
@@ -3312,5 +3322,5 @@ if __name__ == "__main__":
     total_time = end_time - start_time
     # footer
     logging.info(get_log_footer(total_time))
-    logging.info("Number of classes: %i" % NB_TOTAL_CLASSES)
-    logging.info("Number of methods: %i" % NB_TOTAL_METHODS)
+    logging.info(f"Number of classes: {NB_TOTAL_CLASSES}")
+    logging.info(f"Number of methods: {NB_TOTAL_METHODS}")
