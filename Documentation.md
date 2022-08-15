@@ -253,6 +253,6 @@ The 'IsConvex' method of the math_NewtonMinimum class is excluded from the wrapp
 
 Some other important tips.
 
-# 3. Making your own wrapper
+# 3. Misc
 
-This section describes how to upgrade the wrapper for an oce version change.
+Source code is formatted with black (https://black.readthedocs.io/) using default settings.
