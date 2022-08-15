@@ -1,5 +1,3 @@
-[![Travis Badge](https://travis-ci.org/tpaviot/pythonocc-generator.svg?branch=master)](https://travis-ci.org/tpaviot/pythonocc-generator)
-
 pythonocc-generator
 -------------------
 
@@ -31,7 +29,7 @@ How to use ?
 
 Install required dependencies (cppheaderparsr, ply):
 
-    $ pip install - requirements.txt
+    $ pip install -r requirements.txt
 
 Edit/Modify the wrapper-generator.conf file then
 
@@ -40,10 +38,7 @@ Edit/Modify the wrapper-generator.conf file then
 
 Requirements
 ------------
-The current developments target opencascade 7.4.0 (http://dev.opencascade.org), source can be downloaded at https://github.com/tpaviot/oce/releases/tag/official-upstream-packages.
-
-All .i SWIG files are created and copied to the generated_swig_files path
-defined in the wrapper-generator.conf
+The current developments target opencascade 7.6.2 (http://dev.opencascade.org).
 
 
 License
