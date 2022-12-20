@@ -1,3 +1,5 @@
+[![Build Status](https://dev.azure.com/tpaviot/pythonocc-generator/_apis/build/status/tpaviot.pythonocc-generator?branchName=review%2Fazure)](https://dev.azure.com/tpaviot/pythonocc-generator/_build/latest?definitionId=11&branchName=review%2Fazure)
+
 pythonocc-generator
 -------------------
 

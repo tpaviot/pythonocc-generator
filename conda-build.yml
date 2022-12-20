@@ -1,0 +1,49 @@
+parameters:
+  name: 'Conda build job'
+  vmImage: 'Ubuntu-18.04'
+  py_maj: '3'
+  py_min: '6'
+  conda_bld: '3.16.3'
+
+jobs:
+- job: ${{ parameters.name }}
+  timeoutInMinutes: 360
+  
+  pool:
+    vmImage: ${{ parameters.vmImage }}
+    
+  steps: 
+  # - bash: |
+  #       wget 'https://git.dev.opencascade.org/gitweb/?p=occt.git;a=snapshot;h=185d29b92f6764ffa9fc195b7dbe7bba3c4ac855;sf=tgz' -O occt-770.tar.gz && \
+  #       tar -zxvf occt-770.tar.gz
+  #   displayName: 'Download and extract source occt-7.7.0'
+  #activate conda
+  - ${{ if or(contains(parameters.vmImage, 'macOS'),contains(parameters.vmImage, 'Ubuntu')) }}:
+    - bash: echo "##vso[task.prependpath]$CONDA/bin"
+      displayName: 'Add conda to PATH'
+  - ${{ if contains(parameters.vmImage, 'win') }}:
+    - powershell: Write-Host "##vso[task.prependpath]$env:CONDA\Scripts"
+      displayName: 'Add conda to PATH'
+
+  - bash: |
+        conda config --set always_yes yes --set changeps1 no && \
+        conda create --yes --name pythonoccgen python=${{ parameters.py_maj }}.${{ parameters.py_min }} && \
+        conda info -a && \
+        source activate pythonoccgen && \
+        conda install -c conda-forge occt=7.7.0 pip && \
+        pip install -r requirements.txt && \
+        conda list
+    displayName: 'Install dependencies from conda-forge'
+
+  - bash: |
+        mkdir -p pythonocc-core/src/SWIG_files/wrapper && \
+        mkdir -p pythonocc-core/src/SWIG_files/headers && \
+        mkdir -p pythonocc-core/src/SWIG_files/common
+    displayName: 'Create a fake pythonocc-core file structure'
+
+  - bash: |
+        pwd && \
+        cd src && \
+        source activate pythonoccgen && \
+        python generate_wrapper.py
+    displayName: 'Run pythonocc-generator'
