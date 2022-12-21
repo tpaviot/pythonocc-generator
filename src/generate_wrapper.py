@@ -27,7 +27,9 @@ from operator import itemgetter
 import os
 import os.path
 import platform
+import random
 import re
+import string
 import subprocess
 import sys
 import time
@@ -1950,10 +1952,15 @@ def adapt_type_hint_parameter_name(param_name_str):
     if keyword.iskeyword(param_name_str):
         new_param_name = param_name_str + "_"
         success = True
-    elif param_name_str == "":
-        new_param_name = "x"  # give a fake name
-        success = True
-    elif param_name_str == "&":
+    elif param_name_str in ["", "&"]:
+        # some parameter names maybe missing
+        # for example
+        # Standard_EXPORT static int mma1her_(const integer *  ,
+        #            doublereal * ,
+        #            integer *   );
+        logging.warning(
+            f"    [TypeHint] param name missing or '&', skip method type hint"
+        )
         new_param_name = ""
         success = False
     else:  # default
