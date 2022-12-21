@@ -1880,6 +1880,20 @@ def adapt_type_for_hint(type_str):
         return "bool"
     if "float" in type_str:
         return "float"
+    if "integer *" in type_str:
+        return "int"
+    if "doublereal" in type_str:
+        return "float"
+    if "int" == type_str:
+        return "int"
+    if type_str == "int *":
+        return "int"
+    if type_str == "double":
+        return "float"
+    if type_str == "const double":
+        return "float"
+    if type_str == "double *":
+        return "float"
     if not "_" in type_str:  # TODO these are special cases, e.g. nested classes
         logging.warning(f"    [TypeHint] Skipping type {type_str}, should contain _")
         return False  # returns a boolean to prevent type hint creation, the type will not be found
@@ -1967,7 +1981,7 @@ def adapt_type_hint_default_value(default_value_str):
         new_default_value_str = "False"
         success = True
     elif "Precision::" in default_value_str:
-        new_default_value_str = default_value_str.replace("Precision::", "precision_")
+        new_default_value_str = default_value_str.replace("Precision::", "Precision.")
         success = True
     elif default_value_str == "NULL":
         new_default_value_str = "None"
