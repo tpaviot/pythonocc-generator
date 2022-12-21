@@ -27,9 +27,7 @@ from operator import itemgetter
 import os
 import os.path
 import platform
-import random
 import re
-import string
 import subprocess
 import sys
 import time
@@ -800,9 +798,9 @@ def get_log_header():
     if os.path.isfile(standard_version_header):
         with open(standard_version_header, "r") as f:
             file_lines = f.readlines()
-        for l in file_lines:
-            if l.startswith("#define OCC_VERSION_COMPLETE"):
-                occ_version = l.split('"')[1].strip()
+        for file_line in file_lines:
+            if file_line.startswith("#define OCC_VERSION_COMPLETE"):
+                occ_version = file_line.split('"')[1].strip()
     timestamp = TIMESTAMP_TEMPLATE % (generator_git_revision, os_name, occ_version, now)
     return timestamp
 
@@ -852,13 +850,13 @@ def filter_header_list(header_list, exclusion_list):
     # remove platform dependent files
     # this is done to have the same SWIG files on every platform
     # wnt specific
-    header_list = [x for x in header_list if not "WNT" in x.lower()]
-    header_list = [x for x in header_list if not "wnt" in x.lower()]
+    header_list = [x for x in header_list if "WNT" not in x.lower()]
+    header_list = [x for x in header_list if "wnt" not in x.lower()]
     # linux
-    header_list = [x for x in header_list if not "X11" in x]
-    header_list = [x for x in header_list if not "XWD" in x]
+    header_list = [x for x in header_list if "X11" not in x]
+    header_list = [x for x in header_list if "XWD" not in x]
     # and osx
-    header_list = [x for x in header_list if not "Cocoa" in x]
+    header_list = [x for x in header_list if "Cocoa" not in x]
     return header_list
 
 
@@ -1107,7 +1105,7 @@ def process_templates_from_typedefs(list_of_typedefs):
                     wrap_template = False
             # sometimes the template name is weird (parenthesis, comma etc.)
             # don't consider this
-            if not "_" in template_name:
+            if "_" not in template_name:
                 wrap_template = False
                 logging.warning(
                     "Template: "
@@ -1177,7 +1175,7 @@ def process_templates_from_typedefs(list_of_typedefs):
         ):  # it's a lst iterator, we use another way to wrap the template
             # #%template(TopTools_ListIteratorOfListOfShape) NCollection_TListIterator<TopTools_ListOfShape>;
             if "IteratorOf" in template_name:
-                if not "::handle" in template_type:
+                if "::handle" not in template_type:
                     typ = (template_type.split("<")[1]).split(">")[0]
                 else:
                     h_typ = (template_type.split("<")[2]).split(">")[0]
@@ -1423,7 +1421,7 @@ def process_enums(enums_list):
             python_proxy = False
         else:
             enum_name = enum["name"]
-            if not enum_name in ALL_ENUMS:
+            if enum_name not in ALL_ENUMS:
                 ALL_ENUMS.append(enum_name)
 
         if enum_name in ENUMS_TO_EXLUDE:
@@ -1520,17 +1518,17 @@ def adapt_param_type_and_name(param_type_and_name):
         or ("Quantity_Length &" in param_type_and_name)
         or ("V3d_Coordinate &" in param_type_and_name)
         or (param_type_and_name.startswith("double &"))
-    ) and not "const" in param_type_and_name:
+    ) and "const" not in param_type_and_name:
         adapted_param_type_and_name = "Standard_Real &OutValue"
     elif (
         ("Standard_Integer &" in param_type_and_name)
         or (param_type_and_name.startswith("int &"))
-    ) and not "const" in param_type_and_name:
+    ) and "const" not in param_type_and_name:
         adapted_param_type_and_name = "Standard_Integer &OutValue"
     elif (
         ("Standard_Boolean &" in param_type_and_name)
         or (param_type_and_name.startswith("bool &"))
-    ) and not "const" in param_type_and_name:
+    ) and "const" not in param_type_and_name:
         adapted_param_type_and_name = "Standard_Boolean &OutValue"
     # some enums can also be passed as reference, among them
     # we look for getenirc patterns such as
@@ -1541,7 +1539,7 @@ def adapt_param_type_and_name(param_type_and_name):
         param_type_and_name.split()[1].startswith("&")
     ):
         enum_name = param_type_and_name.split()[0]
-        if not enum_name in ALL_BYREF_ENUMS:
+        if enum_name not in ALL_BYREF_ENUMS:
             ALL_BYREF_ENUMS.append(enum_name)
         logging.info(
             f"Enum passed by reference: {param_type_and_name} changed to {enum_name} &OutValue"
@@ -1659,7 +1657,7 @@ def adapt_return_type(return_type):
     # opencascade::handle may contain extra spaces, that has to be removed
     if "opencascade::handle" in return_type:
         return_type = return_type.replace(" >", ">")
-    if (("gp" in return_type) and not "TColgp" in return_type) or (
+    if (("gp" in return_type) and "TColgp" not in return_type) or (
         "TopoDS" in return_type
     ):
         return_type = return_type.replace("&", "").strip()
@@ -1886,7 +1884,7 @@ def adapt_type_for_hint(type_str):
         return "int"
     if "doublereal" in type_str:
         return "float"
-    if "int" == type_str:
+    if type_str == "int":
         return "int"
     if type_str == "int *":
         return "int"
@@ -1896,7 +1894,7 @@ def adapt_type_for_hint(type_str):
         return "float"
     if type_str == "double *":
         return "float"
-    if not "_" in type_str:  # TODO these are special cases, e.g. nested classes
+    if "_" not in type_str:  # TODO these are special cases, e.g. nested classes
         logging.warning(f"    [TypeHint] Skipping type {type_str}, should contain _")
         return False  # returns a boolean to prevent type hint creation, the type will not be found
     # we only keep what is
@@ -2107,7 +2105,7 @@ def process_function(f, overload=False):
     # or the second parameter is a Message_ProgressIndicator with a default value
     #
     number_of_parameters = len(f["parameters"])
-    if number_of_parameters == 1 or number_of_parameters == 2:
+    if number_of_parameters in (1, 2):
         first_parameter = f["parameters"][0]
         param_type_1st_param = first_parameter["type"]
 
@@ -2160,7 +2158,7 @@ def process_function(f, overload=False):
         parent_class_name = f["parent"]["name"]
         if parent_class_name == CURRENT_MODULE:
             parent_class_name = parent_class_name.lower()
-        if not "<" in parent_class_name:
+        if "<" not in parent_class_name:
             CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES += "%s_%s = %s.%s\n" % (
                 parent_class_name,
                 function_name,
@@ -2585,7 +2583,7 @@ def build_inheritance_tree(classes_dict):
             if upper_class_name in ALL_STANDARD_TRANSIENTS:
                 # this class inherits from a Standard_Transient base class
                 # so we add it to the ALL_STANDARD_TRANSIENTS list:
-                if not klass in ALL_STANDARD_TRANSIENTS:
+                if klass not in ALL_STANDARD_TRANSIENTS:
                     ALL_STANDARD_TRANSIENTS.append(class_name)
     return class_list
 
@@ -2765,7 +2763,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             inheritance_access = inherits_from[0]["access"]
             class_def_str += f" : {inheritance_access} {inheritance_name}"
             class_pyi_str += "("
-            if not "::" in inheritance_name and not "<" in inheritance_name:
+            if "::" not in inheritance_name and "<" not in inheritance_name:
                 class_pyi_str += f"{inheritance_name}"
             if len(inherits_from) == 2:  ## 2 ancestors
                 inheritance_name_2 = inherits_from[1]["class"]
