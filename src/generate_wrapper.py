@@ -2087,7 +2087,7 @@ def process_function(f, overload=False):
     if "operator" in function_name:
         operand = function_name.split("operator ")[1].strip()
         # if not allowed, just skip it
-        if not operand in operator_wrapper:
+        if operand not in operator_wrapper:
             return "", ""
         ##############################################
         # Cases where the method is actually wrapped #
@@ -2975,7 +2975,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # they used to be skipped, but it's better to explicitly
         # raise a MethodNotWrappedError exception
         for excluded_method_name in members_functions_to_exclude:
-            if excluded_method_name != "Handle" and not "::" in excluded_method_name:
+            if excluded_method_name != "Handle" and "::" not in excluded_method_name:
                 class_def_str += "\n\t@methodnotwrapped\n"
                 class_def_str += f"\tdef {excluded_method_name}(self):\n\t\tpass\n"
         class_def_str += "\t}\n};\n\n"
