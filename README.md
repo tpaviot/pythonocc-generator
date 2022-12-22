@@ -1,4 +1,5 @@
 [![Build Status](https://dev.azure.com/tpaviot/pythonocc-generator/_apis/build/status/tpaviot.pythonocc-generator?branchName=review%2Fazure)](https://dev.azure.com/tpaviot/pythonocc-generator/_build/latest?definitionId=11&branchName=review%2Fazure)
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/512945885d214293995c482e31efd0d7)](https://www.codacy.com/gh/tpaviot/pythonocc-generator/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=tpaviot/pythonocc-generator&amp;utm_campaign=Badge_Grade)
 
 pythonocc-generator
 -------------------
@@ -8,12 +9,10 @@ features. It is intended to developers who aim at developing
 CAD/PDM/PLM applications.
 
 pythonocc is built using SWIG (http://www.swig.org) ,
-Simple Wrapper Interface Generator, from a set of '.i' SWIG files.
+Simple Wrapper Interface Generator, from a set of interface SWIG files.
 
 pythonocc-generator is the pythonocc subproject dedicated to automatic
-SWIG '.i' files generation from OCE or opencascade C++ header files. It relies on a 
-fork of CppHeaderParser (https://github.com/robotpy/robotpy-cppheaderparser)
-to parse hxx headers and perform code generation.
+SWIG interface files generation from Opencascade C++ header files. It relies on CppHeaderParser (https://github.com/robotpy/robotpy-cppheaderparser) to parse hxx headers and perform code generation.
 
 How to create a local copy of the repository?
 ---------------------------------------------
@@ -40,7 +39,7 @@ Edit/Modify the wrapper-generator.conf file then
 
 Requirements
 ------------
-The current developments target opencascade 7.6.2 (http://dev.opencascade.org).
+The current developments target opencascade 7.7.0 (http://dev.opencascade.org).
 
 
 License
