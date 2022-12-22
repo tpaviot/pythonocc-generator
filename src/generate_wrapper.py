@@ -2911,7 +2911,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
                     };
             """
             class_pyi_str += "    @staticmethod\n"
-            class_pyi_str += "    def WriteToString(Sh: TopoDS_Shape) -> str: ...\n"
+            class_pyi_str += "    def WriteToString(sh: TopoDS_Shape) -> str: ...\n"
             class_pyi_str += "    @staticmethod\n"
             class_pyi_str += "    def ReadFromString(s: str) -> TopoDS_Shape: ...\n"
             global CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES
@@ -2956,12 +2956,12 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         if class_name == "TopoDS_Shape":
             class_def_str += "%extend TopoDS_Shape {\n%pythoncode {\n"
             class_def_str += "\tdef __getstate__(self):\n"
-            class_def_str += "\t\tfrom .BRepTools import breptools_WriteToString\n"
-            class_def_str += "\t\tstr_shape = breptools_WriteToString(self, True)\n"
+            class_def_str += "\t\tfrom .BRepTools import breptools\n"
+            class_def_str += "\t\tstr_shape = breptools.WriteToString(self, True)\n"
             class_def_str += "\t\treturn str_shape\n"
             class_def_str += "\tdef __setstate__(self, state):\n"
-            class_def_str += "\t\tfrom .BRepTools import breptools_ReadFromString\n"
-            class_def_str += "\t\tthe_shape = breptools_ReadFromString(state)\n"
+            class_def_str += "\t\tfrom .BRepTools import breptools\n"
+            class_def_str += "\t\tthe_shape = breptools.ReadFromString(state)\n"
             class_def_str += "\t\tself.this = the_shape.this\n"
             class_def_str += "\t}\n};\n"
         # for each class, overload the __repr__ method to avoid things like:
