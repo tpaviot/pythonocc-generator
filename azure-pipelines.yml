@@ -1,0 +1,35 @@
+# see https://docs.microsoft.com/en-us/azure/devops/pipelines/agents/hosted?view=azure-devops
+# to check available agents
+trigger:
+- master
+- review/*
+
+schedules:
+- cron: "0 0 * * *"
+  displayName: Daily midnight build
+  branches:
+    include:
+    - master
+  always: true
+
+jobs:
+- template: conda-build.yml
+  parameters:
+    name: Ubuntu_22_04_python39
+    vmImage: 'ubuntu-22.04'
+    py_maj: 3
+    py_min: 9
+
+# - template:  conda-build.yml
+#   parameters:
+#     name: macOS_11_python39
+#     vmImage: 'macOS-11'
+#     py_maj: 3
+#     py_min: 9
+
+# - template:  conda-build.yml
+#   parameters:
+#     name: Windows_VS2022_python39
+#     vmImage: 'windows-2022'
+#     py_maj: 3
+#     py_min: 9
