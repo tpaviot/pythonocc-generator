@@ -296,6 +296,9 @@ TOOLKIT_DataExchange = {
         "TransferBRep",
         "MoniTool",
         "StepData",
+        "HeaderSection",
+        "RWHeaderSection",
+        "APIHeaderSection",
     ],
     "TKXmlXCAF": [
         "XmlMXCAFDoc",
@@ -2713,6 +2716,7 @@ OCE_MODULES = [
         [],
         {"IGESToBRep_TopoSurface": ["TransferPlaneSurface"]},
     ),
+    # TKXSBase
     ("Interface", ["TopoDS"], []),
     (
         "IFSelect",
@@ -2734,6 +2738,9 @@ OCE_MODULES = [
         {"TransferBRep": ["BRepCheck"]},
     ),  # Fixes undefined ref
     ("MoniTool", [], []),
+    ("HeaderSection", ["MoniTool", "TopoDS", "Message", "Resource"], []),
+    ("RWHeaderSection", ["MoniTool", "TopoDS", "Message", "Resource"], []),
+    ("APIHeaderSection", ["MoniTool", "TopoDS", "Message", "Resource"], []),
     ### TKVRML
     (
         "Vrml",
