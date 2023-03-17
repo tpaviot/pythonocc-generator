@@ -1482,6 +1482,8 @@ def adapt_param_type(param_type):
     param_type = param_type.strip()
     param_type = param_type.replace("Standard_CString", "const char *")
     param_type = param_type.replace("DrawType", "NIS_Drawer::DrawType")
+    if param_type == "const TCollection_AsciiString &":
+        param_type = "TCollection_AsciiString"
     # some enums are type defs and not properly handled by swig
     # these are Standard_Integer
     for pattern in STANDARD_INTEGER_TYPEDEF:
@@ -1530,6 +1532,12 @@ def adapt_param_type_and_name(param_type_and_name):
         or (param_type_and_name.startswith("bool &"))
     ) and "const" not in param_type_and_name:
         adapted_param_type_and_name = "Standard_Boolean &OutValue"
+    elif (
+        "opencascade::handle<TCollection_HAsciiString> &" in param_type_and_name
+    ) and "const" not in param_type_and_name:
+        adapted_param_type_and_name = (
+            "opencascade::handle<TCollection_HAsciiString> &OutValue"
+        )
     # some enums can also be passed as reference, among them
     # we look for getenirc patterns such as
     # TopAbs_Orientation &Or
@@ -1730,6 +1738,9 @@ def process_function_docstring(f):
             # same for the const
             param_type = param_type.replace("const", "")
             param_type = param_type.strip()
+            # a TCollection_AsciiString expects a str
+            if param_type == "TCollection_AsciiString":
+                param_type = "str"
             # check the &OutValue
             the_type_and_name = param["type"] + param["name"]
             if "OutValue" in adapt_param_type_and_name(the_type_and_name):
@@ -1894,6 +1905,8 @@ def adapt_type_for_hint(type_str):
         return "float"
     if type_str == "double *":
         return "float"
+    if type_str == "opencascade::handle<TCollection_HAsciiString> &OutValue":
+        return "str"
     if "_" not in type_str:  # TODO these are special cases, e.g. nested classes
         logging.warning(f"    [TypeHint] Skipping type {type_str}, should contain _")
         return False  # returns a boolean to prevent type hint creation, the type will not be found
@@ -1930,6 +1943,10 @@ def adapt_type_for_hint(type_str):
             f"    [TypeHint] Skipping type {type_str}, seems to be a template"
         )
         return False
+
+    if type_str == "TCollection_AsciiString":
+        type_str = "str"
+
     return type_str
 
 
