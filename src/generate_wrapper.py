@@ -1480,10 +1480,14 @@ def is_return_type_enum(return_type):
 
 def adapt_param_type(param_type):
     param_type = param_type.strip()
-    param_type = param_type.replace("Standard_CString", "const char *")
+    if "CString" in param_type:
+        param_type = param_type.replace("const Standard_CString", "Standard_CString")
+        param_type = param_type.replace("Standard_CString &", "Standard_CString")
     param_type = param_type.replace("DrawType", "NIS_Drawer::DrawType")
     if param_type == "const TCollection_AsciiString &":
         param_type = "TCollection_AsciiString"
+    if param_type == "const TCollection_ExtendedString &":
+        param_type = "TCollection_ExtendedString"
     # some enums are type defs and not properly handled by swig
     # these are Standard_Integer
     for pattern in STANDARD_INTEGER_TYPEDEF:
@@ -1653,7 +1657,8 @@ def adapt_return_type(return_type):
         return_type = return_type.replace(replace, "")
     return_type = return_type.strip()
     # replace Standard_CString with char *
-    return_type = return_type.replace("Standard_CString", "const char *")
+    return_type = return_type.replace("const Standard_CString", "Standard_CString")
+    return_type = return_type.replace("Standard_CString &", "Standard_CString")
     # remove const if const virtual double *
     return_type = return_type.replace(": static", "static")
     return_type = return_type.replace(": const", "const")
@@ -1678,8 +1683,6 @@ def adapt_return_type(return_type):
 
 
 def test_adapt_return_type():
-    adapted_1 = adapt_return_type("Standard_CString")
-    assert adapted_1 == "const char *"
     adapted_2 = adapt_return_type("gp_Dir &")
     assert adapted_2 == "gp_Dir"
 
@@ -1739,7 +1742,7 @@ def process_function_docstring(f):
             param_type = param_type.replace("const", "")
             param_type = param_type.strip()
             # a TCollection_AsciiString expects a str
-            if param_type == "TCollection_AsciiString":
+            if param_type in ["TCollection_AsciiString", "TCollection_ExtendedString"]:
                 param_type = "str"
             # check the &OutValue
             the_type_and_name = param["type"] + param["name"]
@@ -1885,7 +1888,7 @@ def adapt_type_for_hint(type_str):
         return "None"
     if " int" in type_str:  # const int, unsigned int etc.
         return "int"
-    if "char *" in type_str:
+    if "char *" in type_str or "CString" in type_str:
         return "str"
     if "bool" in type_str:
         return "bool"
@@ -1944,7 +1947,7 @@ def adapt_type_for_hint(type_str):
         )
         return False
 
-    if type_str == "TCollection_AsciiString":
+    if type_str in ["TCollection_AsciiString", "TCollection_ExtendedString"]:
         type_str = "str"
 
     return type_str
@@ -2610,6 +2613,7 @@ def fix_type(type_str):
     type_str = type_str.replace("Standard_Boolean", "bool")
     type_str = type_str.replace("Standard_Real", "float")
     type_str = type_str.replace("Standard_Integer", "int")
+    type_str = type_str.replace("Standard_CString", "str")
     type_str = type_str.replace("const", "")
     type_str = type_str.replace("& &", "&")
     return type_str

@@ -3059,7 +3059,7 @@ OCE_MODULES = [
     ("XmlMDataStd", ["Resource"], []),
     ("XmlMDocStd", ["Resource"], []),
     ("XmlMFunction", ["Resource"], []),
-    ("XmlObjMgt", [], []),
+    ("XmlObjMgt", [], [], {"XmlObjMgt": ["GetInteger"]}),
     ### TKXmlTObj
     ("XmlTObjDrivers", ["Resource", "PCDM", "CDF"], []),
     ### TKXmlXCAF
