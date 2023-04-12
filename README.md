@@ -4,15 +4,11 @@
 pythonocc-generator
 -------------------
 
-pythonocc is a python library whose purpose is to provide 3D modeling
-features. It is intended to developers who aim at developing
-CAD/PDM/PLM applications.
+pythonocc-generator is a subproject of pythonocc, a Python library designed for 3D modeling features. pythonocc is aimed at developers who are developing CAD/PDM/PLM applications.
 
-pythonocc is built using SWIG (http://www.swig.org) ,
-Simple Wrapper Interface Generator, from a set of interface SWIG files.
+pythonocc-generator is specifically focused on automatic SWIG (Simple Wrapper Interface Generator) interface file generation from OpenCascade C++ header files. It utilizes CppHeaderParser (https://github.com/robotpy/robotpy-cppheaderparser) to parse .hxx headers and perform code generation.
 
-pythonocc-generator is the pythonocc subproject dedicated to automatic
-SWIG interface files generation from Opencascade C++ header files. It relies on CppHeaderParser (https://github.com/robotpy/robotpy-cppheaderparser) to parse hxx headers and perform code generation.
+To use pythonocc-generator, you will need to have OpenCascade C++ library installed, as it relies on its header files for interface generation. You can find more information about pythonocc at (http://github.com/tpaviot/pythonocc-core).
 
 How to create a local copy of the repository?
 ---------------------------------------------
@@ -40,7 +36,6 @@ Edit/Modify the wrapper-generator.conf file then
 Requirements
 ------------
 The current developments target opencascade 7.7.0 (http://dev.opencascade.org).
-
 
 License
 -------
