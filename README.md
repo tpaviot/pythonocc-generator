@@ -1,4 +1,4 @@
-[![Build Status](https://dev.azure.com/tpaviot/pythonocc-generator/_apis/build/status/tpaviot.pythonocc-generator?branchName=review%2Fazure)](https://dev.azure.com/tpaviot/pythonocc-generator/_build/latest?definitionId=11&branchName=review%2Fazure)
+[![Build Status](https://dev.azure.com/tpaviot/pythonocc-generator/_apis/build/status/tpaviot.pythonocc-generator?branchName=master)](https://dev.azure.com/tpaviot/pythonocc-generator/_build/latest?definitionId=11)
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/512945885d214293995c482e31efd0d7)](https://www.codacy.com/gh/tpaviot/pythonocc-generator/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=tpaviot/pythonocc-generator&amp;utm_campaign=Badge_Grade)
 
 pythonocc-generator
