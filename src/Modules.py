@@ -755,9 +755,11 @@ OCE_MODULES = [
             "Adaptor2d",
             "TopLoc",
             "Message",
+            "TShort"
         ],
         ["BRepExtrema_OverlapTool"],
-        {"BRepExtrema_SelfIntersection": ["OverlapTriangles"]},
+        {"BRepExtrema_SelfIntersection": ["OverlapTriangles"],
+         "BRepExtrema_ProximityDistTool": ["LoadAdditionalPointsFirstSet"]},
     ),
     (
         "BRepClass",

@@ -162,6 +162,7 @@ HXX_TO_EXCLUDE_FROM_CPPPARSER = [
     "BRepMesh_UVParamRangeSplitter.hxx",
     "AdvApp2Var_Data_f2c.hxx",
     "Convert_CosAndSinEvalFunction.hxx",  # strange, a method in a typedef, confusing
+    "BRepExtrema_ProximityValueTool.hxx" # occt-771, file cannot be parsed
 ]
 
 # some includes fail at being compiled
