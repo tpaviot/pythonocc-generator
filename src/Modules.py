@@ -755,11 +755,13 @@ OCE_MODULES = [
             "Adaptor2d",
             "TopLoc",
             "Message",
-            "TShort"
+            "TShort",
         ],
         ["BRepExtrema_OverlapTool"],
-        {"BRepExtrema_SelfIntersection": ["OverlapTriangles"],
-         "BRepExtrema_ProximityDistTool": ["LoadAdditionalPointsFirstSet"]},
+        {
+            "BRepExtrema_SelfIntersection": ["OverlapTriangles"],
+            "BRepExtrema_ProximityDistTool": ["LoadAdditionalPointsFirstSet"],
+        },
     ),
     (
         "BRepClass",
@@ -1960,6 +1962,7 @@ OCE_MODULES = [
             "BRepAdaptor",
             "Adaptor3d",
             "StdSelect",
+            "AIS",
         ],
         [
             "Select3D_SensitiveTriangulation",
@@ -2066,6 +2069,7 @@ OCE_MODULES = [
                 "CreateFiller"
             ],  # circular import with StdSelect
             "SelectMgr_ViewerSelector3d": ["ToPixMap"],
+            "SelectMgr_EntityOwner": ["Select"],  # circular import with StdSelect
         },
     ),  # circular import with StdSelect
     (
@@ -2158,6 +2162,7 @@ OCE_MODULES = [
             "Graphic3d",
             "Geom",
             "Aspect",
+            "AIS",
         ],
         [],
     ),
@@ -2727,7 +2732,20 @@ OCE_MODULES = [
     # TKIGES
     (
         "IGESData",
-        ["MoniTool", "TopoDS"],
+        [
+            "MoniTool",
+            "TopoDS",
+            "Poly",
+            "BRep",
+            "TopTools",
+            "TShort",
+            "TColGeom",
+            "ShapeExtend",
+            "Geom",
+            "Geom2d",
+            "Bnd",
+            "BRepTools",
+        ],
         [],
         {"IGESData_IGESWriter": ["Send"], "IGESData_ParamReader": ["ReadEntity"]},
     ),
@@ -2744,12 +2762,29 @@ OCE_MODULES = [
             "MoniTool",
             "TColGeom",
             "ShapeExtend",
+            "BRepTools",
+            "BRep",
+            "Bnd",
+            "TShort",
+            "BRepTools",
+            "Poly",
         ],
         [],
     ),
     (
         "IGESToBRep",
-        ["TColGeom", "TopTools", "MoniTool"],
+        [
+            "TColGeom",
+            "TopTools",
+            "MoniTool",
+            "BRep",
+            "TShort",
+            "Poly",
+            "Bnd",
+            "BRep",
+            "Poly",
+            "BRepTools",
+        ],
         [],
         {"IGESToBRep_TopoSurface": ["TransferPlaneSurface"]},
     ),
@@ -3261,6 +3296,12 @@ OCE_MODULES = [
             "TColGeom",
             "MoniTool",
             "IGESToBRep",
+            "BRep",
+            "TShort",
+            "Poly",
+            "Bnd",
+            "BRep",
+            "BRepTools",
         ],
         [],
     ),
