@@ -126,8 +126,6 @@ if not os.path.isdir(SWIG_OUTPUT_PATH):
 # the following var is set when the module
 # is created
 CURRENT_MODULE = None
-CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES = ""
-
 PYTHON_MODULE_DEPENDENCY = []
 HEADER_DEPENDENCY = []
 
@@ -162,7 +160,7 @@ HXX_TO_EXCLUDE_FROM_CPPPARSER = [
     "BRepMesh_UVParamRangeSplitter.hxx",
     "AdvApp2Var_Data_f2c.hxx",
     "Convert_CosAndSinEvalFunction.hxx",  # strange, a method in a typedef, confusing
-    "BRepExtrema_ProximityValueTool.hxx" # occt-771, file cannot be parsed
+    "BRepExtrema_ProximityValueTool.hxx",  # occt-771, file cannot be parsed
 ]
 
 # some includes fail at being compiled
@@ -776,6 +774,20 @@ WIN_PRAGMAS = """
 # Template for byref enum #
 ###########################
 BYREF_ENUM_TEMPLATE = "ENUM_OUTPUT_TYPEMAPS(%s);\n"
+
+########################
+# Since the move up to swig-4.1.1, statuc functions are not
+# renamed anymore to free function
+# for example, with 4.0.2
+# it is possible to use either
+# XCAFDoc_DocumentTool_ColorTool
+# or
+# XCAFDoc_DocumentTool.ColorTool
+# in swig-4.1.1, only the later is possible
+# for backward compatibility,
+# XCAFDoc_DocumentTool_ColorTool is marked as deprecated
+# and cool the XCAFDoc_DocumentTool.ColorTool method
+DEPRECATED_STATIC_FUNCTIONS = []
 
 
 def get_log_header():
@@ -1528,6 +1540,11 @@ def adapt_param_type_and_name(param_type_and_name):
     ) and "const" not in param_type_and_name:
         adapted_param_type_and_name = "Standard_Real &OutValue"
     elif (
+        ("Standard_ShortReal &" in param_type_and_name)
+        or (param_type_and_name.startswith("float &"))
+    ) and "const" not in param_type_and_name:
+        adapted_param_type_and_name = "Standard_ShortReal &OutValue"
+    elif (
         ("Standard_Integer &" in param_type_and_name)
         or (param_type_and_name.startswith("int &"))
     ) and "const" not in param_type_and_name:
@@ -1938,8 +1955,8 @@ def adapt_type_for_hint(type_str):
         return False
     if "_" in type_str and not is_module(type_str.split("_")[0]):
         logging.warning(
-            "    [TypeHint] Skipping unknown type, %s not in module list"
-            % type_str.split("_")[0]
+            "    [TypeHint] Skipping unknown type %s, %s not in module list"
+            % (type_str, type_str.split("_")[0])
         )
         return False
     if type_str.count("<") >= 1:  # at least one <, it's a template
@@ -2179,13 +2196,8 @@ def process_function(f, overload=False):
         parent_class_name = f["parent"]["name"]
         if parent_class_name == CURRENT_MODULE:
             parent_class_name = parent_class_name.lower()
-        if "<" not in parent_class_name:
-            CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES += "%s_%s = %s.%s\n" % (
-                parent_class_name,
-                function_name,
-                parent_class_name,
-                function_name,
-            )
+    else:
+        parent_class_name = None
     # Case where primitive values are accessed by reference
     # one method Get* that returns the object
     # one method Set* that sets the object
@@ -2325,6 +2337,14 @@ def process_function(f, overload=False):
             if f["static"]:
                 str_typehint += "    @staticmethod\n"
                 all_parameters_type_hint = []  # if static, not self
+                if (
+                    parent_class_name is not None
+                    and "<" not in parent_class_name
+                    and function_name.isalnum()
+                ):
+                    DEPRECATED_STATIC_FUNCTIONS.append(
+                        (parent_class_name, function_name)
+                    )
             str_typehint += f"    def {function_name}("
 
         if parameters_types_and_names:
@@ -2613,6 +2633,7 @@ def fix_type(type_str):
     type_str = type_str.replace("Standard_Boolean &", "bool")
     type_str = type_str.replace("Standard_Boolean", "bool")
     type_str = type_str.replace("Standard_Real", "float")
+    type_str = type_str.replace("Standard_ShortReal", "float")
     type_str = type_str.replace("Standard_Integer", "int")
     type_str = type_str.replace("Standard_CString", "str")
     type_str = type_str.replace("const", "")
@@ -2936,14 +2957,6 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             class_pyi_str += "    def WriteToString(sh: TopoDS_Shape) -> str: ...\n"
             class_pyi_str += "    @staticmethod\n"
             class_pyi_str += "    def ReadFromString(s: str) -> TopoDS_Shape: ...\n"
-            global CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES
-            CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES += (
-                "breptools_WriteToString = breptools.WriteToString\n"
-            )
-            CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES += (
-                "breptools_ReadFromString = breptools.ReadFromString\n"
-            )
-
         # a special wrapper template for TDF_Label
         # We add a special method for recovering label names
         if class_name == "TDF_Label":
@@ -3020,6 +3033,19 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
     return class_def_str, class_pyi_str
 
 
+def process_deprecated(list_of_classes_methods):
+    """takes a list of tuples"""
+    if not list_of_classes_methods:  # empty list
+        return ""
+    str_to_return = "/* deprecated methods */\n%pythoncode {\n"
+    for class_name, method_name in list_of_classes_methods:
+        str_to_return += "@deprecated\n"
+        str_to_return += f"def {class_name}_{method_name}(*args):\n"
+        str_to_return += f"\treturn {class_name}.{method_name}(*args)\n\n"
+    str_to_return += "}\n"
+    return str_to_return
+
+
 def is_module(module_name):
     """Checks if the name passed as a parameter is
     (or is not) a module that aims at being wrapped.
@@ -3073,9 +3099,10 @@ class ModuleWrapper:
         exclude_member_functions,
     ):
         # Reinit global variables
-        global CURRENT_MODULE, CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES, PYTHON_MODULE_DEPENDENCY
+        global CURRENT_MODULE, PYTHON_MODULE_DEPENDENCY, DEPRECATED_STATIC_FUNCTIONS
         CURRENT_MODULE = module_name
-        CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES = ""
+        DEPRECATED_STATIC_FUNCTIONS = []
+        # CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES = ""
         # all modules depend, by default, upon Standard, NCollection and others
         if module_name not in ["Standard", "NCollection"]:
             PYTHON_MODULE_DEPENDENCY = ["Standard", "NCollection"]
@@ -3121,6 +3148,12 @@ class ModuleWrapper:
         )
         # other dependencies
         self._additional_dependencies = additional_dependencies + HEADER_DEPENDENCY
+
+        # deprecated static functions after move to swig-4.1.1
+        self._deprecated_swig_static_functions_str = process_deprecated(
+            DEPRECATED_STATIC_FUNCTIONS
+        )
+
         # generate swig file
         self.generate_SWIG_files()
 
@@ -3259,6 +3292,8 @@ class ModuleWrapper:
             swig_interface_file.write(self._classes_str)
             # write classes aliases
             swig_interface_file.write(self._typedef_aliases_str)
+            # write deprecated functions
+            swig_interface_file.write(self._deprecated_swig_static_functions_str)
             # write free_functions definition
             # TODO: we should write free functions here,
             # but it sometimes fail to compile
@@ -3272,6 +3307,7 @@ class ModuleWrapper:
             for enum_name in ALL_BYREF_ENUMS:
                 enum_template_interface_file.write(BYREF_ENUM_TEMPLATE % enum_name)
             enum_template_interface_file.close()
+
         #
         # write pyi stub file
         #
@@ -3295,7 +3331,6 @@ class ModuleWrapper:
         # then write classes and methods
         pyi_stub_file.write(self._classes_pyi_str)
         # and we finally write the aliases for static methods
-        pyi_stub_file.write(CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES)
         pyi_stub_file.close()
 
 
