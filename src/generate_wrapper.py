@@ -98,7 +98,7 @@ ALL_TOOLKITS = [
 ]
 TOOLKITS = {}
 for tk in ALL_TOOLKITS:
-    TOOLKITS.update(tk)
+    TOOLKITS |= tk
 
 LICENSE_HEADER = """/*
 Copyright 2008-2022 Thomas Paviot (tpaviot@gmail.com)
@@ -794,9 +794,7 @@ def get_log_header():
     """returns a header to be appended to the SWIG file
     Useful for development
     """
-    os_name = (
-        platform.system() + " " + platform.architecture()[0] + " " + platform.release()
-    )
+    os_name = f"{platform.system()} {platform.architecture()[0]} {platform.release()}"
     generator_git_revision = (
         subprocess.check_output(["git", "rev-parse", "--short", "HEAD"])
         .strip()
@@ -814,19 +812,17 @@ def get_log_header():
         for file_line in file_lines:
             if file_line.startswith("#define OCC_VERSION_COMPLETE"):
                 occ_version = file_line.split('"')[1].strip()
-    timestamp = TIMESTAMP_TEMPLATE % (generator_git_revision, os_name, occ_version, now)
-    return timestamp
+    return TIMESTAMP_TEMPLATE % (generator_git_revision, os_name, occ_version, now)
 
 
 def get_log_footer(total_time):
-    footer = """
+    return """
 #################################################
 SWIG interface file generation completed in {:.2f}s
 #################################################
 """.format(
         total_time
     )
-    return footer
 
 
 def reset_header_depency():
@@ -838,19 +834,19 @@ def check_is_persistent(class_name):
     """
     Checks, whether a class belongs to the persistent classes (and not to the transient ones)
     """
-    for occ_module in [
-        "PFunction",
-        "PDataStd",
-        "PPrsStd",
-        "PDF",
-        "PDocStd",
-        "PDataXtd",
-        "PNaming",
-        "PCDM_Document",
-    ]:
-        if class_name.startswith(occ_module):
-            return True
-    return False
+    return any(
+        class_name.startswith(occ_module)
+        for occ_module in [
+            "PFunction",
+            "PDataStd",
+            "PPrsStd",
+            "PDF",
+            "PDocStd",
+            "PDataXtd",
+            "PNaming",
+            "PCDM_Document",
+        ]
+    )
 
 
 def filter_header_list(header_list, exclusion_list):
@@ -888,11 +884,7 @@ def case_sensitive_glob(wildcard):
     """
     flist = glob.glob(wildcard)
     pattern = wildcard.split("*")[0]
-    f = []
-    for file_ in flist:
-        if pattern in file_:
-            f.append(file_)
-    return f
+    return [file_ for file_ in flist if pattern in file_]
 
 
 def get_all_module_headers(module_name):
@@ -900,10 +892,7 @@ def get_all_module_headers(module_name):
     mh = case_sensitive_glob(os.path.join(OCE_INCLUDE_DIR, f"{module_name}.hxx"))
     mh += case_sensitive_glob(os.path.join(OCE_INCLUDE_DIR, f"{module_name}_*.hxx"))
     mh = filter_header_list(mh, HXX_TO_EXCLUDE_FROM_BEING_INCLUDED)
-    headers_list = list(map(os.path.basename, mh))
-    # sort alphabetical order
-    headers_list.sort()
-    return headers_list
+    return sorted(map(os.path.basename, mh))
 
 
 def test_get_all_module_headers():
@@ -959,45 +948,38 @@ def adapt_header_file(header_content):
 
     # search for STANDARD_HANDLE
     outer = re.compile("DEFINE_STANDARD_HANDLE[\\s]*\\([\\w\\s]+\\,+[\\w\\s]+\\)")
-    matches = outer.findall(header_content)
-    if matches:
+    if matches := outer.findall(header_content):
         for match in matches:
             ALL_STANDARD_HANDLES.append(match.split("(")[1].split(",")[0])
     # Search for RTTIEXT
     outer = re.compile("DEFINE_STANDARD_RTTIEXT[\\s]*\\([\\w\\s]+\\,+[\\w\\s]+\\)")
     matches = outer.findall(header_content)
-    if matches:
-        for match in matches:
-            pass
     # Search for HARRAY1
     outer = re.compile("DEFINE_HARRAY1[\\s]*\\([\\w\\s]+\\,+[\\w\\s]+\\)")
-    matches = outer.findall(header_content)
-    if matches:
+    if matches := outer.findall(header_content):
         for match in matches:
             # @TODO find inheritance name
             typename = match.split("(")[1].split(",")[0]
             base_typename = match.split(",")[1].split(")")[0]
-            logging.info("Found HARRAY1 definition" + typename + ":" + base_typename)
+            logging.info(f"Found HARRAY1 definition{typename}:{base_typename}")
             ALL_HARRAY1[typename] = base_typename.strip()
     # Search for HARRAY2
     outer = re.compile("DEFINE_HARRAY2[\\s]*\\([\\w\\s]+\\,+[\\w\\s]+\\)")
-    matches = outer.findall(header_content)
-    if matches:
+    if matches := outer.findall(header_content):
         for match in matches:
             # @TODO find inheritance name
             typename = match.split("(")[1].split(",")[0]
             base_typename = match.split(",")[1].split(")")[0]
-            logging.info("Found HARRAY2 definition" + typename + ":" + base_typename)
+            logging.info(f"Found HARRAY2 definition{typename}:{base_typename}")
             ALL_HARRAY2[typename] = base_typename.strip()
     # Search for HSEQUENCE
     outer = re.compile("DEFINE_HSEQUENCE[\\s]*\\([\\w\\s]+\\,+[\\w\\s]+\\)")
-    matches = outer.findall(header_content)
-    if matches:
+    if matches := outer.findall(header_content):
         for match in matches:
             # @TODO find inheritance name
             typename = match.split("(")[1].split(",")[0]
             base_typename = match.split(",")[1].split(")")[0]
-            logging.info("Found HSEQUENCE definition" + typename + ":" + base_typename)
+            logging.info(f"Found HSEQUENCE definition{typename}:{base_typename}")
             ALL_HSEQUENCE[typename] = base_typename.strip()
     # skip some defines that prevent header parsing
     header_content = header_content.replace(
@@ -1031,8 +1013,7 @@ def adapt_header_file(header_content):
     # then we look for Handle(Something) use
     # and replace with opencascade::handle<Something>
     outer = re.compile("Handle[\\s]*\\([\\w\\s]*\\)")
-    matches = outer.findall(header_content)
-    if matches:
+    if matches := outer.findall(header_content):
         for match in matches:
             # matches are of the form :
             # ['Handle(Graphic3d_Structure)',
@@ -1111,19 +1092,16 @@ def process_templates_from_typedefs(list_of_typedefs):
         if not (
             template_type.endswith("::Iterator") or template_type.endswith("::Type")
         ):  # it's not an iterator
-            # check that there's no forbidden template
-            wrap_template = True
-            for forbidden_template in TEMPLATES_TO_EXCLUDE:
-                if forbidden_template in template_type:
-                    wrap_template = False
+            wrap_template = all(
+                forbidden_template not in template_type
+                for forbidden_template in TEMPLATES_TO_EXCLUDE
+            )
             # sometimes the template name is weird (parenthesis, comma etc.)
             # don't consider this
             if "_" not in template_name:
                 wrap_template = False
                 logging.warning(
-                    "Template: "
-                    + template_name
-                    + "skipped because name doesn't contain _."
+                    f"Template: {template_name}skipped because name doesn't contain _."
                 )
             if wrap_template:
                 wrapper_str += f"%template({template_name}) {template_type};\n"
@@ -1229,10 +1207,7 @@ def adapt_type_for_hint_typedef(typedef_type_str):
 def str_in(list_of_patterns, a_string):
     """a utility function that returns True if any of the item
     of the list patterns is in the a_string"""
-    for patt in list_of_patterns:
-        if patt in a_string:
-            return True
-    return False
+    return any(patt in a_string for patt in list_of_patterns)
 
 
 def process_typedefs(typedefs_dict):
@@ -1258,9 +1233,7 @@ def process_typedefs(typedefs_dict):
             elif template_type.count("<") == 1:
                 h_typ = (template_type.split("<")[1]).split(">")[0]
             else:
-                logging.warning(
-                    "This template type cannot be handled: " + template_type
-                )
+                logging.warning(f"This template type cannot be handled: {template_type}")
                 continue
             module = h_typ.split("_")[0]
             if module != CURRENT_MODULE:
@@ -1268,9 +1241,7 @@ def process_typedefs(typedefs_dict):
                 if (module not in PYTHON_MODULE_DEPENDENCY) and (is_module(module)):
                     PYTHON_MODULE_DEPENDENCY.append(module)
 
-    sorted_list_of_typedefs = list(filtered_typedef_dict.keys())
-    sorted_list_of_typedefs.sort()
-
+    sorted_list_of_typedefs = sorted(filtered_typedef_dict.keys())
     for typedef_value in sorted_list_of_typedefs:
         # some occttype defs are actually templated classes,
         # for instance
@@ -1316,7 +1287,7 @@ def process_typedefs(typedefs_dict):
             "NCollection_Sequence",
         ]
         if (
-            all([match not in type_to_define for match in match_1])
+            all(match not in type_to_define for match in match_1)
             and type_to_define is not None
         ):
             type_to_define = adapt_type_for_hint_typedef(type_to_define)
@@ -1368,13 +1339,10 @@ def adapt_enum_value(enum_value):
     The values (unsigned int )(1 << int(Graphic3d_TextureUnit_BaseColor)) cannot be processed as is by SWIG.
     We transform them to Graphic3d_TextureUnit_BaseColor
     """
-    if isinstance(enum_value, int):
+    if isinstance(enum_value, int) or "int (" not in enum_value:
         return enum_value
-    elif "int (" in enum_value:
-        to_return = enum_value.split("int ( ")[1].split(")")[0].strip()
-        return to_return
-    else:  # do nothing
-        return enum_value
+    else:
+        return enum_value.split("int ( ")[1].split(")")[0].strip()
 
 
 def process_enums(enums_list):
@@ -1416,9 +1384,9 @@ def process_enums(enums_list):
     """
     enum_str = "/* public enums */\n"
 
-    enum_python_proxies = "/* python proxy classes for enums */\n"
-    enum_python_proxies += "%pythoncode {\n"
-
+    enum_python_proxies = (
+        "/* python proxy classes for enums */\n" + "%pythoncode {\n"
+    )
     enum_pyi_str = ""
     # loop over enums
     for enum in enums_list:
@@ -1485,10 +1453,7 @@ def is_return_type_enum(return_type):
     BRepCheck_Status &
     BRepCheck_Status
     """
-    for r in return_type.split():
-        if r in ALL_ENUMS:
-            return True
-    return False
+    return any(r in ALL_ENUMS for r in return_type.split())
 
 
 def adapt_param_type(param_type):
@@ -1767,10 +1732,10 @@ def process_function_docstring(f):
             if "OutValue" in adapt_param_type_and_name(the_type_and_name):
                 # this parameter has to be added to the
                 # returns, not the parameters of the python method
-                ret.append("%s: %s" % (param["name"], param_type))
+                ret.append(f'{param["name"]}: {param_type}')
                 continue
             # add the parameter to the list
-            parameters_string += "%s: %s" % (param["name"], param_type)
+            parameters_string += f'{param["name"]}: {param_type}'
             if "defaultValue" in param:
                 parameters_string += ",optional\n"
                 def_value = adapt_default_value(param["defaultValue"])
@@ -1779,7 +1744,7 @@ def process_function_docstring(f):
     # return types:
     returns_string = "Returns\n-------\n"
     method_return_type = adapt_return_type(f["rtnType"])
-    if len(ret) >= 1:  # at least on by ref parameter
+    if ret:  # at least on by ref parameter
         for r in ret:
             returns_string += f"{r}\n"
     elif method_return_type != "void":
@@ -1826,7 +1791,7 @@ def process_function_docstring(f):
 
         doxygen_string = doxygen_string.capitalize()
         if not doxygen_string.endswith("."):
-            doxygen_string = doxygen_string + "."
+            doxygen_string = f"{doxygen_string}."
         # then remove spaces from start and end
         doxygen_string = doxygen_string.strip() + "\n"
     # concatenate everything
@@ -1848,8 +1813,7 @@ def adapt_default_value(def_value):
 def adapt_default_value_parmlist(param):
     """adapts default value to be used in swig parameter list"""
     def_value = param["defaultValue"]
-    def_value = def_value.replace(" ", "")
-    return def_value
+    return def_value.replace(" ", "")
 
 
 def test_adapt_default_value():
@@ -1955,8 +1919,7 @@ def adapt_type_for_hint(type_str):
         return False
     if "_" in type_str and not is_module(type_str.split("_")[0]):
         logging.warning(
-            "    [TypeHint] Skipping unknown type %s, %s not in module list"
-            % (type_str, type_str.split("_")[0])
+            f'    [TypeHint] Skipping unknown type {type_str}, {type_str.split("_")[0]} not in module list'
         )
         return False
     if type_str.count("<") >= 1:  # at least one <, it's a template
@@ -1986,7 +1949,7 @@ def adapt_type_hint_parameter_name(param_name_str):
     for instance with, False etc.
     Returns the modified name, and whether to take it into account"""
     if keyword.iskeyword(param_name_str):
-        new_param_name = param_name_str + "_"
+        new_param_name = f"{param_name_str}_"
         success = True
     elif param_name_str in ["", "&"]:
         # some parameter names maybe missing
@@ -1995,7 +1958,7 @@ def adapt_type_hint_parameter_name(param_name_str):
         #            doublereal * ,
         #            integer *   );
         logging.warning(
-            f"    [TypeHint] param name missing or '&', skip method type hint"
+            "    [TypeHint] param name missing or '&', skip method type hint"
         )
         new_param_name = ""
         success = False
@@ -2008,7 +1971,7 @@ def adapt_type_hint_parameter_name(param_name_str):
         if param_name == "":
             success = False
         else:
-            new_param_name = param_name + "_list"
+            new_param_name = f"{param_name}_list"
             success = True
     return new_param_name, success
 
@@ -2019,16 +1982,12 @@ def adapt_type_hint_default_value(default_value_str):
     """
     if default_value_str == "Standard_True":
         new_default_value_str = "True"
-        success = True
     elif default_value_str == "Standard_False":
         new_default_value_str = "False"
-        success = True
     elif "Precision::" in default_value_str:
         new_default_value_str = default_value_str.replace("Precision::", "Precision.")
-        success = True
     elif default_value_str == "NULL":
         new_default_value_str = "None"
-        success = True
     elif "opencascade::handle" in default_value_str:
         # case opencascade::handle<Message_ProgressIndicator>()
         # should be Message_ProgressIndicator()
@@ -2039,7 +1998,6 @@ def adapt_type_hint_default_value(default_value_str):
             new_default_value_str = "'Message_ProgressIndicator()'"
         else:
             new_default_value_str = classname + default_value_str.split(">")[1]
-        success = True
     elif default_value_str.endswith(
         "f"
     ):  # some float values are defined as 0.0f or 0.1f
@@ -2049,18 +2007,12 @@ def adapt_type_hint_default_value(default_value_str):
             is_float = True
         except ValueError:
             is_float = False
-        if is_float:
-            new_default_value_str = str_removed_final_f
-            success = True
-        else:
-            new_default_value_str = default_value_str
-            success = True
+        new_default_value_str = str_removed_final_f if is_float else default_value_str
     elif default_value_str == "0L":
         new_default_value_str = "0"
-        success = True
     else:
         new_default_value_str = default_value_str
-        success = True
+    success = True
     return new_default_value_str, success
 
 

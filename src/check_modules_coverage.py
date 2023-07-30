@@ -12,14 +12,13 @@ occt_toolkits = glob.glob(os.path.join(occt_src_dir, "TK*"))
 # for each toolit, we parse the occt source file structure
 t = {}
 for occt_tk in occt_toolkits:
-    f = open(os.path.join(occt_tk, "PACKAGES"), "r")
-    d = f.read().splitlines()
-    f.close()
+    with open(os.path.join(occt_tk, "PACKAGES"), "r") as f:
+        d = f.read().splitlines()
     toolkit_name = os.path.basename(occt_tk)
     t[toolkit_name] = d
 
 # build the flattened list of opencascade modules
-occt_modules = list(itertools.chain(*[modlist for modlist in t.values()]))
+occt_modules = list(itertools.chain(*list(t.values())))
 
 ALL_TOOLKITS = [
     TOOLKIT_Foundation,
@@ -31,12 +30,11 @@ ALL_TOOLKITS = [
 ]
 TOOLKITS = {}
 for tk in ALL_TOOLKITS:
-    TOOLKITS.update(tk)
+    TOOLKITS |= tk
 
 # compare the two dictionnaries
-for tk_name in t:
+for tk_name, modules in t.items():
     if tk_name in TOOLKITS:
-        modules = t[tk_name]
         other_modules = TOOLKITS[tk_name]
         # check that modules are wrapped
         for m in modules:
@@ -51,5 +49,5 @@ for tk_name in t:
     if tk_name in TOOLKITS:
         modules = t[tk_name]
         for m in modules:
-            if not m in occt_modules:
+            if m not in occt_modules:
                 print("pythonocc module ", m, "not part of opencascade")
