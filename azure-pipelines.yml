@@ -19,17 +19,3 @@ jobs:
     vmImage: 'ubuntu-22.04'
     py_maj: 3
     py_min: 9
-
-# - template:  conda-build.yml
-#   parameters:
-#     name: macOS_11_python39
-#     vmImage: 'macOS-11'
-#     py_maj: 3
-#     py_min: 9
-
-# - template:  conda-build.yml
-#   parameters:
-#     name: Windows_VS2022_python39
-#     vmImage: 'windows-2022'
-#     py_maj: 3
-#     py_min: 9
