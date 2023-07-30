@@ -15,7 +15,19 @@ schedules:
 jobs:
 - template: conda-build.yml
   parameters:
+    name: Ubuntu_22_04_python38
+    vmImage: 'ubuntu-22.04'
+    py_maj: 3
+    py_min: 8
+- template: conda-build.yml
+  parameters:
     name: Ubuntu_22_04_python39
     vmImage: 'ubuntu-22.04'
     py_maj: 3
     py_min: 9
+- template: conda-build.yml
+  parameters:
+    name: Ubuntu_22_04_python310
+    vmImage: 'ubuntu-22.04'
+    py_maj: 3
+    py_min: 10
