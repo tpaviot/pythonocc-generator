@@ -3140,6 +3140,7 @@ class ModuleWrapper:
                 "EnumTemplates",
                 "Operators",
                 "OccHandle",
+                "IOStream"
             ]
             for include in includes:
                 swig_interface_file.write(f"%include ../common/{include}.i\n")
