@@ -1233,7 +1233,9 @@ def process_typedefs(typedefs_dict):
             elif template_type.count("<") == 1:
                 h_typ = (template_type.split("<")[1]).split(">")[0]
             else:
-                logging.warning(f"This template type cannot be handled: {template_type}")
+                logging.warning(
+                    f"This template type cannot be handled: {template_type}"
+                )
                 continue
             module = h_typ.split("_")[0]
             if module != CURRENT_MODULE:
@@ -1382,11 +1384,27 @@ def process_enums(enums_list):
 
     Note: this only makes sense for named enums
     """
+    # first sort the enum list in alphanbetical sort
+    # the enum list is actually a list of dicts which looks like:
+    # [{'name': 'BOPAlgo_CheckStatus', 'namespace': '',
+    #   'typedef': False, 'isclass': False,
+    #   'values': [{'name': 'BOPAlgo_CheckUnknown', 'value': 0}, {'name': 'BOPAlgo_BadType', 'value': 1},
+    enum_names = {}
+    for i, enum in enumerate(enums_list):
+        if "name" in enum:
+            enum_names[enum["name"]] = i
+        else:
+            enum_names[""] = i
+    sorted_enums_list = []
+    for name in sorted(enum_names.keys()):
+        index = enum_names[name]
+        sorted_enums_list.append(enums_list[index])
+    enums_list = sorted_enums_list
+
+    # done, enum lists in alphabetical sort
     enum_str = "/* public enums */\n"
 
-    enum_python_proxies = (
-        "/* python proxy classes for enums */\n" + "%pythoncode {\n"
-    )
+    enum_python_proxies = "/* python proxy classes for enums */\n" + "%pythoncode {\n"
     enum_pyi_str = ""
     # loop over enums
     for enum in enums_list:
@@ -3140,7 +3158,7 @@ class ModuleWrapper:
                 "EnumTemplates",
                 "Operators",
                 "OccHandle",
-                "IOStream"
+                "IOStream",
             ]
             for include in includes:
                 swig_interface_file.write(f"%include ../common/{include}.i\n")
