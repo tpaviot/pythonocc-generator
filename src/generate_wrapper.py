@@ -715,13 +715,25 @@ TEMPLATE_ISTREAM = """
 """
 
 TEMPLATE_DUMPJSON = """
-            %feature("autodoc", "1");
-            %extend{
-                std::string DumpJsonToString(int depth=-1) {
-                std::stringstream s;
-                self->DumpJson(s, depth);
-                return s.str();}
-            };
+        /****************** DumpJsonToString ******************/
+        %feature("autodoc", "Json string serializer.");
+        %extend{
+            std::string DumpJsonToString(int depth=-1) {
+            std::stringstream s;
+            self->DumpJson(s, depth);
+            return "{" + s.str() + "}" ;}
+        };
+"""
+
+TEMPLATE_INITFROMJSON = """
+        /****************** InitFromJsonString ******************/
+        %feature("autodoc", "1");
+        %extend{
+            bool InitFromJsonString(std::string src) {
+            std::stringstream s(src);
+            Standard_Integer pos=1;
+            return self->InitFromJson(s, pos);}
+        };
 """
 
 TEMPLATE_GETTER_SETTER = """
@@ -2140,6 +2152,11 @@ def process_function(f, overload=False):
     if function_name == "DumpJson":
         str_function = TEMPLATE_DUMPJSON
         return str_function, ""
+
+    if function_name == "InitFromJson":
+        str_function = TEMPLATE_INITFROMJSON
+        return str_function, ""
+
     # enable autocompactargs feature to enable compilation with swig>3.0.3
     str_function = f"\t\t/****************** {function_name} ******************/\n"
     str_function += f"\t\t/**** md5 signature: {function_signature_md5} ****/\n"
@@ -3157,8 +3174,7 @@ class ModuleWrapper:
                 "FunctionTransformers",
                 "EnumTemplates",
                 "Operators",
-                "OccHandle",
-                "IOStream",
+                "OccHandle"
             ]
             for include in includes:
                 swig_interface_file.write(f"%include ../common/{include}.i\n")
