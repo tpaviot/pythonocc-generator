@@ -554,7 +554,6 @@ class $NCollection_Array1_Template_Instanciation:
 """
 )
 
-
 NCOLLECTION_LIST_EXTEND_TEMPLATE = Template(
     """
 %extend $NCollection_List_Template_Instanciation {
@@ -768,9 +767,9 @@ TEMPLATE_INITFROMJSON = """
         /****************** InitFromJsonString ******************/
         %feature("autodoc", "1");
         %extend{
-            bool InitFromJsonString(std::string src) {
-            std::stringstream s(src);
-            Standard_Integer pos=1;
+            bool InitFromJsonString(std::string json_string) {
+            std::stringstream s(json_string);
+            Standard_Integer pos=2;
             return self->InitFromJson(s, pos);}
         };
 """
@@ -822,6 +821,50 @@ WIN_PRAGMAS = """
 %}
 
 """
+
+GETSTATE_TEMPLATE = Template(
+    """
+%extend $CLASSNAME {
+%pythoncode {
+    def __getstate__(self):
+        return self.DumpJsonToString()
+    }
+};
+"""
+)
+
+
+SETSTATE_TEMPLATE = Template(
+    """
+%extend $CLASSNAME {
+%pythoncode {
+    def __setstate__(self, state):
+        inst = $CLASSNAME()
+        if inst.InitFromJsonString(state):
+            self.this = inst.this
+        else:
+            raise IOError('Failed to set state of $CLASSNAME')
+    }
+};
+"""
+)
+
+TOPODS_SHAPE_PICKLE_TEMPLATE = Template(
+    """
+%extend TopoDS_Shape {
+%pythoncode {
+    def __getstate__(self):
+        from .BRepTools import breptools
+        str_shape = breptools.WriteToString(self, True)
+        return str_shape
+    def __setstate__(self, state):
+        from .BRepTools import breptools
+        the_shape = breptools.ReadFromString(state)
+        self.this = the_shape.this
+    }
+};
+"""
+)
 
 ###########################
 # Template for byref enum #
@@ -3008,18 +3051,16 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             # Extend class by GetHandle method
             class_def_str += f"%make_alias({class_name})\n\n"
 
+        # if shape can be serialized as a Json
+        if "DumpJsonToString" in class_def_str and class_name != "TopoDS_Shape":
+            class_def_str += GETSTATE_TEMPLATE.substitute({"CLASSNAME": class_name})
+        if "InitFromJsonString" in class_def_str and class_name != "TopoDS_Shape":
+            class_def_str += SETSTATE_TEMPLATE.substitute({"CLASSNAME": class_name})
         # We add pickling for TopoDS_Shapes
         if class_name == "TopoDS_Shape":
-            class_def_str += "%extend TopoDS_Shape {\n%pythoncode {\n"
-            class_def_str += "\tdef __getstate__(self):\n"
-            class_def_str += "\t\tfrom .BRepTools import breptools\n"
-            class_def_str += "\t\tstr_shape = breptools.WriteToString(self, True)\n"
-            class_def_str += "\t\treturn str_shape\n"
-            class_def_str += "\tdef __setstate__(self, state):\n"
-            class_def_str += "\t\tfrom .BRepTools import breptools\n"
-            class_def_str += "\t\tthe_shape = breptools.ReadFromString(state)\n"
-            class_def_str += "\t\tself.this = the_shape.this\n"
-            class_def_str += "\t}\n};\n"
+            class_def_str += TOPODS_SHAPE_PICKLE_TEMPLATE.substitute(
+                {"CLASSNAME": class_name}
+            )
         # for each class, overload the __repr__ method to avoid things like:
         # >>> print(box)
         # <OCC.TopoDS.TopoDS_Shape; proxy of <Swig Object of type 'TopoDS_Shape *' at 0x02
