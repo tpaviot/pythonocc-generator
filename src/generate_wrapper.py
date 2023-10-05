@@ -25,9 +25,9 @@ import keyword  # to prevent using python language keywords
 import logging
 from operator import itemgetter
 import os
-import os.path
 import platform
 import re
+from string import Template
 import subprocess
 import sys
 import time
@@ -405,78 +405,91 @@ NCOLLECTION_HEADER_TEMPLATE = """
 # Templates for method wrapper #
 ################################
 
-HARRAY1_TEMPLATE = """
-class HClassName : public _Array1Type_, public Standard_Transient {
+HARRAY1_TEMPLATE = Template(
+    """
+class $HClassName : public $Array1Type, public Standard_Transient {
   public:
-    HClassName(const Standard_Integer theLower, const Standard_Integer theUpper);
-    HClassName(const Standard_Integer theLower, const Standard_Integer theUpper, const _Array1Type_::value_type& theValue);
-    HClassName(const _Array1Type_& theOther);
-    const _Array1Type_& Array1();
-    _Array1Type_& ChangeArray1();
+    $HClassName(const Standard_Integer theLower, const Standard_Integer theUpper);
+    $HClassName(const Standard_Integer theLower, const Standard_Integer theUpper, const $Array1Type::value_type& theValue);
+    $HClassName(const $Array1Type& theOther);
+    const $Array1Type& Array1();
+    $Array1Type& ChangeArray1();
 };
-%make_alias(HClassName)
+%make_alias($HClassName)
 
 """
+)
 
-HARRAY1_TEMPLATE_PYI = """
-class HClassName(_Array1Type_, Standard_Transient):
+HARRAY1_TEMPLATE_PYI = Template(
+    """
+class $HClassName($Array1Type, Standard_Transient):
     def __init__(self, theLower: int, theUpper: int) -> None: ...
-    def Array1(self) -> _Array1Type_: ...
+    def Array1(self) -> $Array1Type: ...
 
 """
+)
 
-HARRAY2_TEMPLATE = """
-class HClassName : public _Array2Type_, public Standard_Transient {
+HARRAY2_TEMPLATE = Template(
+    """
+class $HClassName : public $Array2Type, public Standard_Transient {
   public:
-    HClassName(const Standard_Integer theRowLow, const Standard_Integer theRowUpp, const Standard_Integer theColLow,
+    $HClassName(const Standard_Integer theRowLow, const Standard_Integer theRowUpp, const Standard_Integer theColLow,
                 const Standard_Integer theColUpp);
-    HClassName(const Standard_Integer theRowLow, const Standard_Integer theRowUpp, const Standard_Integer theColLow,
-               const Standard_Integer theColUpp, const _Array2Type_::value_type& theValue);
-    HClassName(const _Array2Type_& theOther);
-    const _Array2Type_& Array2 ();
-    _Array2Type_& ChangeArray2 (); 
+    $HClassName(const Standard_Integer theRowLow, const Standard_Integer theRowUpp, const Standard_Integer theColLow,
+               const Standard_Integer theColUpp, const $Array2Type::value_type& theValue);
+    $HClassName(const $Array2Type& theOther);
+    const $Array2Type& Array2 ();
+    $Array2Type& ChangeArray2 (); 
 };
-%make_alias(HClassName)
+%make_alias($HClassName)
 
 """
+)
 
-HARRAY2_TEMPLATE_PYI = """
-class HClassName(_Array2Type_, Standard_Transient):
+HARRAY2_TEMPLATE_PYI = Template(
+    """
+class $HClassName($Array2Type, Standard_Transient):
     @overload
     def __init__(self, theRowLow: int, theRowUpp: int, theColLow: int, theColUpp: int) -> None: ...
     @overload
-    def __init__(self, theOther: _Array2Type_) -> None: ...
-    def Array2(self) -> _Array2Type_: ...
+    def __init__(self, theOther: $Array2Type) -> None: ...
+    def Array2(self) -> $Array2Type: ...
 
 """
+)
 
-HSEQUENCE_TEMPLATE = """
-class HClassName : public _SequenceType_, public Standard_Transient {
+HSEQUENCE_TEMPLATE = Template(
+    """
+class $HClassName : public $SequenceType, public Standard_Transient {
   public:
-    HClassName();
-    HClassName(const _SequenceType_& theOther);
-    const _SequenceType_& Sequence();
-    void Append (const _SequenceType_::value_type& theItem);
-    void Append (_SequenceType_& theSequence);
-    _SequenceType_& ChangeSequence();
+    $HClassName();
+    $HClassName(const $SequenceType& theOther);
+    const $SequenceType& Sequence();
+    void Append (const $SequenceType::value_type& theItem);
+    void Append ($SequenceType& theSequence);
+    $SequenceType& ChangeSequence();
 };
-%make_alias(HClassName)
+%make_alias($HClassName)
 
 """
+)
 
-HSEQUENCE_TEMPLATE_PYI = """
-class HClassName(_SequenceType_, Standard_Transient):
+HSEQUENCE_TEMPLATE_PYI = Template(
+    """
+class $HClassName($SequenceType, Standard_Transient):
     @overload
     def __init__(self) -> None: ...
     @overload
-    def __init__(self, other: _SequenceType_) -> None: ...
-    def Sequence(self) -> _SequenceType_: ...
-    def Append(self, theSequence: _SequenceType_) -> None: ...
+    def __init__(self, other: $SequenceType) -> None: ...
+    def Sequence(self) -> $SequenceType: ...
+    def Append(self, theSequence: $SequenceType) -> None: ...
 
 """
+)
 
-NCOLLECTION_ARRAY1_EXTEND_TEMPLATE = """
-%extend NCollection_Array1_Template_Instanciation {
+NCOLLECTION_ARRAY1_EXTEND_TEMPLATE = Template(
+    """
+%extend $NCollection_Array1_Template_Instanciation {
     %pythoncode {
     def __getitem__(self, index):
         if index + self.Lower() > self.Upper():
@@ -510,21 +523,23 @@ NCOLLECTION_ARRAY1_EXTEND_TEMPLATE = """
     }
 };
 """
+)
 
 # the related pyi stub string
-NCOLLECTION_ARRAY1_EXTEND_TEMPLATE_PYI = """
-class NCollection_Array1_Template_Instanciation:
+NCOLLECTION_ARRAY1_EXTEND_TEMPLATE_PYI = Template(
+    """
+class $NCollection_Array1_Template_Instanciation:
     @overload
     def __init__(self) -> None: ...
     @overload
     def __init__(self, theLower: int, theUpper: int) -> None: ...
-    def __getitem__(self, index: int) -> Type_T: ...
-    def __setitem__(self, index: int, value: Type_T) -> None: ...
+    def __getitem__(self, index: int) -> $Type_T: ...
+    def __setitem__(self, index: int, value: $Type_T) -> None: ...
     def __len__(self) -> int: ...
-    def __iter__(self) -> Iterator[Type_T]: ...
-    def next(self) -> Type_T: ...
+    def __iter__(self) -> Iterator[$Type_T]: ...
+    def next(self) -> $Type_T: ...
     __next__ = next
-    def Init(self, theValue: Type_T) -> None: ...
+    def Init(self, theValue: $Type_T) -> None: ...
     def Size(self) -> int: ...
     def Length(self) -> int: ...
     def IsEmpty(self) -> bool: ...
@@ -532,76 +547,87 @@ class NCollection_Array1_Template_Instanciation:
     def Upper(self) -> int: ...
     def IsDetectable(self) -> bool: ...
     def IsAllocated(self) -> bool: ...
-    def First(self) -> Type_T: ...
-    def Last(self) -> Type_T: ...
-    def Value(self, theIndex: int) -> Type_T: ...
-    def SetValue(self, theIndex: int, theValue: Type_T) -> None: ...
+    def First(self) -> $Type_T: ...
+    def Last(self) -> $Type_T: ...
+    def Value(self, theIndex: int) -> $Type_T: ...
+    def SetValue(self, theIndex: int, theValue: $Type_T) -> None: ...
 """
+)
 
 
-NCOLLECTION_LIST_EXTEND_TEMPLATE = """
-%extend NCollection_List_Template_Instanciation {
+NCOLLECTION_LIST_EXTEND_TEMPLATE = Template(
+    """
+%extend $NCollection_List_Template_Instanciation {
     %pythoncode {
     def __len__(self):
         return self.Size()
     }
 };
 """
+)
 
 # the related pyi stub string
-NCOLLECTION_LIST_EXTEND_TEMPLATE_PYI = """
-class NCollection_List_Template_Instanciation:
+NCOLLECTION_LIST_EXTEND_TEMPLATE_PYI = Template(
+    """
+class $NCollection_List_Template_Instanciation:
     def __init__(self) -> None: ...
     def __len__(self) -> int: ...
     def Size(self) -> int: ...
     def Clear(self) -> None: ...
-    def First(self) -> Type_T: ...
-    def Last(self) -> Type_T: ...
-    def Append(self, theItem: Type_T) -> Type_T: ...
-    def Prepend(self, theItem: Type_T) -> Type_T: ...
+    def First(self) -> $Type_T: ...
+    def Last(self) -> $Type_T: ...
+    def Append(self, theItem: $Type_T) -> $Type_T: ...
+    def Prepend(self, theItem: $Type_T) -> $Type_T: ...
     def RemoveFirst(self) -> None: ...
     def Reverse(self) -> None: ...
-    def Value(self, theIndex: int) -> Type_T: ...
-    def SetValue(self, theIndex: int, theValue: Type_T) -> None: ...
+    def Value(self, theIndex: int) -> $Type_T: ...
+    def SetValue(self, theIndex: int, theValue: $Type_T) -> None: ...
 """
+)
 
 # NCollection_Sequence and NCollection_List shares the
 # same pyi and extension templates. It's just a copy/paste
 # from the previous templates, it may change in the future
-NCOLLECTION_SEQUENCE_EXTEND_TEMPLATE = """
-%extend NCollection_Sequence_Template_Instanciation {
+NCOLLECTION_SEQUENCE_EXTEND_TEMPLATE = Template(
+    """
+%extend $NCollection_Sequence_Template_Instanciation {
     %pythoncode {
     def __len__(self):
         return self.Size()
     }
 };
 """
+)
 
 # the related pyi stub string
-NCOLLECTION_SEQUENCE_EXTEND_TEMPLATE_PYI = """
-class NCollection_Sequence_Template_Instanciation:
+NCOLLECTION_SEQUENCE_EXTEND_TEMPLATE_PYI = Template(
+    """
+class $NCollection_Sequence_Template_Instanciation:
     def __init__(self) -> None: ...
     def __len__(self) -> int: ...
     def Size(self) -> int: ...
     def Clear(self) -> None: ...
-    def First(self) -> Type_T: ...
-    def Last(self) -> Type_T: ...
+    def First(self) -> $Type_T: ...
+    def Last(self) -> $Type_T: ...
     def Length(self) -> int: ...
-    def Append(self, theItem: Type_T) -> Type_T: ...
-    def Prepend(self, theItem: Type_T) -> Type_T: ...
+    def Append(self, theItem: $Type_T) -> $Type_T: ...
+    def Prepend(self, theItem: $Type_T) -> $Type_T: ...
     def RemoveFirst(self) -> None: ...
     def Reverse(self) -> None: ...
-    def Value(self, theIndex: int) -> Type_T: ...
-    def SetValue(self, theIndex: int, theValue: Type_T) -> None: ...
+    def Value(self, theIndex: int) -> $Type_T: ...
+    def SetValue(self, theIndex: int, theValue: $Type_T) -> None: ...
 """
+)
+
 # We extend the NCollection_DataMap template with a Keys
 # method that returns a list of Keys
 # TODO: do the same for other Key types
-NCOLLECTION_DATAMAP_EXTEND_TEMPLATE = """
-%extend NCollection_DataMap_Template_Instanciation {
+NCOLLECTION_DATAMAP_EXTEND_TEMPLATE = Template(
+    """
+%extend $NCollection_DataMap_Template_Instanciation {
     PyObject* Keys() {
         PyObject *l=PyList_New(0);
-        for (NCollection_DataMap_Template_Name::Iterator anIt1(*self); anIt1.More(); anIt1.Next()) {
+        for ($NCollection_DataMap_Template_Name::Iterator anIt1(*self); anIt1.More(); anIt1.Next()) {
           PyObject *o = PyLong_FromLong(anIt1.Key());
           PyList_Append(l, o);
           Py_DECREF(o);
@@ -610,90 +636,103 @@ NCOLLECTION_DATAMAP_EXTEND_TEMPLATE = """
     }
 };
 """
+)
 
-TEMPLATE__EQ__ = """
-            %%extend{
-                bool __eq_wrapper__(%s other) {
-                if (*self==other) return true;
-                else return false;
-                }
-            }
-            %%pythoncode {
-            def __eq__(self, right):
-                try:
-                    return self.__eq_wrapper__(right)
-                except:
-                    return False
-            }
+TEMPLATE__EQ__ = Template(
+    """
+%extend{
+    bool __eq_wrapper__($TYPE other) {
+    if (*self==other) return true;
+    else return false;
+    }
+}
+%pythoncode {
+def __eq__(self, right):
+    try:
+        return self.__eq_wrapper__(right)
+    except:
+        return False
+}
 """
+)
 
-TEMPLATE__IMUL__ = """
-            %%extend{
-                void __imul_wrapper__(%s other) {
-                *self *= other;
-                }
-            }
-            %%pythoncode {
-            def __imul__(self, right):
-                self.__imul_wrapper__(right)
-                return self
-            }
+TEMPLATE__IMUL__ = Template(
+    """
+%extend{
+    void __imul_wrapper__($TYPE other) {
+    *self *= other;
+    }
+}
+%pythoncode {
+def __imul__(self, right):
+    self.__imul_wrapper__(right)
+    return self
+}
 """
+)
 
-TEMPLATE__NE__ = """
-            %%extend{
-                bool __ne_wrapper__(%s other) {
-                if (*self!=other) return true;
-                else return false;
-                }
-            }
-            %%pythoncode {
-            def __ne__(self, right):
-                try:
-                    return self.__ne_wrapper__(right)
-                except:
-                    return True
-            }
+TEMPLATE__NE__ = Template(
+    """
+%extend{
+    bool __ne_wrapper__($TYPE other) {
+    if (*self!=other) return true;
+    else return false;
+    }
+}
+%pythoncode {
+def __ne__(self, right):
+    try:
+        return self.__ne_wrapper__(right)
+    except:
+        return True
+}
 """
+)
 
-TEMPLATE__IADD__ = """
-            %%extend{
-                void __iadd_wrapper__(%s other) {
-                *self += other;
-                }
-            }
-            %%pythoncode {
-            def __iadd__(self, right):
-                self.__iadd_wrapper__(right)
-                return self
-            }
+TEMPLATE__IADD__ = Template(
+    """
+%extend{
+    void __iadd_wrapper__($TYPE other) {
+    *self += other;
+    }
+}
+%pythoncode {
+def __iadd__(self, right):
+    self.__iadd_wrapper__(right)
+    return self
+}
 """
+)
 
-TEMPLATE__ISUB__ = """
-            %%extend{
-                void __isub_wrapper__(%s other) {
-                *self -= other;
-                }
-            }
-            %%pythoncode {
-            def __isub__(self, right):
-                self.__isub_wrapper__(right)
-                return self
-            }
+TEMPLATE__ISUB__ = Template(
+    """
+%extend{
+    void __isub_wrapper__($TYPE other) {
+    *self -= other;
+    }
+}
+%pythoncode {
+def __isub__(self, right):
+    self.__isub_wrapper__(right)
+    return self
+}
 """
+)
 
-TEMPLATE__ITRUEDIV__ = """
-            %%extend{
-                void __itruediv_wrapper__(%s other) {
-                *self /= other;
-                }
-            }
-            %%pythoncode {
-            def __itruediv__(self, right):
-                self.__itruediv_wrapper__(right)
-                return self
-            }
+TEMPLATE__ITRUEDIV__ = Template(
+    """
+%extend{
+    void __itruediv_wrapper__($TYPE other) {
+    *self /= other;
+    }
+}
+%pythoncode {
+def __itruediv__(self, right):
+    self.__itruediv_wrapper__(right)
+    return self
+}
 """
+)
 
 TEMPLATE_OSTREAM = """
         %%feature("autodoc", "1");
@@ -759,19 +798,21 @@ TEMPLATE_HASHCODE = """
         };
 """
 
-TIMESTAMP_TEMPLATE = """
+TIMESTAMP_TEMPLATE = Template(
+    """
 ############################
 Running pythonocc-generator.
 ############################
-git revision : %s
+git revision : $GITREVISION
 
-operating system : %s
+operating system : $OS
 
-occt version targeted : %s
+occt version targeted : $OCCTVERSION
 
-date : %s
+date : $DATE
 ############################
 """
+)
 
 WIN_PRAGMAS = """
 %{
@@ -812,7 +853,6 @@ def get_log_header():
         .strip()
         .decode("utf8")
     )
-    now = str(datetime.datetime.now())
     # find the OCC VERSION targeted by the wrapper
     # the OCCT version is available from the Standard_Version.hxx header
     # e.g. define OCC_VERSION_COMPLETE     "7.4.0"
@@ -824,7 +864,14 @@ def get_log_header():
         for file_line in file_lines:
             if file_line.startswith("#define OCC_VERSION_COMPLETE"):
                 occ_version = file_line.split('"')[1].strip()
-    return TIMESTAMP_TEMPLATE % (generator_git_revision, os_name, occ_version, now)
+    return TIMESTAMP_TEMPLATE.substitute(
+        {
+            "GITREVISION": generator_git_revision,
+            "OS": os_name,
+            "OCCTVERSION": occ_version,
+            "DATE": f"{datetime.datetime.now()}",
+        }
+    )
 
 
 def get_log_footer(total_time):
@@ -1113,7 +1160,7 @@ def process_templates_from_typedefs(list_of_typedefs):
             if "_" not in template_name:
                 wrap_template = False
                 logging.warning(
-                    f"Template: {template_name}skipped because name doesn't contain _."
+                    f"Template {template_name} skipped because name doesn't contain '_'."
                 )
             if wrap_template:
                 wrapper_str += f"%template({template_name}) {template_type};\n"
@@ -1123,34 +1170,36 @@ def process_templates_from_typedefs(list_of_typedefs):
                 basetype_hint = adapt_type_for_hint(
                     get_type_for_ncollection_array(template_type)
                 )
-
                 if "NCollection_Array1" in template_type:
-                    wrapper_str += NCOLLECTION_ARRAY1_EXTEND_TEMPLATE.replace(
-                        "NCollection_Array1_Template_Instanciation", template_type
+                    wrapper_str += NCOLLECTION_ARRAY1_EXTEND_TEMPLATE.substitute(
+                        {"NCollection_Array1_Template_Instanciation": template_type}
                     )
-                    str1 = NCOLLECTION_ARRAY1_EXTEND_TEMPLATE_PYI.replace(
-                        "NCollection_Array1_Template_Instanciation", template_name
+                    pyi_str += NCOLLECTION_ARRAY1_EXTEND_TEMPLATE_PYI.substitute(
+                        {
+                            "NCollection_Array1_Template_Instanciation": template_name,
+                            "Type_T": f"{basetype_hint}",
+                        }
                     )
-                    pyi_str += str1.replace("Type_T", f"{basetype_hint}")
-
                 elif "NCollection_List" in template_type:
-                    wrapper_str += NCOLLECTION_LIST_EXTEND_TEMPLATE.replace(
-                        "NCollection_List_Template_Instanciation", template_type
+                    wrapper_str += NCOLLECTION_LIST_EXTEND_TEMPLATE.substitute(
+                        {"NCollection_List_Template_Instanciation": template_type}
                     )
-                    str1 = NCOLLECTION_LIST_EXTEND_TEMPLATE_PYI.replace(
-                        "NCollection_List_Template_Instanciation", template_name
+                    pyi_str += NCOLLECTION_LIST_EXTEND_TEMPLATE_PYI.substitute(
+                        {
+                            "NCollection_List_Template_Instanciation": template_name,
+                            "Type_T": f"{basetype_hint}",
+                        }
                     )
-                    pyi_str += str1.replace("Type_T", f"{basetype_hint}")
-
                 elif "NCollection_Sequence" in template_type:
-                    wrapper_str += NCOLLECTION_SEQUENCE_EXTEND_TEMPLATE.replace(
-                        "NCollection_Sequence_Template_Instanciation", template_type
+                    wrapper_str += NCOLLECTION_SEQUENCE_EXTEND_TEMPLATE.substitute(
+                        {"NCollection_Sequence_Template_Instanciation": template_type}
                     )
-                    str1 = NCOLLECTION_SEQUENCE_EXTEND_TEMPLATE_PYI.replace(
-                        "NCollection_Sequence_Template_Instanciation", template_name
+                    pyi_str += NCOLLECTION_SEQUENCE_EXTEND_TEMPLATE_PYI.substitute(
+                        {
+                            "NCollection_Sequence_Template_Instanciation": template_name,
+                            "Type_T": f"{basetype_hint}",
+                        }
                     )
-                    pyi_str += str1.replace("Type_T", f"{basetype_hint}")
-
                 elif "NCollection_DataMap" in template_type:
                     # NCollection_Datamap is similar to a Python dict,
                     # it's a (key, value) store. Defined as
@@ -1162,16 +1211,12 @@ def process_templates_from_typedefs(list_of_typedefs):
                     # NCollection_DataMap keys and returns a Python list of key objects.
                     # Note : works for standard_Integer keys only so far
                     if "<Standard_Integer" in template_type:
-                        ncollection_datamap_extent = (
-                            NCOLLECTION_DATAMAP_EXTEND_TEMPLATE.replace(
-                                "NCollection_DataMap_Template_Instanciation",
-                                template_type,
-                            )
+                        wrapper_str += NCOLLECTION_DATAMAP_EXTEND_TEMPLATE.substitute(
+                            {
+                                "NCollection_DataMap_Template_Instanciation": template_type,
+                                "NCollection_DataMap_Template_Name": template_name,
+                            }
                         )
-                        ncollection_datamap_extent = ncollection_datamap_extent.replace(
-                            "NCollection_DataMap_Template_Name", template_name
-                        )
-                        wrapper_str += ncollection_datamap_extent
 
         elif (
             template_name.endswith("Iter") or "_ListIteratorOf" in template_name
@@ -2115,7 +2160,10 @@ def process_function(f, overload=False):
         if operator_wrapper[operand] is not None:
             param = f["parameters"][0]
             param_type = param["type"].replace("&", "").strip()
-            return operator_wrapper[operand] % param_type, ""  # not hint for operator
+            return (
+                operator_wrapper[operand].substitute({"TYPE": param_type}),
+                "",
+            )  # not hint for operator
 
     # at this point, we can increment the method counter
     NB_TOTAL_METHODS += 1
@@ -2636,18 +2684,14 @@ def process_harray1():
     pyi_str = "\n# harray1 classes\n"
     for HClassName in ALL_HARRAY1:
         if HClassName.startswith(CURRENT_MODULE + "_"):
-            _Array1Type_ = ALL_HARRAY1[HClassName]
-            wrapper_for_harray1 = HARRAY1_TEMPLATE.replace("HClassName", HClassName)
-            wrapper_for_harray1 = wrapper_for_harray1.replace(
-                "_Array1Type_", _Array1Type_
+            array1_type = ALL_HARRAY1[HClassName]
+            wrapper_str += HARRAY1_TEMPLATE.substitute(
+                {"HClassName": f"{HClassName}", "Array1Type": f"{array1_type}"}
             )
-            wrapper_str += wrapper_for_harray1
             # type hint
-            pyi_str_for_harray1 = HARRAY1_TEMPLATE_PYI.replace("HClassName", HClassName)
-            pyi_str_for_harray1 = pyi_str_for_harray1.replace(
-                "_Array1Type_", _Array1Type_
+            pyi_str += HARRAY1_TEMPLATE_PYI.substitute(
+                {"HClassName": f"{HClassName}", "Array1Type": f"{array1_type}"}
             )
-            pyi_str += pyi_str_for_harray1
     return wrapper_str, pyi_str
 
 
@@ -2656,18 +2700,14 @@ def process_harray2():
     pyi_str = "# harray2 classes\n"
     for HClassName in ALL_HARRAY2:
         if HClassName.startswith(CURRENT_MODULE + "_"):
-            _Array2Type_ = ALL_HARRAY2[HClassName]
-            wrapper_for_harray2 = HARRAY2_TEMPLATE.replace("HClassName", HClassName)
-            wrapper_for_harray2 = wrapper_for_harray2.replace(
-                "_Array2Type_", _Array2Type_
+            array2_type = ALL_HARRAY2[HClassName]
+            wrapper_str += HARRAY2_TEMPLATE.substitute(
+                {"HClassName": f"{HClassName}", "Array2Type": f"{array2_type}"}
             )
-            wrapper_str += wrapper_for_harray2
             # type hint
-            pyi_str_for_harray2 = HARRAY2_TEMPLATE_PYI.replace("HClassName", HClassName)
-            pyi_str_for_harray2 = pyi_str_for_harray2.replace(
-                "_Array2Type_", _Array2Type_
+            pyi_str += HARRAY2_TEMPLATE_PYI.substitute(
+                {"HClassName": f"{HClassName}", "Array2Type": f"{array2_type}"}
             )
-            pyi_str += pyi_str_for_harray2
     wrapper_str += "\n"
     return wrapper_str, pyi_str
 
@@ -2677,20 +2717,14 @@ def process_hsequence():
     pyi_str = "# hsequence classes\n"
     for HClassName in ALL_HSEQUENCE:
         if HClassName.startswith(CURRENT_MODULE + "_"):
-            _SequenceType_ = ALL_HSEQUENCE[HClassName]
-            wrapper_for_hsequence = HSEQUENCE_TEMPLATE.replace("HClassName", HClassName)
-            wrapper_for_hsequence = wrapper_for_hsequence.replace(
-                "_SequenceType_", _SequenceType_
+            sequence_type = ALL_HSEQUENCE[HClassName]
+            wrapper_str += HSEQUENCE_TEMPLATE.substitute(
+                {"HClassName": f"{HClassName}", "SequenceType": f"{sequence_type}"}
             )
-            wrapper_str += wrapper_for_hsequence
             # type hint
-            pyi_str_for_hsequence = HSEQUENCE_TEMPLATE_PYI.replace(
-                "HClassName", HClassName
+            pyi_str += HSEQUENCE_TEMPLATE_PYI.substitute(
+                {"HClassName": f"{HClassName}", "SequenceType": f"{sequence_type}"}
             )
-            pyi_str_for_hsequence = pyi_str_for_hsequence.replace(
-                "_SequenceType_", _SequenceType_
-            )
-            pyi_str += pyi_str_for_hsequence
     wrapper_str += "\n"
     pyi_str += "\n"
     return wrapper_str, pyi_str
@@ -3174,7 +3208,7 @@ class ModuleWrapper:
                 "FunctionTransformers",
                 "EnumTemplates",
                 "Operators",
-                "OccHandle"
+                "OccHandle",
             ]
             for include in includes:
                 swig_interface_file.write(f"%include ../common/{include}.i\n")
