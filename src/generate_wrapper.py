@@ -3051,10 +3051,13 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             # Extend class by GetHandle method
             class_def_str += f"%make_alias({class_name})\n\n"
 
-        # if shape can be serialized as a Json
-        if "DumpJsonToString" in class_def_str and class_name != "TopoDS_Shape":
+        # if shape can be serialized as a Json, both get/set, implement pickling
+        if (
+            "DumpJsonToString" in class_def_str
+            and "InitFromJsonString" in class_def_str
+            and class_name != "TopoDS_Shape"
+        ):
             class_def_str += GETSTATE_TEMPLATE.substitute({"CLASSNAME": class_name})
-        if "InitFromJsonString" in class_def_str and class_name != "TopoDS_Shape":
             class_def_str += SETSTATE_TEMPLATE.substitute({"CLASSNAME": class_name})
         # We add pickling for TopoDS_Shapes
         if class_name == "TopoDS_Shape":
