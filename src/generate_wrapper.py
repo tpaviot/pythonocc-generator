@@ -1283,6 +1283,7 @@ def process_templates_from_typedefs(list_of_typedefs):
 def adapt_type_for_hint_typedef(typedef_type_str):
     typedef_type_str = typedef_type_str.replace(" *", "")
     typedef_type_str = typedef_type_str.replace("&OutValue", "")
+    typedef_type_str = typedef_type_str.replace("class", "")
     if "char" in typedef_type_str or "Char" in typedef_type_str:
         typedef_type_str = "str"
     if (
