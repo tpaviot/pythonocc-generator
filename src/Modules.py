@@ -441,12 +441,10 @@ OCE_MODULES = [
         ["NCollection"],
         [
             "Poly_CoherentTriPtr",
-            "Poly_CoherentTriangulation",
             "Poly_MakeLoops",
             "Poly_MakeLoops3D",
             "Poly_MakeLoops2D",
         ],
-        {"Poly": ["PolygonProperties"]},
     ),
     ("CSLib", ["Message"], []),
     ("Convert", [], []),
