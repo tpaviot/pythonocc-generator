@@ -79,8 +79,7 @@ log.addHandler(console_handler)
 ####################
 # Global variables #
 ####################
-# 7.6.2 online doc is not available, point to 7.6.0
-DOC_URL = "https://www.opencascade.com/doc/occt-7.6.0/refman/html"
+DOC_URL = "https://www.opencascade.com/doc/occt-7.7.0/refman/html"
 
 ##################
 # For statistics #
@@ -1395,7 +1394,7 @@ def process_typedefs(typedefs_dict):
         ):
             type_to_define = adapt_type_for_hint_typedef(type_to_define)
             typedef_pyi_str += (
-                f"\n{typedef_value} = NewType('{typedef_value}', {type_to_define})"
+                f'\n{typedef_value} = NewType("{typedef_value}", {type_to_define})'
             )
         elif (
             ")" not in typedef_value
@@ -1406,8 +1405,8 @@ def process_typedefs(typedefs_dict):
             and "NCollection_DataMap" not in type_to_define
             and "NCollection_Sequence" not in type_to_define
         ):
-            typedef_pyi_str += "\n#the following typedef cannot be wrapped as is"
-            typedef_pyi_str += f"\n{typedef_value} = NewType('{typedef_value}', Any)"
+            typedef_pyi_str += "\n# the following typedef cannot be wrapped as is"
+            typedef_pyi_str += f'\n{typedef_value} = NewType("{typedef_value}", Any)'
 
     typedef_pyi_str += "\n"
     typedef_str += "/* end typedefs declaration */\n\n"
@@ -1856,12 +1855,13 @@ def process_function_docstring(f):
             # add the parameter to the list
             parameters_string += f'{param["name"]}: {param_type}'
             if "defaultValue" in param:
-                parameters_string += ",optional\n"
                 def_value = adapt_default_value(param["defaultValue"])
-                parameters_string += f"\tdefault value is {def_value}"
+                parameters_string += f" (optional, default to {def_value})"
             parameters_string += "\n"
+        parameters_string += "\n"
+
     # return types:
-    returns_string = "Returns\n-------\n"
+    returns_string = "Return\n-------\n"
     method_return_type = adapt_return_type(f["rtnType"])
     if ret:  # at least on by ref parameter
         for r in ret:
@@ -1876,6 +1876,7 @@ def process_function_docstring(f):
         returns_string += f"{method_return_type}\n"
     else:
         returns_string += "None\n"
+    returns_string += "\n"
     # process doxygen strings
     doxygen_string = "No available documentation.\n"
     if "doxygen" in f:
@@ -1893,7 +1894,7 @@ def process_function_docstring(f):
         # replace <me> with <self>, which is more pythonic
         doxygen_string = doxygen_string.replace("<me>", "<self>")
         # make '\r' correctly processed
-        doxygen_string = doxygen_string.replace(r"\\return", "Returns")
+        doxygen_string = doxygen_string.replace(r"\\return", "Return")
         doxygen_string = doxygen_string.replace("\\r", "")
         # replace \n with space
         doxygen_string = doxygen_string.replace("\n", " ")
@@ -1902,19 +1903,24 @@ def process_function_docstring(f):
         doxygen_string = doxygen_string.replace("TRUE", "True")
         doxygen_string = doxygen_string.replace("FALSE", "False")
         # misc
-        doxygen_string = doxygen_string.replace("@return", "returns")
+        doxygen_string = doxygen_string.replace("@return", "return")
         # replace the extra spaces
         doxygen_string = doxygen_string.replace("    ", " ")
         doxygen_string = doxygen_string.replace("   ", " ")
         doxygen_string = doxygen_string.replace("  ", " ")
-
+        doxygen_string = doxygen_string.replace(" : ", ": ")
         doxygen_string = doxygen_string.capitalize()
         if not doxygen_string.endswith("."):
             doxygen_string = f"{doxygen_string}."
         # then remove spaces from start and end
         doxygen_string = doxygen_string.strip() + "\n"
     # concatenate everything
-    final_string = doxygen_string + parameters_string + "\n" + returns_string
+    final_string = (
+        parameters_string
+        + returns_string
+        + "Description\n-----------\n"
+        + doxygen_string
+    )
     string_to_return += f'{final_string}") {function_name};\n'
     return string_to_return
 
