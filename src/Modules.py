@@ -311,6 +311,8 @@ TOOLKIT_DataExchange = {
         "XmlMXCAFDoc",
         "XmlXCAFDrivers",
     ],
+    "TKXDE": ["DE"],
+    "TKXDECascade": ["DEBRepCascade", "DEXCAFCascade"],
 }
 
 
@@ -2869,6 +2871,7 @@ OCE_MODULES = [
             "V3d",
             "TNaming",
             "TDataXtd",
+            "DE",
         ],
         [],
     ),
@@ -2901,6 +2904,7 @@ OCE_MODULES = [
             "Interface",
             "TDocStd",
             "XSControl",
+            "DE",
         ],
         [],
     ),
@@ -3135,6 +3139,56 @@ OCE_MODULES = [
     ### TKXmlXCAF
     ("XmlXCAFDrivers", ["Resource", "PCDM", "TDF", "CDF"], []),
     ("XmlMXCAFDoc", ["Message", "Resource", "TopoDS", "XCAFDimTolObjects"], []),
+    ### TKXDE
+    (
+        "DE",
+        [
+            "CDF",
+            "TopTools",
+            "Transfer",
+            "TDF",
+            "PCDM",
+            "MoniTool",
+            "Interface",
+            "IFSelect",
+            "Geom",
+            "Geom2d",
+        ],
+        [],
+    ),
+    ### TKXDECascade
+    (
+        "DEBRepCascade",
+        [
+            "CDF",
+            "TopTools",
+            "Transfer",
+            "TDF",
+            "PCDM",
+            "MoniTool",
+            "Interface",
+            "IFSelect",
+            "Geom",
+            "Geom2d",
+        ],
+        [],
+    ),
+    (
+        "DEXCAFCascade",
+        [
+            "CDF",
+            "TopTools",
+            "Transfer",
+            "TDF",
+            "PCDM",
+            "MoniTool",
+            "Interface",
+            "IFSelect",
+            "Geom",
+            "Geom2d",
+        ],
+        [],
+    ),
     ### TKCDF
     ("CDF", ["Resource", "Message"], ["CDF_DirectoryIterator"]),
     ("CDM", [], []),
