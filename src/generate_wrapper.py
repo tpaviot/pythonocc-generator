@@ -1967,14 +1967,15 @@ def filter_member_functions(
             "".join([method_name, "::", public_method_signature])
             in member_functions_to_exclude
         ):
-            logging.info(f"    skipped method {class_name}::{public_method_signature}")
+            logging.info(
+                f"    explicitly excluded method {class_name}::{public_method_signature}"
+            )
             continue
         if class_is_abstract and public_method["constructor"]:
-            logging.info(f"Constructor skipped for abstract class {class_name}")
-            continue
-        if method_name == "ShallowCopy":  # specific to 0.17.1 and Mingw
+            logging.info(f"    Constructor skipped for abstract class {class_name}")
             continue
         if "<" in method_name:
+            logging.info(f"    {method_name} skipped because invalid name")
             continue
         # finally, we add this method to process in the correct list
         if public_method["constructor"]:
