@@ -100,7 +100,7 @@ for tk in ALL_TOOLKITS:
     TOOLKITS |= tk
 
 LICENSE_HEADER = """/*
-Copyright 2008-2022 Thomas Paviot (tpaviot@gmail.com)
+Copyright 2008-2023 Thomas Paviot (tpaviot@gmail.com)
 
 This file is part of pythonOCC.
 pythonOCC is free software: you can redistribute it and/or modify
@@ -130,73 +130,23 @@ HEADER_DEPENDENCY = []
 
 # remove headers that can't be parse by CppHeaderParser
 HXX_TO_EXCLUDE_FROM_CPPPARSER = [
-    "NCollection_StlIterator.hxx",
-    "NCollection_CellFilter.hxx",
     "Standard_CLocaleSentry.hxx",
-    # this file has to be fixed
-    # there's a missing include
-    "Aspect_VKeySet.hxx",
-    "StepToTopoDS_Tool.hxx",
-    "AIS_DataMapOfSelStat.hxx",
-    "BVH_IndexedBoxSet.hxx",
-    "BRepApprox_SurfaceTool.hxx",
-    "BRepBlend_BlendTool.hxx",
-    "BRepBlend_HCurveTool.hxx",
-    "BRepBlend_HCurve2dTool.hxx",
     "IntWalk_PWalking.hxx",
-    "HLRAlgo_PolyHidingData.hxx",
-    "HLRAlgo_Array1OfPHDat.hxx",
     "Standard_Dump.hxx",  # to avoid a dependency of Standard over TCollection
     "IMeshData_ParametersListArrayAdaptor.hxx",
-    "BRepMesh_CustomBaseMeshAlgo.hxx",
-    "BRepMesh_CylinderRangeSplitter.hxx",
-    "BRepMesh_DefaultRangeSplitter.hxx",
-    "BRepMesh_BoundaryParamsRangeSplitter.hxx",
-    "BRepMesh_ConeRangeSplitter.hxx",
-    "BRepMesh_NURBSRangeSplitter.hxx",
-    "BRepMesh_SphereRangeSplitter.hxx",
-    "BRepMesh_TorusRangeSplitter.hxx",
-    "BRepMesh_UVParamRangeSplitter.hxx",
-    "AdvApp2Var_Data_f2c.hxx",
-    "Convert_CosAndSinEvalFunction.hxx",  # strange, a method in a typedef, confusing
     "BRepExtrema_ProximityValueTool.hxx",  # occt-771, file cannot be parsed
 ]
 
 # some includes fail at being compiled
 HXX_TO_EXCLUDE_FROM_BEING_INCLUDED = [
-    "AIS_DataMapOfSelStat.hxx",  # TODO : report the bug upstream
-    # same for the following
-    "AIS_DataMapIteratorOfDataMapOfSelStat.hxx",
-    # file has to be fixed, missing include
-    "NCollection_CellFilter.hxx",
-    "Aspect_VKeySet.hxx",
-    "Interface_ValueInterpret.hxx",
-    "StepToTopoDS_Tool.hxx",
-    "BVH_IndexedBoxSet.hxx",
     # report the 3 following to upstream, buggy
     # error: ‘ChFiDS_ChamfMode’ does not name a type;
     "ChFiKPart_ComputeData_ChPlnPln.hxx",
     "ChFiKPart_ComputeData_ChPlnCyl.hxx",
     "ChFiKPart_ComputeData_ChPlnCon.hxx",
     # others
-    "BRepApprox_SurfaceTool.hxx",
-    "BRepBlend_BlendTool.hxx",
-    "BRepBlend_HCurveTool.hxx",
-    "BRepBlend_HCurve2dTool.hxx",
     "IntWalk_PWalking.hxx",
-    "HLRAlgo_PolyHidingData.hxx",
-    "HLRAlgo_Array1OfPHDat.hxx",
-    "ShapeUpgrade_UnifySameDomain.hxx",
     "IMeshData_ParametersListArrayAdaptor.hxx",
-    "BRepMesh_CustomBaseMeshAlgo.hxx",
-    "BRepMesh_CylinderRangeSplitter.hxx",
-    "BRepMesh_DefaultRangeSplitter.hxx",
-    "BRepMesh_BoundaryParamsRangeSplitter.hxx",
-    "BRepMesh_ConeRangeSplitter.hxx",
-    "BRepMesh_NURBSRangeSplitter.hxx",
-    "BRepMesh_SphereRangeSplitter.hxx",
-    "BRepMesh_TorusRangeSplitter.hxx",
-    "BRepMesh_UVParamRangeSplitter.hxx",
 ]
 
 # some typedefs parsed by CppHeader can't be wrapped
@@ -219,7 +169,6 @@ TYPEDEF_TO_EXCLUDE = [
     "TopoDS_AlertWithShape",
     "gp_TrsfNLerp",
     "TopOpeBRepTool_IndexedDataMapOfSolidClassifier",
-    #
     "Graphic3d_Vec2u",
     "Graphic3d_Vec3u",
     "Graphic3d_Vec4u",
@@ -1382,6 +1331,7 @@ def process_typedefs(typedefs_dict):
             "<",
             ":",
             "struct",
+            "union",
             ")",
             "NCollection_Array1",
             "NCollection_List",
@@ -1391,6 +1341,7 @@ def process_typedefs(typedefs_dict):
         if (
             all(match not in type_to_define for match in match_1)
             and type_to_define is not None
+            and ")" not in typedef_value
         ):
             type_to_define = adapt_type_for_hint_typedef(type_to_define)
             typedef_pyi_str += (
@@ -1805,9 +1756,8 @@ def get_module_docstring(module_name):
     used, for instance, for the gp package:
     https://www.opencascade.com/doc/occt-7.4.0/refman/html/package_gp.html
     """
-    minus_module_name = module_name.lower()
     module_docstring = f"{module_name} module, see official documentation at\n"
-    module_docstring += f"{DOC_URL}/package_{minus_module_name}.html"
+    module_docstring += f"{DOC_URL}/package_{module_name.lower()}.html"
     return module_docstring
 
 
@@ -2204,6 +2154,7 @@ def process_function(f, overload=False):
         operand = function_name.split("operator ")[1].strip()
         # if not allowed, just skip it
         if operand not in operator_wrapper:
+            logging.info(f"    operand {operand} cannot be wrapped")
             return "", ""
         ##############################################
         # Cases where the method is actually wrapped #
@@ -3268,34 +3219,34 @@ class ModuleWrapper:
             # Here we write required dependencies, headers, as well as
             # other swig interface files
             swig_interface_file.write("%{\n")
-            ## modifiers for occt762
-            if self._module_name in ["Blend", "BlendFunc", "Contap"]:
-                swig_interface_file.write("#include<Adaptor2d_Curve2d.hxx>\n")
-            if self._module_name == "BRepAdaptor":
-                swig_interface_file.write(
-                    "#include<Adaptor2d_Curve2d.hxx>\n#include<Adaptor2d_OffsetCurve.hxx>\n"
-                )
-            if self._module_name == "HLRTopoBRep":
-                swig_interface_file.write(
-                    "#include<BRepAdaptor_Curve2d.hxx>\n#include<Adaptor2d_Curve2d.hxx>\n"
-                )
-            if self._module_name == "BRepTopAdaptor":
-                swig_interface_file.write("#include<BRepAdaptor_Curve2d.hxx>\n")
-            if self._module_name == "Aspect":
-                swig_interface_file.write("#include<Standard_Atomic.hxx>\n")
+            # ## modifiers for occt762
+            # if self._module_name in ["Blend", "BlendFunc", "Contap"]:
+            #     swig_interface_file.write("#include<Adaptor2d_Curve2d.hxx>\n")
+            # if self._module_name == "BRepAdaptor":
+            #     swig_interface_file.write(
+            #         "#include<Adaptor2d_Curve2d.hxx>\n#include<Adaptor2d_OffsetCurve.hxx>\n"
+            #     )
+            # if self._module_name == "HLRTopoBRep":
+            #     swig_interface_file.write(
+            #         "#include<BRepAdaptor_Curve2d.hxx>\n#include<Adaptor2d_Curve2d.hxx>\n"
+            #     )
+            # if self._module_name == "BRepTopAdaptor":
+            #     swig_interface_file.write("#include<BRepAdaptor_Curve2d.hxx>\n")
+            # if self._module_name == "Aspect":
+            #     swig_interface_file.write("#include<Standard_Atomic.hxx>\n")
             if self._module_name == "AdvApp2Var":  # windows compilation issues
                 swig_interface_file.write(
                     "#if defined(_WIN32)\n#include <windows.h>\n#endif\n"
                 )
-            if self._module_name in [
-                "BRepMesh",
-                "XBRepMesh",
-            ]:  # wrong header order with gcc4 issue #63
-                swig_interface_file.write("#include<BRepMesh_Delaun.hxx>\n")
-            if self._module_name == "ShapeUpgrade":
-                swig_interface_file.write(
-                    "#include<Precision.hxx>\n#include<TopoDS_Edge.hxx>\n#include<ShapeUpgrade_UnifySameDomain.hxx>\n"
-                )
+            # if self._module_name in [
+            #     "BRepMesh",
+            #     "XBRepMesh",
+            # ]:  # wrong header order with gcc4 issue #63
+            #     swig_interface_file.write("#include<BRepMesh_Delaun.hxx>\n")
+            # if self._module_name == "ShapeUpgrade":
+            #     swig_interface_file.write(
+            #         "#include<Precision.hxx>\n#include<TopoDS_Edge.hxx>\n#include<ShapeUpgrade_UnifySameDomain.hxx>\n"
+            #     )
             module_headers = glob.glob(
                 "%s/%s_*.hxx" % (OCE_INCLUDE_DIR, self._module_name)
             )

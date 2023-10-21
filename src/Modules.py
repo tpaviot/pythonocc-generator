@@ -1164,6 +1164,7 @@ OCE_MODULES = [
                 "ProcessConstraints",
             ],
             "BRepMesh_GeomTool": ["IntLinLin", "Normal", "IntSegSeg"],
+            "BRepMesh_ConeRangeSplitter": ["GetSplitSteps"],
         },
     ),
     (
