@@ -681,46 +681,57 @@ def __itruediv__(self, right):
 """
 )
 
-TEMPLATE_OSTREAM = """
-        %%feature("autodoc", "1");
-        %%extend{
-            std::string %sToString() {
-            std::stringstream s;
-            self->%s(s);
-            return s.str();}
-        };
-"""
-
-TEMPLATE_ISTREAM = """
-            %%feature("autodoc", "1");
-            %%extend{
-                void %sFromString(std::string src) {
-                std::stringstream s(src);
-                self->%s(s);}
-            };
-"""
-
 TEMPLATE_DUMPJSON = """
-        /****************** DumpJsonToString ******************/
-        %feature("autodoc", "Json string serializer.");
+        /****************** DumpJson ******************/
+        %feature("autodoc", "
+Parameters
+----------
+depth: int, default=-1
+
+Return
+-------
+str
+
+Description
+-----------
+Dump the object to JSON string.
+") DumpJson;
         %extend{
-            std::string DumpJsonToString(int depth=-1) {
+            std::string DumpJson(int depth=-1) {
             std::stringstream s;
             self->DumpJson(s, depth);
             return "{" + s.str() + "}" ;}
         };
 """
 
+TEMPLATE_DUMPJSON_PYI = "    def DumpJson(self, depth: Optional[int]=-1) -> str: ...\n"
+
 TEMPLATE_INITFROMJSON = """
-        /****************** InitFromJsonString ******************/
-        %feature("autodoc", "1");
+        /****************** InitFromJson ******************/
+        %feature("autodoc", "
+Parameters
+----------
+json_string: the string
+
+Return
+-------
+bool
+
+Description
+-----------
+Init the object from a JSON string.
+") InitFromJson;
         %extend{
-            bool InitFromJsonString(std::string json_string) {
+            bool InitFromJson(std::string json_string) {
             std::stringstream s(json_string);
             Standard_Integer pos=2;
             return self->InitFromJson(s, pos);}
         };
 """
+
+TEMPLATE_INITFROMJSON_PYI = (
+    "    def InitFromJson(self, json_string: str) -> bool: ...\n"
+)
 
 TEMPLATE_GETTER_SETTER = """
         %%feature("autodoc","1");
@@ -772,10 +783,10 @@ WIN_PRAGMAS = """
 
 GETSTATE_TEMPLATE = Template(
     """
-%extend $CLASSNAME {
+%extend ${CLASSNAME} {
 %pythoncode {
     def __getstate__(self):
-        return self.DumpJsonToString()
+        return self.DumpJson()
     }
 };
 """
@@ -787,11 +798,11 @@ SETSTATE_TEMPLATE = Template(
 %extend $CLASSNAME {
 %pythoncode {
     def __setstate__(self, state):
-        inst = $CLASSNAME()
-        if inst.InitFromJsonString(state):
+        inst = ${CLASSNAME}()
+        if inst.InitFromJson(state):
             self.this = inst.this
         else:
-            raise IOError('Failed to set state of $CLASSNAME')
+            raise IOError('Failed to set state of ${CLASSNAME}')
     }
 };
 """
@@ -1554,6 +1565,10 @@ def adapt_param_type(param_type):
                 param_type = param_type.replace(pattern, "int")
             else:
                 logging.warning("Unknown pattern in Standard_Integer typedef")
+    # replace Standard_IStream with std::istream
+    # so that SWIG template can apply
+    param_type = param_type.replace("Standard_IStream", "std::istream")
+    param_type = param_type.replace("Standard_SStream", "std::stringstream")
     param_type = param_type.strip()
     check_dependency(param_type)
     return param_type
@@ -1583,6 +1598,13 @@ def adapt_param_type_and_name(param_type_and_name):
         or (param_type_and_name.startswith("int &"))
     ) and "const" not in param_type_and_name:
         adapted_param_type_and_name = "Standard_Integer &OutValue"
+    elif (
+        "Standard_OStream&" in param_type_and_name
+        or "Standard_OStream &" in param_type_and_name
+        or "std::ostream&" in param_type_and_name
+        or "std::ostream &" in param_type_and_name
+    ):
+        adapted_param_type_and_name = "std::ostream &OutValue"
     elif (
         ("Standard_Boolean &" in param_type_and_name)
         or (param_type_and_name.startswith("bool &"))
@@ -2187,25 +2209,11 @@ def process_function(f, overload=False):
                 "Message_ProgressRange" in param_type_2nd_param
             )
 
-        if "Standard_OStream" in f"{param_type_1st_param}" and (
-            param_type_2nd_param is None or param_type_2nd_is_Message_ProgressRange
-        ):
-            str_function = TEMPLATE_OSTREAM % (function_name, function_name)
-            return str_function, ""
-
-        if (
-            ("std::istream &" in f"{param_type_1st_param}")
-            or ("Standard_IStream" in param_type_1st_param)
-        ) and (param_type_2nd_param is None or param_type_2nd_is_Message_ProgressRange):
-            return TEMPLATE_ISTREAM % (function_name, function_name), ""
-
     if function_name == "DumpJson":
-        str_function = TEMPLATE_DUMPJSON
-        return str_function, ""
+        return TEMPLATE_DUMPJSON, TEMPLATE_DUMPJSON_PYI
 
     if function_name == "InitFromJson":
-        str_function = TEMPLATE_INITFROMJSON
-        return str_function, ""
+        return TEMPLATE_INITFROMJSON, TEMPLATE_INITFROMJSON_PYI
 
     # enable autocompactargs feature to enable compilation with swig>3.0.3
     str_function = f"\t\t/****************** {function_name} ******************/\n"
@@ -2317,13 +2325,7 @@ def process_function(f, overload=False):
                 False,
                 "",
             )  # skip this function, it will raise a compilation exception, it's something like a template
-        if (
-            "Standard_IStream" in param_type or "Standard_OStream" in param_type
-        ) and num_parameters > 1:
-            return (
-                "",
-                "",
-            )  # skip this method TODO : wrap std:istream and std::ostream properly
+
         if "array_size" in param:
             # create a list of types/names tuples
             # a liste with 3 items [type, name, default_value]
@@ -2667,12 +2669,14 @@ def build_inheritance_tree(classes_dict):
 
 
 def fix_type(type_str):
+    """used in docstrings"""
     type_str = type_str.replace("Standard_Boolean &", "bool")
     type_str = type_str.replace("Standard_Boolean", "bool")
     type_str = type_str.replace("Standard_Real", "float")
     type_str = type_str.replace("Standard_ShortReal", "float")
     type_str = type_str.replace("Standard_Integer", "int")
     type_str = type_str.replace("Standard_CString", "str")
+    type_str = type_str.replace("std::istream &", "str")
     type_str = type_str.replace("const", "")
     type_str = type_str.replace("& &", "&")
     return type_str
@@ -3012,8 +3016,8 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
 
         # if shape can be serialized as a Json, both get/set, implement pickling
         if (
-            "DumpJsonToString" in class_def_str
-            and "InitFromJsonString" in class_def_str
+            "DumpJson" in class_def_str
+            and "InitFromJson" in class_def_str
             and class_name != "TopoDS_Shape"
         ):
             class_def_str += GETSTATE_TEMPLATE.substitute({"CLASSNAME": class_name})
@@ -3212,6 +3216,7 @@ class ModuleWrapper:
                 "EnumTemplates",
                 "Operators",
                 "OccHandle",
+                "IOStream",
             ]
             for include in includes:
                 swig_interface_file.write(f"%include ../common/{include}.i\n")
@@ -3219,34 +3224,12 @@ class ModuleWrapper:
             # Here we write required dependencies, headers, as well as
             # other swig interface files
             swig_interface_file.write("%{\n")
-            # ## modifiers for occt762
-            # if self._module_name in ["Blend", "BlendFunc", "Contap"]:
-            #     swig_interface_file.write("#include<Adaptor2d_Curve2d.hxx>\n")
-            # if self._module_name == "BRepAdaptor":
-            #     swig_interface_file.write(
-            #         "#include<Adaptor2d_Curve2d.hxx>\n#include<Adaptor2d_OffsetCurve.hxx>\n"
-            #     )
-            # if self._module_name == "HLRTopoBRep":
-            #     swig_interface_file.write(
-            #         "#include<BRepAdaptor_Curve2d.hxx>\n#include<Adaptor2d_Curve2d.hxx>\n"
-            #     )
-            # if self._module_name == "BRepTopAdaptor":
-            #     swig_interface_file.write("#include<BRepAdaptor_Curve2d.hxx>\n")
-            # if self._module_name == "Aspect":
-            #     swig_interface_file.write("#include<Standard_Atomic.hxx>\n")
+
             if self._module_name == "AdvApp2Var":  # windows compilation issues
                 swig_interface_file.write(
                     "#if defined(_WIN32)\n#include <windows.h>\n#endif\n"
                 )
-            # if self._module_name in [
-            #     "BRepMesh",
-            #     "XBRepMesh",
-            # ]:  # wrong header order with gcc4 issue #63
-            #     swig_interface_file.write("#include<BRepMesh_Delaun.hxx>\n")
-            # if self._module_name == "ShapeUpgrade":
-            #     swig_interface_file.write(
-            #         "#include<Precision.hxx>\n#include<TopoDS_Edge.hxx>\n#include<ShapeUpgrade_UnifySameDomain.hxx>\n"
-            #     )
+
             module_headers = glob.glob(
                 "%s/%s_*.hxx" % (OCE_INCLUDE_DIR, self._module_name)
             )
