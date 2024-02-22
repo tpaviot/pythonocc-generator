@@ -733,20 +733,30 @@ TEMPLATE_INITFROMJSON_PYI = (
     "    def InitFromJson(self, json_string: str) -> bool: ...\n"
 )
 
-TEMPLATE_GETTER_SETTER = """
-        %%feature("autodoc","1");
-        %%extend {
-            %s Get%s(%s) {
-            return (%s) $self->%s(%s);
+TEMPLATE_GETTER_SETTER = Template(
+    """
+        %feature("autodoc","1");
+        %extend {
+            ${Return_Type} Get${Function_Name}(${Getter_Parameters_Types_Names}) {
+            return (${Return_Type}) $$self->${Function_Name}(${Getter_Parameters_Names});
             }
         };
-        %%feature("autodoc","1");
-        %%extend {
-            void Set%s(%s) {
-            $self->%s(%s)=value;
+        %feature("autodoc","1");
+        %extend {
+            void Set${Function_Name}(${Setter_Parameters_Types_Names}) {
+            $$self->${Function_Name}(${Getter_Parameters_Names})=value;
             }
         };
 """
+)
+
+TEMPLATE_GETTER_PYI = Template(
+    "    def Get${Function_Name}(${Getter_Parameters_Hints}) -> ${Hint_Output_Type}: ...\n"
+)
+
+TEMPLATE_SETTER_PYI = Template(
+    "    def Set${Function_Name}(${Setter_Parameters_Hints}) -> None: ...\n"
+)
 
 TEMPLATE_HASHCODE = """
         %extend {
@@ -795,7 +805,7 @@ GETSTATE_TEMPLATE = Template(
 
 SETSTATE_TEMPLATE = Template(
     """
-%extend $CLASSNAME {
+%extend ${CLASSNAME} {
 %pythoncode {
     def __setstate__(self, state):
         inst = ${CLASSNAME}()
@@ -808,8 +818,7 @@ SETSTATE_TEMPLATE = Template(
 """
 )
 
-TOPODS_SHAPE_PICKLE_TEMPLATE = Template(
-    """
+TOPODS_SHAPE_PICKLE_TEMPLATE = """
 %extend TopoDS_Shape {
 %pythoncode {
     def __getstate__(self):
@@ -823,7 +832,7 @@ TOPODS_SHAPE_PICKLE_TEMPLATE = Template(
     }
 };
 """
-)
+
 
 ###########################
 # Template for byref enum #
@@ -1990,6 +1999,8 @@ def adapt_type_for_hint(type_str):
         return "float"
     if type_str == "opencascade::handle<TCollection_HAsciiString> &OutValue":
         return "str"
+    if type_str == "std::istream &":
+        return "str"
     if "_" not in type_str:  # TODO these are special cases, e.g. nested classes
         logging.warning(f"    [TypeHint] Skipping type {type_str}, should contain _")
         return False  # returns a boolean to prevent type hint creation, the type will not be found
@@ -2115,7 +2126,32 @@ def adapt_type_hint_default_value(default_value_str):
 
 
 def get_function_md5_signature(f):
-    """compute md5 signature"""
+    """
+    Computes the MD5 hash of a function's signature provided in the input dictionary.
+
+    The function's signature is normalized by removing all whitespace and converting
+    all characters to lowercase before calculating the MD5 hash. This normalization
+    process ensures that insignificant differences in formatting do not affect the
+    hash value, providing a consistent identifier for function signatures across
+    different releases of tools like cppheaderparser.
+
+    Parameters:
+    - f (dict): A dictionary representing the function, where the function's signature
+      is expected to be associated with the 'debug' key. The signature is a string
+      that typically includes the function's name, return type, and parameter types.
+
+    Returns:
+    - str: The MD5 hash of the normalized function signature as a hexadecimal string.
+
+    Note:
+    This function is used for excluding specific function signature from
+    the wrapper.
+
+    Example:
+    >>> function_info = {"debug": "int add(int a, int b)"}
+    >>> get_function_md5_signature(function_info)
+    '9b74c9897bac770ffc029102a200c5de'
+    """
     function_signature = f["debug"]
     # remove spaces, capital letters etc.
     # this id done to prevent the function signature to change
@@ -2128,11 +2164,33 @@ def get_function_md5_signature(f):
 
 
 def process_function(f, overload=False):
-    """Process function f and returns a SWIG compliant string.
-    If process_docstrings is set to True, the documentation string
-    from the C++ header will be used as is for the python wrapper
-    f : a dict for the function f
-    overload: False by default, True if other method with the same name exists
+    """
+    Processes a C++ function represented as a dictionary and generates SWIG interface code
+    for creating Python bindings. This method handles various aspects of function wrapping
+    including name adaptation, operator overloading, and special case handling for specific
+    function patterns. It generates and returns SWIG compliant string representations along
+    with Python type hints for enhanced development experience.
+
+    Parameters:
+    - f (dict): A dictionary containing information about the C++ function to be processed.
+      The dictionary must include keys such as 'name', 'template', 'destructor', 'returns',
+      'rtnType', 'parameters', etc., representing the function's signature and characteristics.
+    - overload (bool, optional): Indicates whether the function is an overloaded version of
+      another function with the same name. Defaults to False. When True, additional handling
+      is applied to differentiate the overloaded functions in the SWIG interface.
+
+    Returns:
+    - tuple: A tuple containing two elements. The first element is a string with the generated
+      SWIG interface code for the function. The second element is a string with Python type
+      hints for the function, intended for use in .pyi stub files. In cases where the function
+      cannot be wrapped or is intentionally skipped, the returned strings may be empty or
+      indicative of the reason for skipping.
+
+    Global Variables:
+    - NB_TOTAL_METHODS (int): A counter tracking the total number of methods processed. This
+      function increments the counter for each successfully processed function.
+    - CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES (list): A list maintaining aliases for static
+      methods in the current module, used for generating Python type hints.
     """
     global NB_TOTAL_METHODS, CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES
     # compute signature md5
@@ -2141,6 +2199,7 @@ def process_function(f, overload=False):
         return False, ""
     # first, adapt function name, if needed
     function_name = adapt_function_name(f["name"])
+
     ################################################
     # Cases where the method should not be wrapped #
     ################################################
@@ -2192,23 +2251,7 @@ def process_function(f, overload=False):
     # at this point, we can increment the method counter
     NB_TOTAL_METHODS += 1
 
-    #
-    # special case : Standard_OStream or Standard_IStream is the only parameter
-    # or the second parameter is a Message_ProgressIndicator with a default value
-    #
-    number_of_parameters = len(f["parameters"])
-    if number_of_parameters in (1, 2):
-        first_parameter = f["parameters"][0]
-        param_type_1st_param = first_parameter["type"]
-
-        param_type_2nd_param = None  # by default, no second argument
-        if number_of_parameters == 2:  # we check the type of the second argument
-            second_parameter = f["parameters"][1]
-            param_type_2nd_param = second_parameter["type"]
-            param_type_2nd_is_Message_ProgressRange = (
-                "Message_ProgressRange" in param_type_2nd_param
-            )
-
+    # special wrapper for DumpJson and InitFromJson
     if function_name == "DumpJson":
         return TEMPLATE_DUMPJSON, TEMPLATE_DUMPJSON_PYI
 
@@ -2283,32 +2326,33 @@ def process_function(f, overload=False):
         setter_params_type_and_names_str_csv = ",".join(setter_params_type_and_names)
         getter_params_only_names_str_csv = ",".join(getter_params_only_names)
 
-        str_function = TEMPLATE_GETTER_SETTER % (
-            modified_return_type,
-            function_name,
-            getter_params_type_and_names_str_csv,
-            modified_return_type,
-            function_name,
-            getter_params_only_names_str_csv,
-            function_name,
-            setter_params_type_and_names_str_csv,
-            function_name,
-            getter_params_only_names_str_csv,
+        str_function = TEMPLATE_GETTER_SETTER.substitute(
+            {
+                "Return_Type": modified_return_type,
+                "Function_Name": function_name,
+                "Getter_Parameters_Types_Names": getter_params_type_and_names_str_csv,
+                "Getter_Parameters_Names": getter_params_only_names_str_csv,
+                "Setter_Parameters_Types_Names": setter_params_type_and_names_str_csv,
+            }
         )
         # process type hint for this case
-        getter_hint_str = "    def Get%s(%s) -> %s: ...\n" % (
-            function_name,
-            ", ".join(getter_param_hints),
-            hint_output_type,
+        getter_hint_str = TEMPLATE_GETTER_PYI.substitute(
+            {
+                "Function_Name": function_name,
+                "Getter_Parameters_Hints": ", ".join(getter_param_hints),
+                "Hint_Output_Type": hint_output_type,
+            }
         )
-        setter_hint_str = "    def Set%s(%s) -> None: ...\n" % (
-            function_name,
-            ", ".join(setter_param_hints),
+        setter_hint_str = TEMPLATE_SETTER_PYI.substitute(
+            {
+                "Function_Name": function_name,
+                "Setter_Parameters_Hints": ", ".join(setter_param_hints),
+            }
         )
-
         # finally returns the method definition and hint
         type_hint_str = getter_hint_str + setter_hint_str
         return str_function, type_hint_str
+
     str_function += f"{return_type} "
     # function name
     str_function += f"{function_name}"
@@ -2358,10 +2402,11 @@ def process_function(f, overload=False):
     str_typehint = ""
     # below is the list of types returned by the method
     # generally, all c++ methods return either zero (void) values
-    # or 1. In some special cases, by ef returned parameters are wrapped
+    # or 1. In some special cases, by ref returned parameters are wrapped
     # to python types and added to the return values
     # thus, some method may return a tuple
     types_returned = ["%s" % adapt_type_for_hint(return_type)]  # by default, nothing
+
     if overload:
         str_typehint += "    @overload\n"
     if "operator" not in function_name:
@@ -3024,9 +3069,8 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             class_def_str += SETSTATE_TEMPLATE.substitute({"CLASSNAME": class_name})
         # We add pickling for TopoDS_Shapes
         if class_name == "TopoDS_Shape":
-            class_def_str += TOPODS_SHAPE_PICKLE_TEMPLATE.substitute(
-                {"CLASSNAME": class_name}
-            )
+            class_def_str += TOPODS_SHAPE_PICKLE_TEMPLATE
+
         # for each class, overload the __repr__ method to avoid things like:
         # >>> print(box)
         # <OCC.TopoDS.TopoDS_Shape; proxy of <Swig Object of type 'TopoDS_Shape *' at 0x02
