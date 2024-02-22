@@ -2001,6 +2001,8 @@ def adapt_type_for_hint(type_str):
         return "str"
     if type_str == "std::istream &":
         return "str"
+    if "std::ostream &" in type_str:
+        return "str"
     if "_" not in type_str:  # TODO these are special cases, e.g. nested classes
         logging.warning(f"    [TypeHint] Skipping type {type_str}, should contain _")
         return False  # returns a boolean to prevent type hint creation, the type will not be found
