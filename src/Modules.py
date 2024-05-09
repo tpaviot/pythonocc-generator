@@ -415,7 +415,15 @@ OCE_MODULES = [
     ("StdFail", [], ["*"]),
     ("Storage", ["Standard"], ["*"]),
     ("TColStd", [], []),
-    ("TCollection", [], [], {"TCollection_ExtendedString": ["ToWideString"]}),
+    (
+        "TCollection",
+        [],
+        [],
+        {
+            "TCollection_ExtendedString": ["ToWideString", "Move"],
+            "TCollection_AsciiString": ["Move"],
+        },
+    ),
     ("TShort", ["Standard"], []),
     ("Units", [], []),
     ("UnitsAPI", [], []),
@@ -509,9 +517,14 @@ OCE_MODULES = [
     ("CPnts", ["Geom", "Geom2d", "Message"], []),
     ("Approx", ["FEmTool", "Adaptor2d", "Message"], []),
     ("AppParCurves", ["Message"], []),
-    ("FEmTool", ["Message"], []),
+    ("FEmTool", ["Message"], ["*"]),
     ("AppCont", ["Message"], []),
-    ("Extrema", ["Precision", "Message"], []),
+    (
+        "Extrema",
+        ["Precision", "Message"],
+        [],
+        {"Extrema_FuncPSDist": ["Gradient", "Values"]},
+    ),
     ("IntAna", [], []),
     ("IntAna2d", [], []),
     (
@@ -3155,7 +3168,7 @@ OCE_MODULES = [
             "Geom",
             "Geom2d",
         ],
-        [],
+        ["DE_PluginHolder"],
     ),
     ### TKXDECascade
     (

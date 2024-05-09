@@ -147,6 +147,8 @@ HXX_TO_EXCLUDE_FROM_BEING_INCLUDED = [
     # others
     "IntWalk_PWalking.hxx",
     "IMeshData_ParametersListArrayAdaptor.hxx",
+    "Standard_MemoryUtils.hxx",
+    "math_VectorBase.hxx",
 ]
 
 # some typedefs parsed by CppHeader can't be wrapped
@@ -197,7 +199,7 @@ STANDARD_INTEGER_TYPEDEF = [
 ]
 
 # enums to skip
-ENUMS_TO_EXLUDE = ["ShapeMapGroup"]  # bug in RWGtlf.i
+ENUMS_TO_EXLUDE = ["ShapeMapGroup", "AllocatorType"]  # RWGtlf.i  # Standard.i
 
 # The list of all enums defined in oce
 ALL_ENUMS = []
@@ -274,6 +276,25 @@ TEMPLATES_TO_EXCLUDE = [
     "BVH_Box",
     "Prs3d_Point",
     "OSD_StreamBuffer",  # occt762
+    "TColStd_Array1OfListOfInteger",  ## occt781
+    "TopTools_Array1OfListOfShape",
+    "TColGeom_Array2OfBezierSurface",
+    "FEmTool_AssemblyTable",
+    "Extrema_Array2OfPOnCurv",
+    "Extrema_Array2OfPOnCurv2d",
+    "Extrema_Array2OfPOnSurf",
+    "Extrema_Array2OfPOnSurfParams",
+    "TopOpeBRepDS_Array1OfDataMapOfIntegerListOfInterference",
+    "TopTrans_Array2OfOrientation",
+    "GccEnt_Array1OfPosition",
+    "MAT2d_Array2OfConnexion",
+    "StepElement_Array2OfCurveElementPurposeMember",
+    "StepElement_Array2OfSurfaceElementPurpose",
+    "StepElement_Array2OfSurfaceElementPurposeMember",
+    "StepDimTol_Array1OfGeometricToleranceModifier",
+    "StepGeom_Array2OfCartesianPoint",
+    "StepGeom_Array2OfSurfacePatch",
+    "TFunction_Array1OfDataMapOfGUIDDriver",
 ]
 
 ##########################
@@ -349,9 +370,11 @@ NCOLLECTION_HEADER_TEMPLATE = """
 %ignore NCollection_TListIterator::Value();
 """
 
-################################
-# Templates for method wrapper #
-################################
+MATH_HEADER_TEMPLATE = """
+%include "math_VectorBase.hxx";
+%template(math_Vector) math_VectorBase<double>;
+typedef math_VectorBase<double> math_Vector;
+"""
 
 HARRAY1_TEMPLATE = Template(
     """
@@ -761,7 +784,7 @@ TEMPLATE_SETTER_PYI = Template(
 TEMPLATE_HASHCODE = """
         %extend {
             Standard_Integer __hash__() {
-            return $self->HashCode(2147483647);
+            return $self->HashCode();
             }
         };
 """
@@ -1166,6 +1189,8 @@ def process_templates_from_typedefs(list_of_typedefs):
                 forbidden_template not in template_type
                 for forbidden_template in TEMPLATES_TO_EXCLUDE
             )
+            if template_name in TEMPLATES_TO_EXCLUDE:
+                continue
             # sometimes the template name is weird (parenthesis, comma etc.)
             # don't consider this
             if "_" not in template_name:
@@ -3145,6 +3170,12 @@ def parse_module(module_name):
     """
     module_headers = glob.glob(f"{OCE_INCLUDE_DIR}/{module_name}_*.hxx")
     module_headers += glob.glob(f"{OCE_INCLUDE_DIR}/{module_name}.hxx")
+    # check if there are some files
+    if len(module_headers) == 0:
+        logging.warning(
+            f"No file for module {module_name}. Please check that the module name is part of occt."
+        )
+
     # filter those headers
     module_headers = filter_header_list(module_headers, HXX_TO_EXCLUDE_FROM_CPPPARSER)
     cpp_headers = map(parse_header, module_headers)
@@ -3293,6 +3324,8 @@ class ModuleWrapper:
             mod_header.write("#define %s_HXX\n\n" % self._module_name.upper())
             mod_header.write("\n")
 
+            if self._module_name == "XCAFDoc":
+                mod_header.write("#include<TDF_Label.hxx>\n")
             for module_header in filter_header_list(
                 module_headers, HXX_TO_EXCLUDE_FROM_BEING_INCLUDED
             ):
@@ -3327,6 +3360,8 @@ class ModuleWrapper:
             # automatically with SWIG
             if self._module_name == "NCollection":
                 swig_interface_file.write(NCOLLECTION_HEADER_TEMPLATE)
+            if self._module_name == "math":
+                swig_interface_file.write(MATH_HEADER_TEMPLATE)
             if self._module_name == "BVH":
                 swig_interface_file.write(BVH_HEADER_TEMPLATE)
             if self._module_name == "Prs3d":
