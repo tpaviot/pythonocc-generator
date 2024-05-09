@@ -149,6 +149,7 @@ HXX_TO_EXCLUDE_FROM_BEING_INCLUDED = [
     "IMeshData_ParametersListArrayAdaptor.hxx",
     "Standard_MemoryUtils.hxx",
     "math_VectorBase.hxx",
+    "StepToTopoDS_Builder.hxx",
 ]
 
 # some typedefs parsed by CppHeader can't be wrapped
@@ -781,14 +782,6 @@ TEMPLATE_SETTER_PYI = Template(
     "    def Set${Function_Name}(${Setter_Parameters_Hints}) -> None: ...\n"
 )
 
-TEMPLATE_HASHCODE = """
-        %extend {
-            Standard_Integer __hash__() {
-            return $self->HashCode();
-            }
-        };
-"""
-
 TIMESTAMP_TEMPLATE = Template(
     """
 ############################
@@ -856,6 +849,14 @@ TOPODS_SHAPE_PICKLE_TEMPLATE = """
 };
 """
 
+HASH_TOPODS_SHAPE_TEMPLATE = """
+%extend TopoDS_Shape {
+    size_t __hash__() {
+    std::hash<TopoDS_Shape> shapeHasher;
+    size_t hashValue = shapeHasher(*self);
+    return hashValue;}
+};
+"""
 
 ###########################
 # Template for byref enum #
@@ -2502,9 +2503,6 @@ def process_function(f, overload=False):
     if canceled:
         str_typehint = ""
     # if the function is HashCode, we add immediately after
-    # an __hash__ overloading
-    if function_name == "HashCode" and len(f["parameters"]) == 1:
-        str_function += TEMPLATE_HASHCODE
     str_function = str_function.replace("const const", "const") + "\n"
     return str_function, str_typehint
 
@@ -3085,7 +3083,9 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         if check_has_related_handle(class_name) or class_name == "Standard_Transient":
             # Extend class by GetHandle method
             class_def_str += f"%make_alias({class_name})\n\n"
-
+        # hashing TopoDS_Shape . TODO: do it far all other classes that need to be hashed
+        if class_name == "TopoDS_Shape":
+            class_def_str += HASH_TOPODS_SHAPE_TEMPLATE
         # if shape can be serialized as a Json, both get/set, implement pickling
         if (
             "DumpJson" in class_def_str

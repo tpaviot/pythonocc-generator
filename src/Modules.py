@@ -2588,6 +2588,9 @@ OCE_MODULES = [
             "Resource",
         ],
         [],
+        {
+            "STEPControl_Reader": ["ReadStream::670ef148332e793552b9d850beda7220"]
+        },  # ReadStream
     ),
     (
         "STEPSelections",
