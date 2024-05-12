@@ -1295,6 +1295,7 @@ OCE_MODULES = [
         "ShapeAnalysis",
         ["TColGeom", "Message", "Adaptor2d", "Geom"],
         ["ShapeAnalysis_BoxBndTreeSelector", "ShapeCustom_ConvertToRevolution"],
+        {"ShapeAnalysis_FreeBounds": ["ConnectEdgesToWires", "ConnectWiresToWires"]},
     ),
     (
         "ShapeFix",

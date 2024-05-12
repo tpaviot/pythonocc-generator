@@ -1,5 +1,5 @@
 #!/usr/bin/python
-##Copyright 2008-2022 Thomas Paviot (tpaviot@gmail.com)
+##Copyright 2008-2024 Thomas Paviot (tpaviot@gmail.com)
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -79,7 +79,7 @@ log.addHandler(console_handler)
 ####################
 # Global variables #
 ####################
-DOC_URL = "https://www.opencascade.com/doc/occt-7.7.0/refman/html"
+DOC_URL = "https://dev.opencascade.org/doc/occt-7.7.0/refman/html"
 
 ##################
 # For statistics #
@@ -589,6 +589,37 @@ class $NCollection_Sequence_Template_Instanciation:
     def SetValue(self, theIndex: int, theValue: $Type_T) -> None: ...
 """
 )
+
+SHAPE_ANALYSIS_FREE_BOUNDS_TEMPLATE = """
+%extend ShapeAnalysis_FreeBounds {
+    static Handle(TopTools_HSequenceOfShape) ConnectEdgesToWires(opencascade::handle<TopTools_HSequenceOfShape> & edges,
+              const Standard_Real toler,
+              const Standard_Boolean shared)
+        {
+            Handle(TopTools_HSequenceOfShape) owires = new TopTools_HSequenceOfShape;
+            ShapeAnalysis_FreeBounds::ConnectEdgesToWires(edges, toler, shared, owires);
+            return owires;
+        }
+    };
+
+%extend ShapeAnalysis_FreeBounds {
+    static Handle(TopTools_HSequenceOfShape) ConnectWiresToWires(opencascade::handle<TopTools_HSequenceOfShape> & iwires,
+              const Standard_Real toler,
+              const Standard_Boolean shared)
+        {
+            Handle(TopTools_HSequenceOfShape) owires = new TopTools_HSequenceOfShape;
+            ShapeAnalysis_FreeBounds::ConnectWiresToWires(iwires, toler, shared, owires);
+            return owires;
+        }
+    };
+"""
+
+SHAPE_ANALYSIS_FREE_BOUNDS_TEMPLATE_PYI = """    @staticmethod
+    def ConnectEdgesToWires(edges: TopTools_HSequenceOfShape, toler: float, shared: bool) -> TopTools_HSequenceOfShape: ...
+    @staticmethod
+    def ConnectWiresToWires(iwires: TopTools_HSequenceOfShape, toler: float, shared: bool) ->  TopTools_HSequenceOfShape: ...
+"""
+
 
 # We extend the NCollection_DataMap template with a Keys
 # method that returns a list of Keys
@@ -3086,6 +3117,9 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # hashing TopoDS_Shape . TODO: do it far all other classes that need to be hashed
         if class_name == "TopoDS_Shape":
             class_def_str += HASH_TOPODS_SHAPE_TEMPLATE
+        if class_name == "ShapeAnalysis_FreeBounds":
+            class_def_str += SHAPE_ANALYSIS_FREE_BOUNDS_TEMPLATE
+            class_pyi_str += SHAPE_ANALYSIS_FREE_BOUNDS_TEMPLATE_PYI
         # if shape can be serialized as a Json, both get/set, implement pickling
         if (
             "DumpJson" in class_def_str
@@ -3109,7 +3143,11 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # they used to be skipped, but it's better to explicitly
         # raise a MethodNotWrappedError exception
         for excluded_method_name in members_functions_to_exclude:
-            if excluded_method_name != "Handle" and "::" not in excluded_method_name:
+            if (
+                excluded_method_name != "Handle"
+                and "::" not in excluded_method_name
+                and "Connect" not in excluded_method_name
+            ):
                 class_def_str += "\n\t@methodnotwrapped\n"
                 class_def_str += f"\tdef {excluded_method_name}(self):\n\t\tpass\n"
         class_def_str += "\t}\n};\n\n"
