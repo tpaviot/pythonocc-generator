@@ -1049,6 +1049,7 @@ OCE_MODULES = [
             "AppParCurves",
             "Bnd",
             "IntCurvesFace",
+            "Geom2dHatch",
         ],
         [
             "BOPTools_Parallel",

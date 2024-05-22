@@ -100,7 +100,7 @@ for tk in ALL_TOOLKITS:
     TOOLKITS |= tk
 
 LICENSE_HEADER = """/*
-Copyright 2008-2023 Thomas Paviot (tpaviot@gmail.com)
+Copyright 2008-2024 Thomas Paviot (tpaviot@gmail.com)
 
 This file is part of pythonOCC.
 pythonOCC is free software: you can redistribute it and/or modify
@@ -186,6 +186,8 @@ TYPEDEF_TO_EXCLUDE = [
     "IMeshData::ICurveArrayAdaptor",
     "Prs3d_ShapeTool",  # circular import
     "StdSelect_ViewerSelector3d",  # circular import
+    "TopoDS_ListOfShape",
+    "TopoDS_ListIteratorOfListOfShape",
 ]
 
 # Following are standard integer typedefs. They have to be replaced
@@ -296,6 +298,8 @@ TEMPLATES_TO_EXCLUDE = [
     "StepGeom_Array2OfCartesianPoint",
     "StepGeom_Array2OfSurfacePatch",
     "TFunction_Array1OfDataMapOfGUIDDriver",
+    "TopoDS_ListOfShape",  # shadows TopTools_ListOfShape
+    "TopoDS_ListIteratorOfListOfShape",  # shadows TopTools_ListIteratorOfListOfShape
 ]
 
 ##########################
@@ -339,9 +343,15 @@ GRAPHIC3D_DEFINE_HEADER = """
 """
 
 NCOLLECTION_HEADER_TEMPLATE = """
+%include "Standard_Macro.hxx";
+%include "Standard_DefineAlloc.hxx";
+%include "NCollection_DefineAlloc.hxx";
 %include "NCollection_TypeDef.hxx";
 %include "NCollection_Array1.hxx";
 %include "NCollection_Array2.hxx";
+%include "NCollection_BaseList.hxx";
+%include "NCollection_BaseMap.hxx";
+%include "NCollection_BasePointerVector.hxx";
 %include "NCollection_Map.hxx";
 %include "NCollection_DefaultHasher.hxx";
 %include "NCollection_List.hxx";
@@ -351,8 +361,6 @@ NCOLLECTION_HEADER_TEMPLATE = """
 %include "NCollection_IndexedDataMap.hxx";
 %include "NCollection_DoubleMap.hxx";
 %include "NCollection_DefineAlloc.hxx";
-%include "Standard_Macro.hxx";
-%include "Standard_DefineAlloc.hxx";
 %include "NCollection_UBTree.hxx";
 %include "NCollection_UBTreeFiller.hxx";
 %include "NCollection_Lerp.hxx";
