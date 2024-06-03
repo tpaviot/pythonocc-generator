@@ -584,16 +584,7 @@ OCE_MODULES = [
         [],
     ),
     ("BRepAdaptor", ["TopLoc", "Geom2d", "Message", "Adaptor2d"], []),
-    (
-        "BRepTools",
-        ["TShort", "Poly"],
-        [],
-        {
-            "BRepTools_ReShape": ["Merge"],
-            "BRepTools_History": ["BRepTools_History", "Merge"],
-            "BRepTools_PurgeLocations": ["ModifiedShape"],
-        },
-    ),
+    ("BRepTools", ["TShort", "Poly"], []),
     (
         "BinTools",
         ["Message", "CDF"],
@@ -2034,6 +2025,7 @@ OCE_MODULES = [
             "Media",
             "Prs3d",
             "BRepTools",
+            "Adaptor2d",
         ],
         ["StdPrs_DeflectionCurve"],
     ),
