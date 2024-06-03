@@ -385,6 +385,10 @@ NCOLLECTION_HEADER_TEMPLATE = """
 %ignore NCollection_List::First();
 %ignore NCollection_List::Last();
 %ignore NCollection_TListIterator::Value();
+
+%ignore NCollection_Array2::Value();
+%ignore NCollection_Array2::ChangeValue();
+%ignore NCollection_Array2::operator();
 """
 
 MATH_HEADER_TEMPLATE = """
@@ -1812,6 +1816,18 @@ def adapt_return_type(return_type):
     for replace in replaces:
         return_type = return_type.replace(replace, "")
     return_type = return_type.strip()
+
+    if (
+        "const" in return_type
+        and "&" in return_type
+        and ("Surface" in return_type or "Curve" in return_type)
+        and "handle" not in return_type
+    ):
+        logging.warning(f"{return_type} wrapped as a copy")
+        return_type = return_type.replace("const", "")
+        return_type = return_type.replace("&", "")
+        return_type = return_type.strip()
+        return return_type
     # replace Standard_CString with char *
     return_type = return_type.replace("const Standard_CString", "Standard_CString")
     return_type = return_type.replace("Standard_CString &", "Standard_CString")
