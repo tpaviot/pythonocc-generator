@@ -584,7 +584,12 @@ OCE_MODULES = [
         [],
     ),
     ("BRepAdaptor", ["TopLoc", "Geom2d", "Message", "Adaptor2d"], []),
-    ("BRepTools", ["TShort", "Poly"], []),
+    (
+        "BRepTools",
+        ["TShort", "Poly"],
+        [],
+        {"BRepTools_PurgeLocations": ["ModifiedShape"]},
+    ),
     (
         "BinTools",
         ["Message", "CDF"],
