@@ -74,7 +74,7 @@ log = logging.getLogger()
 log.setLevel(logging.INFO)
 log_file_name = os.path.join(SWIG_OUTPUT_PATH, "generator.log")
 # ensure log file is emptied before running the generator
-lf = open(log_file_name, "w")
+lf = open(log_file_name, "w", encoding="utf8")
 lf.close()
 
 file_handler = logging.FileHandler(log_file_name)
@@ -87,7 +87,7 @@ log.addHandler(console_handler)
 ####################
 # Global variables #
 ####################
-DOC_URL = "https://dev.opencascade.org/doc/occt-7.8.0/refman/html/"
+DOC_URL = "https://dev.opencascade.org/doc/occt-7.7.0/refman/html"
 
 ##################
 # For statistics #
@@ -977,7 +977,7 @@ def get_log_header():
     standard_version_header = os.path.join(OCE_INCLUDE_DIR, "Standard_Version.hxx")
     occ_version = "unknown"
     if os.path.isfile(standard_version_header):
-        with open(standard_version_header, "r") as f:
+        with open(standard_version_header, "r", encoding="utf8") as f:
             file_lines = f.readlines()
         for file_line in file_lines:
             if file_line.startswith("#define OCC_VERSION_COMPLETE"):
@@ -1138,7 +1138,7 @@ def adapt_header_file(header_content):
             # @TODO find inheritance name
             typename = match.split("(")[1].split(",")[0]
             base_typename = match.split(",")[1].split(")")[0]
-            logging.info(f"Found HARRAY1 definition{typename}:{base_typename}")
+            logging.info("Found HARRAY1 definition %s:%s", typename, base_typename)
             ALL_HARRAY1[typename] = base_typename.strip()
     # Search for HARRAY2
     outer = re.compile("DEFINE_HARRAY2[\\s]*\\([\\w\\s]+\\,+[\\w\\s]+\\)")
@@ -1147,7 +1147,7 @@ def adapt_header_file(header_content):
             # @TODO find inheritance name
             typename = match.split("(")[1].split(",")[0]
             base_typename = match.split(",")[1].split(")")[0]
-            logging.info(f"Found HARRAY2 definition{typename}:{base_typename}")
+            logging.info("Found HARRAY2 definition %s:%s", typename, base_typename)
             ALL_HARRAY2[typename] = base_typename.strip()
     # Search for HSEQUENCE
     outer = re.compile("DEFINE_HSEQUENCE[\\s]*\\([\\w\\s]+\\,+[\\w\\s]+\\)")
@@ -1156,7 +1156,7 @@ def adapt_header_file(header_content):
             # @TODO find inheritance name
             typename = match.split("(")[1].split(",")[0]
             base_typename = match.split(",")[1].split(")")[0]
-            logging.info(f"Found HSEQUENCE definition{typename}:{base_typename}")
+            logging.info("Found HSEQUENCE definition %s:%s", typename, base_typename)
             ALL_HSEQUENCE[typename] = base_typename.strip()
     # skip some defines that prevent header parsing
     header_content = header_content.replace(
@@ -1412,7 +1412,7 @@ def process_typedefs(typedefs_dict):
                 h_typ = (template_type.split("<")[1]).split(">")[0]
             else:
                 logging.warning(
-                    f"This template type cannot be handled: {template_type}"
+                    "This template type cannot be handled: %s", template_type
                 )
                 continue
             module = h_typ.split("_")[0]
@@ -1523,8 +1523,8 @@ def adapt_enum_value(enum_value):
     """
     if isinstance(enum_value, int) or "int (" not in enum_value:
         return enum_value
-    else:
-        return enum_value.split("int ( ")[1].split(")")[0].strip()
+
+    return enum_value.split("int ( ")[1].split(")")[0].strip()
 
 
 def process_enums(enums_list):
@@ -1604,10 +1604,10 @@ def process_enums(enums_list):
                 ALL_ENUMS.append(enum_name)
 
         if enum_name in ENUMS_TO_EXLUDE:
-            logging.info(f"Skipping Enum: {enum_name}")
+            logging.info("Skipping Enum: %s", enum_name)
             continue
 
-        logging.info(f"Enum: {enum_name}")
+        logging.info("Enum: %s", enum_name)
         enum_str += f"enum {enum_name}" + " {\n"
         if python_proxy:
             enum_python_proxies += f"\nclass {enum_name}(IntEnum):\n"
@@ -1621,20 +1621,17 @@ def process_enums(enums_list):
                     number_of_string_aliases += 1
                 else:
                     adapted_enum_value -= number_of_string_aliases
-            enum_str += "\t%s = %s,\n" % (enum_value["name"], adapted_enum_value)
+            enum_str += f"\t{enum_value['name']} = {adapted_enum_value},\n"
             if python_proxy:
-                enum_python_proxies += "\t%s = %s\n" % (
-                    enum_value["name"],
-                    adapted_enum_value,
+                enum_python_proxies += (
+                    f"\t{enum_value['name']} = {adapted_enum_value}\n"
                 )
-                enum_pyi_str += "    %s: int = ...\n" % enum_value["name"]
+                enum_pyi_str += f"    {enum_value['name']}: int = ...\n"
                 # then, in both proxy and stub files, we create the alias for each named enum,
                 # for instance
                 # gp_IntrisicXYZ = gp_EulerSequence.gp_IntrinsicXYZ
-                alias_str += "%s = %s.%s\n" % (
-                    enum_value["name"],
-                    enum_name,
-                    enum_value["name"],
+                alias_str += (
+                    f"{enum_value['name']} = {enum_name}.{enum_value['name']}\n"
                 )
         enum_python_proxies += alias_str
         enum_pyi_str += "\n" + alias_str
@@ -1746,7 +1743,9 @@ def adapt_param_type_and_name(param_type_and_name):
         if enum_name not in ALL_BYREF_ENUMS:
             ALL_BYREF_ENUMS.append(enum_name)
         logging.info(
-            f"Enum passed by reference: {param_type_and_name} changed to {enum_name} &OutValue"
+            "Enum passed by reference: %s changed to %s &OutValue",
+            param_type_and_name,
+            enum_name,
         )
         adapted_param_type_and_name = f"{enum_name} &OutValue"
     else:
@@ -1855,7 +1854,7 @@ def adapt_return_type(return_type):
         and ("Surface" in return_type or "Curve" in return_type)
         and "handle" not in return_type
     ):
-        logging.warning(f"{return_type} wrapped as a copy")
+        logging.warning("%s wrapped as a copy", return_type)
         return_type = return_type.replace("const", "")
         return_type = return_type.replace("&", "")
         return_type = return_type.strip()
@@ -2070,14 +2069,16 @@ def filter_member_functions(
             in member_functions_to_exclude
         ):
             logging.info(
-                f"    explicitly excluded method {class_name}::{public_method_signature}"
+                "    explicitly excluded method %s::%s",
+                class_name,
+                public_method_signature,
             )
             continue
         if class_is_abstract and public_method["constructor"]:
-            logging.info(f"    Constructor skipped for abstract class {class_name}")
+            logging.info("    Constructor skipped for abstract class %s", class_name)
             continue
         if "<" in method_name:
-            logging.info(f"    {method_name} skipped because invalid name")
+            logging.info("    %s skipped because invalid name", method_name)
             continue
         # finally, we add this method to process in the correct list
         if public_method["constructor"]:
@@ -2125,7 +2126,7 @@ def adapt_type_for_hint(type_str):
     if "std::ostream &" in type_str:
         return "str"
     if "_" not in type_str:  # TODO these are special cases, e.g. nested classes
-        logging.warning(f"    [TypeHint] Skipping type {type_str}, should contain _")
+        logging.warning("    [TypeHint] Skipping type %s, should contain _", type_str)
         return False  # returns a boolean to prevent type hint creation, the type will not be found
     # we only keep what is
     for tp in type_str.split(" "):
@@ -2147,16 +2148,18 @@ def adapt_type_for_hint(type_str):
     if type_str.startswith("opencascade::handle<"):
         type_str = type_str[20:].split(">")[0].strip()
     if ":" in type_str:
-        logging.warning(f"    [TypeHint] Skip type {type_str}, because of trailing :")
+        logging.warning("    [TypeHint] Skip type %s, because of trailing :", type_str)
         return False
     if "_" in type_str and not is_module(type_str.split("_")[0]):
         logging.warning(
-            f'    [TypeHint] Skipping unknown type {type_str}, {type_str.split("_")[0]} not in module list'
+            "    [TypeHint] Skipping unknown type %s, %s not in module list",
+            type_str,
+            type_str.split("_")[0],
         )
         return False
     if type_str.count("<") >= 1:  # at least one <, it's a template
         logging.warning(
-            f"    [TypeHint] Skipping type {type_str}, seems to be a template"
+            "    [TypeHint] Skipping type %s, seems to be a template", type_str
         )
         return False
 
@@ -2171,9 +2174,10 @@ def get_classname_from_handle(handle_name):
     returns: Something
     """
     if handle_name.startswith("opencascade::handle<"):
-        class_name = handle_name[20:].split(">")[0].strip()
-
-    return class_name
+        return handle_name[20:].split(">")[0].strip()
+    raise AssertionError(
+        f"Should be an opencascade handle, you provided a {handle_name}"
+    )
 
 
 def adapt_type_hint_parameter_name(param_name_str):
@@ -2367,7 +2371,7 @@ def process_function(f, overload=False):
         operand = function_name.split("operator ")[1].strip()
         # if not allowed, just skip it
         if operand not in operator_wrapper:
-            logging.info(f"    operand {operand} cannot be wrapped")
+            logging.info("    operand %s cannot be wrapped", operand)
             return "", ""
         ##############################################
         # Cases where the method is actually wrapped #
@@ -2425,22 +2429,19 @@ def process_function(f, overload=False):
         "Standard_Real&",
         "Standard_Boolean&",
     ]:
-        logging.info(f"    Creating Get and Set methods for method {function_name}")
+        logging.info("    Creating Get and Set methods for method %s", function_name)
         modified_return_type = return_type.split(" ")[0]
         # compute the parameters type and name, separated with comma
         getter_params_type_and_names = []
         getter_params_only_names = []
         getter_param_hints = ["self"]
         for param in f["parameters"]:
-            param_type_and_name = "%s %s" % (
-                adapt_param_type(param["type"]),
-                param["name"],
-            )
+            param_type_and_name = f"{adapt_param_type(param['type'])} {param['name']}"
             getter_params_type_and_names.append(param_type_and_name)
             getter_params_only_names.append(param["name"])
             # process hints
             type_for_hint = adapt_type_for_hint(adapt_param_type(param["type"]))
-            getter_param_hints.append("%s: %s" % (param["name"], type_for_hint))
+            getter_param_hints.append(f"{param['name']}: {type_for_hint}")
 
         setter_params_type_and_names = getter_params_type_and_names + [
             f"{modified_return_type} value"
@@ -2504,11 +2505,11 @@ def process_function(f, overload=False):
             # if there's no default value, False
             # other wise the default value as a string
             param_type_and_name = [
-                "%s" % param_type,
-                "%s[%s]" % (param["name"], param["array_size"]),
+                f"{param_type}",
+                f"{param['name']}[{param['array_size']}]",
             ]
         else:
-            param_type_and_name = ["%s" % param_type, "%s" % param["name"]]
+            param_type_and_name = [f"{param_type}", f"{param['name']}"]
 
         param_string += adapt_param_type_and_name(" ".join(param_type_and_name))
 
@@ -2533,7 +2534,7 @@ def process_function(f, overload=False):
     # or 1. In some special cases, by ref returned parameters are wrapped
     # to python types and added to the return values
     # thus, some method may return a tuple
-    types_returned = ["%s" % adapt_type_for_hint(return_type)]  # by default, nothing
+    types_returned = [f"{adapt_type_for_hint(return_type)}"]  # by default, nothing
 
     if overload:
         str_typehint += "    @overload\n"
@@ -2568,7 +2569,7 @@ def process_function(f, overload=False):
                 # check if there is some OutValue
                 ov = adapt_param_type_and_name(" ".join(par))
                 if "OutValue" in ov:
-                    type_to_add = "%s" % adapt_type_for_hint(ov)
+                    type_to_add = f"{adapt_type_for_hint(ov)}"
                     if types_returned[0] == "None":
                         types_returned[0] = type_to_add
                     else:
@@ -2594,7 +2595,7 @@ def process_function(f, overload=False):
         if len(types_returned) == 1:
             returned_type_hint = types_returned[0]
         elif len(types_returned) > 1:  # it's a tuple
-            returned_type_hint = "Tuple[%s]" % (", ".join(types_returned))
+            returned_type_hint = f"Tuple[{(', '.join(types_returned))}]"
         else:
             raise AssertionError("Method should at least have one returned type.")
         str_typehint += f") -> {returned_type_hint}: ...\n"
@@ -2700,7 +2701,7 @@ def class_can_have_default_constructor(klass):
         return False
     # class must not be an abstract class
     if klass["abstract"]:
-        logging.info("    Class %s is abstract, using %%nodefaultctor." % klass["name"])
+        logging.info("    Class %s is abstract, using %%nodefaultctor.", klass["name"])
         return False
     # check if the class has at least one public constructor defined
     has_one_public_constructor = False
@@ -2777,7 +2778,8 @@ def build_inheritance_tree(classes_dict):
             class_2_module = upper_class_name_2.split("_")[0]
             if class_1_module == upper_class_name_2 == CURRENT_MODULE:
                 logging.warning(
-                    f"This is a special case, where the 2 ancestors belong the same module. Class {class_name} skipped."
+                    "This is a special case, where the 2 ancestors belong the same module. Class %s skipped.",
+                    class_name,
                 )
             if class_1_module == CURRENT_MODULE:
                 inheritance_dict[class_name] = upper_class_name_1
@@ -2792,7 +2794,9 @@ def build_inheritance_tree(classes_dict):
             # prevent multiple inheritance: OCE only has single
             # inheritance
             logging.warning(
-                f"Class {class_name} has {nbr_upper_classes} ancestors and is skipped."
+                "Class %s has %s ancestors and is skipped.",
+                class_name,
+                nbr_upper_classes,
             )
 
     # then, after that, we process both dictionaries, list so
@@ -2818,7 +2822,7 @@ def build_inheritance_tree(classes_dict):
     # at last, we return the class_list containing a list
     # of ordered classes.
     class_list = []
-    for class_name, depth_value in sorted(
+    for class_name, _ in sorted(
         inheritance_depth.items(), key=lambda kv: (kv[1], kv[0])
     ):
         if class_name in classes_dict:  # TODO: should always be the case!
@@ -2956,7 +2960,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             if class_name_to_exclude not in new_exclude_classes:
                 new_exclude_classes.append(class_name_to_exclude)
         exclude_classes = new_exclude_classes.copy()
-        # return "", ""
+
     class_def_str = ""  # the string for class definition
     class_pyi_str = ""  # the string for class type hints
 
@@ -2979,12 +2983,12 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # we rename the class if the module is the same name
         # for instance TopoDS is both a module and a class
         # then we rename the class with lowercase
-        logging.info(f"Class: {class_name}")
+        logging.info("Class: %s", class_name)
         # the class type hint
         class_name_for_pyi = class_name.split("<")[0]
 
         if class_name == CURRENT_MODULE:
-            class_def_str += "%%rename(%s) %s;\n" % (class_name.lower(), class_name)
+            class_def_str += f"%rename({class_name.lower()}) {class_name};\n"
             class_name_for_pyi = class_name_for_pyi.lower()
         # then process the class itself
         if not class_can_have_default_constructor(klass):
@@ -3020,9 +3024,8 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         for typedef_value in list(klass["typedefs"]["public"]):
             if ")" in typedef_value:
                 continue
-            typedef_str += "typedef %s %s;\n" % (
-                klass._public_typedefs[typedef_value],
-                typedef_value,
+            typedef_str += (
+                f"typedef {klass._public_typedefs[typedef_value]} {typedef_value};\n"
             )
         class_def_str += typedef_str
         # process class enums here
@@ -3035,11 +3038,11 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             # or Graphic3d_TransformPers
             if "anon" in nested_class_name:
                 continue
-            logging.info(f"    Wrap nested class {class_name}::{nested_class_name}")
+            logging.info("    Wrap nested class %s::%s", class_name, nested_class_name)
             class_def_str += "\t\tclass " + nested_class_name + " {};\n"
         ####### class enums
         if class_enums_list:
-            class_enum_def, class_enum_pyi = process_enums(class_enums_list)
+            class_enum_def, _ = process_enums(class_enums_list)
             class_def_str += class_enum_def
         # process class properties here
         properties_str = ""
@@ -3063,16 +3066,9 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             ):
                 continue
             if "array_size" in property_value:
-                temp = "\t\t%s %s[%s];\n" % (
-                    fix_type(property_value["type"]),
-                    property_value["name"],
-                    property_value["array_size"],
-                )
+                temp = f"\t\t{fix_type(property_value['type'])} {property_value['name']}[{property_value['array_size']}];\n"
             else:
-                temp = "\t\t%s %s;\n" % (
-                    fix_type(property_value["type"]),
-                    property_value["name"],
-                )
+                temp = f"\t\t{fix_type(property_value['type'])} {property_value['name']};\n"
             properties_str += temp
         # @TODO : wrap class typedefs (for instance BRepGProp_MeshProps)
         class_def_str += properties_str
@@ -3283,7 +3279,8 @@ def parse_module(module_name):
     # check if there are some files
     if len(module_headers) == 0:
         logging.warning(
-            f"No file for module {module_name}. Please check that the module name is part of occt."
+            "No file for module %s. Please check that the module name is part of occt.",
+            module_name,
         )
 
     # filter those headers
@@ -3325,7 +3322,7 @@ class ModuleWrapper:
         else:
             PYTHON_MODULE_DEPENDENCY = []
 
-        logging.info(f"## Processing module {module_name}")
+        logging.info("## Processing module %s", module_name)
         self._module_name = module_name
         self._module_docstring = get_module_docstring(module_name)
         # parse
@@ -3378,20 +3375,21 @@ class ModuleWrapper:
         #
         if GENERATE_SWIG_FILES:
             swig_interface_file = open(
-                os.path.join(SWIG_OUTPUT_PATH, "%s.i" % self._module_name), "w"
+                os.path.join(SWIG_OUTPUT_PATH, f"{self._module_name}.i"),
+                "w",
+                encoding="utf8",
             )
             # write header
             swig_interface_file.write(LICENSE_HEADER)
             # write module docstring
             # for instante define GPDOCSTRING
-            docstring_macro = "%sDOCSTRING" % self._module_name.upper()
-            swig_interface_file.write("%%define %s\n" % docstring_macro)
-            swig_interface_file.write('"%s"\n' % self._module_docstring)
+            docstring_macro = f"{self._module_name.upper()}DOCSTRING"
+            swig_interface_file.write(f"%define {docstring_macro}\n")
+            swig_interface_file.write(f'"{self._module_docstring}"\n')
             swig_interface_file.write("%enddef\n")
             # module name
             swig_interface_file.write(
-                '%%module (package="OCC.Core", docstring=%s) %s\n\n'
-                % (docstring_macro, self._module_name)
+                f'%module (package="OCC.Core", docstring={docstring_macro}) {self._module_name}\n\n'
             )
             # write windows pragmas to avoid compiler errors
             swig_interface_file.write(WIN_PRAGMAS)
@@ -3417,22 +3415,18 @@ class ModuleWrapper:
                     "#if defined(_WIN32)\n#include <windows.h>\n#endif\n"
                 )
 
-            module_headers = glob.glob(
-                "%s/%s_*.hxx" % (OCE_INCLUDE_DIR, self._module_name)
-            )
-            module_headers += glob.glob(
-                "%s/%s.hxx" % (OCE_INCLUDE_DIR, self._module_name)
-            )
+            module_headers = glob.glob(f"{OCE_INCLUDE_DIR}/{self._module_name}_*.hxx")
+            module_headers += glob.glob(f"{OCE_INCLUDE_DIR}/{self._module_name}.hxx")
             module_headers.sort()
 
             mod_header = open(
-                os.path.join(HEADERS_OUTPUT_PATH, "%s_module.hxx" % self._module_name),
+                os.path.join(HEADERS_OUTPUT_PATH, f"{self._module_name}_module.hxx"),
                 "w",
+                encoding="utf8",
             )
             mod_header.write(LICENSE_HEADER)
-            mod_header.write("#ifndef %s_HXX\n" % self._module_name.upper())
-            mod_header.write("#define %s_HXX\n\n" % self._module_name.upper())
-            mod_header.write("\n")
+            mod_header.write(f"#ifndef {self._module_name.upper()}_HXX\n")
+            mod_header.write(f"#define {self._module_name.upper()}_HXX\n\n\n")
 
             if self._module_name == "XCAFDoc":
                 mod_header.write("#include<TDF_Label.hxx>\n")
@@ -3443,10 +3437,10 @@ class ModuleWrapper:
                     os.path.basename(module_header)
                     not in HXX_TO_EXCLUDE_FROM_BEING_INCLUDED
                 ):
-                    mod_header.write("#include<%s>\n" % os.path.basename(module_header))
-            mod_header.write("\n#endif // %s_HXX\n" % self._module_name.upper())
+                    mod_header.write(f"#include<{os.path.basename(module_header)}>\n")
+            mod_header.write(f"\n#endif // {self._module_name.upper()}_HXX\n")
 
-            swig_interface_file.write("#include<%s_module.hxx>\n" % self._module_name)
+            swig_interface_file.write(f"#include<{self._module_name}_module.hxx>\n")
             swig_interface_file.write("\n//Dependencies\n")
             # Include all dependencies
             for dep in PYTHON_MODULE_DEPENDENCY:
@@ -3500,7 +3494,9 @@ class ModuleWrapper:
 
             # The EnumTemplates.i interface file, for all byref enums
             enum_template_interface_file = open(
-                os.path.join(COMMON_OUTPUT_PATH, "EnumTemplates.i"), "w"
+                os.path.join(COMMON_OUTPUT_PATH, "EnumTemplates.i"),
+                "w",
+                encoding="utf8",
             )
             for enum_name in ALL_BYREF_ENUMS:
                 enum_template_interface_file.write(BYREF_ENUM_TEMPLATE % enum_name)
@@ -3510,7 +3506,9 @@ class ModuleWrapper:
         # write pyi stub file
         #
         pyi_stub_file = open(
-            os.path.join(SWIG_OUTPUT_PATH, "%s.pyi" % self._module_name), "w"
+            os.path.join(SWIG_OUTPUT_PATH, f"{self._module_name}.pyi"),
+            "w",
+            encoding="utf8",
         )
         # first write the header
         pyi_stub_file.write("from enum import IntEnum\n")
@@ -3559,7 +3557,7 @@ def process_toolkit(toolkit_name):
     For instance : TKernel, TKMath etc.
     """
     modules_list = TOOLKITS[toolkit_name]
-    logging.info(f"Processing toolkit {toolkit_name} ===")
+    logging.info("Processing toolkit %s ===", toolkit_name)
     for module in sorted(modules_list):
         process_module(module)
 
@@ -3596,5 +3594,5 @@ if __name__ == "__main__":
     total_time = end_time - start_time
     # footer
     logging.info(get_log_footer(total_time))
-    logging.info(f"Number of classes: {NB_TOTAL_CLASSES}")
-    logging.info(f"Number of methods: {NB_TOTAL_METHODS}")
+    logging.info("Number of classes: %s", NB_TOTAL_CLASSES)
+    logging.info("Number of methods: %s", NB_TOTAL_METHODS)
