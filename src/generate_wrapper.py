@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 ##Copyright 2008-2024 Thomas Paviot (tpaviot@gmail.com)
 
 # This program is free software: you can redistribute it and/or modify
@@ -87,7 +87,7 @@ log.addHandler(console_handler)
 ####################
 # Global variables #
 ####################
-DOC_URL = "https://dev.opencascade.org/doc/occt-7.7.0/refman/html"
+DOC_URL = "https://dev.opencascade.org/doc/occt-7.8.0/refman/html/"
 
 ##################
 # For statistics #
@@ -664,8 +664,8 @@ TEMPLATE__EQ__ = Template(
     """
 %extend{
     bool __eq_wrapper__($TYPE other) {
-    if (*self==other) return true;
-    else return false;
+        if (*self==other) return true;
+        else return false;
     }
 }
 %pythoncode {
@@ -697,8 +697,8 @@ TEMPLATE__NE__ = Template(
     """
 %extend{
     bool __ne_wrapper__($TYPE other) {
-    if (*self!=other) return true;
-    else return false;
+        if (*self!=other) return true;
+        else return false;
     }
 }
 %pythoncode {
@@ -903,12 +903,44 @@ TOPODS_SHAPE_PICKLE_TEMPLATE = """
 HASH_TOPODS_SHAPE_TEMPLATE = """
 %extend TopoDS_Shape {
     size_t __hash__() {
-    std::hash<TopoDS_Shape> shapeHasher;
-    size_t hashValue = shapeHasher(*self);
-    return hashValue;}
+        std::hash<TopoDS_Shape> shapeHasher;
+        size_t hashValue = shapeHasher(*self);
+        return hashValue;
+    }
 };
 """
 
+STANDARD_TRANSIENT_OPERATORS_TEMPLATE = """
+%extend Standard_Transient {
+    %pythoncode {
+    __repr__ = _dumps_object
+
+    def __eq__(self, right):
+        if not isinstance(right, Standard_Transient):
+            return False
+        return self.__eq_wrapper__(right)
+
+    def __ne__(self, right):
+        if not isinstance(right, Standard_Transient):
+            return True
+        return self.__ne_wrapper__(right)
+    }
+};
+
+%extend Standard_Transient {
+    bool __eq_wrapper__(const opencascade::handle<Standard_Transient> & other) {
+        if (self==other) return true;
+        else return false;
+    }
+    bool __ne_wrapper__(const opencascade::handle<Standard_Transient> & other) {
+        if (self!=other) return true;
+        else return false;
+    }
+    size_t __hash__() {
+        return opencascade::hash(self);
+    }
+};
+"""
 ###########################
 # Template for byref enum #
 ###########################
@@ -2307,6 +2339,15 @@ def process_function(f, overload=False):
         # this is because Handle (something) some function can not be
         # handled by swig
         return "", ""
+    #
+    # Parent class
+    #
+    if f["static"] and f["parent"] is not None:
+        parent_class_name = f["parent"]["name"]
+        if parent_class_name == CURRENT_MODULE:
+            parent_class_name = parent_class_name.lower()
+    else:
+        parent_class_name = None
     #############
     # Operators #
     #############
@@ -2335,7 +2376,9 @@ def process_function(f, overload=False):
             param = f["parameters"][0]
             param_type = param["type"].replace("&", "").strip()
             return (
-                operator_wrapper[operand].substitute({"TYPE": param_type}),
+                operator_wrapper[operand].substitute(
+                    {"TYPE": param_type, "CLASS": parent_class_name}
+                ),
                 "",
             )  # not hint for operator
 
@@ -2371,12 +2414,6 @@ def process_function(f, overload=False):
         return_type = "static " + return_type
     if f["static"] and f["parent"] is None:
         return_type = "static " + return_type
-    if f["static"] and f["parent"] is not None:
-        parent_class_name = f["parent"]["name"]
-        if parent_class_name == CURRENT_MODULE:
-            parent_class_name = parent_class_name.lower()
-    else:
-        parent_class_name = None
     # Case where primitive values are accessed by reference
     # one method Get* that returns the object
     # one method Set* that sets the object
@@ -3146,6 +3183,9 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         if check_has_related_handle(class_name) or class_name == "Standard_Transient":
             # Extend class by GetHandle method
             class_def_str += f"%make_alias({class_name})\n\n"
+        if class_name == "Standard_Transient":
+            # Extend the class with eq/neq/hash operators
+            class_def_str += STANDARD_TRANSIENT_OPERATORS_TEMPLATE
         # hashing TopoDS_Shape . TODO: do it far all other classes that need to be hashed
         if class_name == "TopoDS_Shape":
             class_def_str += HASH_TOPODS_SHAPE_TEMPLATE
