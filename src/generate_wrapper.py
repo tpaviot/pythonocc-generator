@@ -34,7 +34,15 @@ import time
 
 import CppHeaderParser
 
-from Modules import *
+from Modules import (
+    TOOLKIT_Foundation,
+    TOOLKIT_Modeling,
+    TOOLKIT_Visualisation,
+    TOOLKIT_DataExchange,
+    TOOLKIT_OCAF,
+    TOOLKIT_VTK,
+    OCE_MODULES,
+)
 
 ##############################################
 # Load configuration file and setup settings #
@@ -2426,7 +2434,7 @@ def process_function(f, overload=False):
     # process parameters
     parameters_types_and_names = []
     parameters_definition_strs = []
-    num_parameters = len(f["parameters"])
+    # num_parameters = len(f["parameters"])
     for param in f["parameters"]:
         param_string = ""
         param_type = adapt_param_type(param["type"])
@@ -3376,8 +3384,8 @@ class ModuleWrapper:
                 module_headers, HXX_TO_EXCLUDE_FROM_BEING_INCLUDED
             ):
                 if (
-                    not os.path.basename(module_header)
-                    in HXX_TO_EXCLUDE_FROM_BEING_INCLUDED
+                    os.path.basename(module_header)
+                    not in HXX_TO_EXCLUDE_FROM_BEING_INCLUDED
                 ):
                     mod_header.write("#include<%s>\n" % os.path.basename(module_header))
             mod_header.write("\n#endif // %s_HXX\n" % self._module_name.upper())
