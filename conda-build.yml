@@ -41,3 +41,11 @@ jobs:
         source activate pythonoccgen && \
         python generate_wrapper.py
     displayName: 'Run pythonocc-generator'
+
+  - bash: |
+        wget https://github.com/Open-Cascade-SAS/OCCT/archive/refs/tags/V7_8_1.tar.gz && \
+        tar -zxvf V7_8_1.tar.gz && \
+        cd src && \
+        source activate pythonoccgen && \
+        ./export_occt_structure_to_json.py --output occt_toolkits.json ../OCCT-7_8_1
+    displayName: 'Run occt structure exporter'
