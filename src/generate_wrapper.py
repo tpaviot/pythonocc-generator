@@ -1660,7 +1660,7 @@ def adapt_param_type(param_type):
     return param_type
 
 
-def adapt_param_type_and_name(param_type_and_name):
+def adapt_param_type_and_name(param_type_and_name, parent_method_name = ""):
     """We sometime need to replace some argument type and name
     to properly deal with byref values
     """
@@ -1714,9 +1714,17 @@ def adapt_param_type_and_name(param_type_and_name):
         if enum_name not in ALL_BYREF_ENUMS:
             ALL_BYREF_ENUMS.append(enum_name)
         logging.info(
-            f"Enum passed by reference: {param_type_and_name} changed to {enum_name} &OutValue"
+            f"Enum returned by reference: {param_type_and_name} changed to {enum_name} &OutValue"
         )
         adapted_param_type_and_name = f"{enum_name} &OutValue"
+    # TopoDS_Shape returned by reference
+    elif ("TopoDS_Shape" in param_type_and_name) and ("&" in param_type_and_name) and ("const" not in param_type_and_name) and ("NCollection" not in param_type_and_name) and parent_method_name.startswith(('Get', 'Read', 'Copy', 'Make')):
+        logging.info(
+            f"TopoDS_Shape returned by reference: {param_type_and_name} changed to TopoDS_Shape &OutValue"
+        )
+        adapted_param_type_and_name = (
+            "TopoDS_Shape &OutValue"
+        )
     else:
         adapted_param_type_and_name = param_type_and_name
     if "& &" in adapted_param_type_and_name:
@@ -1917,7 +1925,7 @@ def process_function_docstring(f):
                 param_type = "str"
             # check the &OutValue
             the_type_and_name = param["type"] + param["name"]
-            if "OutValue" in adapt_param_type_and_name(the_type_and_name):
+            if "OutValue" in adapt_param_type_and_name(the_type_and_name, parent_method_name=function_name):
                 # this parameter has to be added to the
                 # returns, not the parameters of the python method
                 ret.append(f'{param["name"]}: {param_type}')
@@ -2473,7 +2481,7 @@ def process_function(f, overload=False):
         else:
             param_type_and_name = ["%s" % param_type, "%s" % param["name"]]
 
-        param_string += adapt_param_type_and_name(" ".join(param_type_and_name))
+        param_string += adapt_param_type_and_name(" ".join(param_type_and_name), parent_method_name=function_name)
 
         if "defaultValue" in param:
             def_value = adapt_default_value_parmlist(param)
@@ -2529,7 +2537,7 @@ def process_function(f, overload=False):
                     canceled = True
                     break
                 # check if there is some OutValue
-                ov = adapt_param_type_and_name(" ".join(par))
+                ov = adapt_param_type_and_name(" ".join(par), parent_method_name=function_name)
                 if "OutValue" in ov:
                     type_to_add = "%s" % adapt_type_for_hint(ov)
                     if types_returned[0] == "None":
