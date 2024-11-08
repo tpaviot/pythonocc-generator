@@ -3067,6 +3067,7 @@ OCE_MODULES = [
             "Poly",
         ],
         [],
+        {"RWPly_PlyWriterContext": ["Open"]},
     ),
     (
         "RWMesh",
