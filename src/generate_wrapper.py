@@ -941,6 +941,34 @@ STANDARD_TRANSIENT_OPERATORS_TEMPLATE = """
     }
 };
 """
+
+# for Geom, Geom2d, Poly, TColStd, TColgp, TShort
+NUMPY_INIT_TEMPLATE = """
+/*
+numpy support for Geom, Geom2d, Poly, TColStd, TColgp, TShort see
+https://github.com/tpaviot/pythonocc-core/pull/1381
+*/
+%{
+#define SWIG_FILE_WITH_INIT
+%}
+%include ../common/numpy.i
+%include ../common/ArrayMacros.i
+
+%init %{
+        import_array();
+%}
+
+%pythoncode {
+    import numpy as np
+}
+%apply (double* IN_ARRAY1, int DIM1) { (double* numpyArrayU, int nRowsU) };
+%apply (double* IN_ARRAY2, int DIM1, int DIM2) { (double* numpyArrayUV, int nRowsUV, int nColUV) };
+%apply (double* ARGOUT_ARRAY1, int DIM1) { (double* numpyArrayResultArgout, int aSizeArgout) };
+
+/*
+end of numpy support section
+*/
+"""
 ###########################
 # Template for byref enum #
 ###########################
@@ -1280,10 +1308,11 @@ def process_templates_from_typedefs(list_of_typedefs):
             if "_" not in template_name:
                 wrap_template = False
                 logging.warning(
-                    f"Template {template_name} skipped because name doesn't contain '_'."
+                    "Template %s skipped because name doesn't contain '_'.",
+                    template_name,
                 )
             if wrap_template:
-                wrapper_str += f"%template({template_name}) {template_type};\n"
+                # wrapper_str += f"%template({template_name}) {template_type};\n"
                 # if a NCollection_Array1, extend this template to benefit from pythonic methods
                 # All "Array1" classes are considered as python arrays
                 # TODO : it should be a good thing to use decorators here, to avoid code duplication
@@ -1291,16 +1320,82 @@ def process_templates_from_typedefs(list_of_typedefs):
                     get_type_for_ncollection_array(template_type)
                 )
                 if "NCollection_Array1" in template_type:
-                    wrapper_str += NCOLLECTION_ARRAY1_EXTEND_TEMPLATE.substitute(
-                        {"NCollection_Array1_Template_Instanciation": template_type}
-                    )
+                    # in this cas, we use the Array1ExtendIter(T) macro by default
+                    # if the NCollection_Array1 involves Standard_Integer or Standard_Real
+                    # then the NCollection_Array1 can be wrapped as a numpy array and the
+                    # macro Array1NumpyTemplate is used.
+                    # TO REMOVE
+                    # wrapper_str += NCOLLECTION_ARRAY1_EXTEND_TEMPLATE.substitute(
+                    #     {"NCollection_Array1_Template_Instanciation": template_type}
+                    # )
+                    base_type = template_type[:-1].split("NCollection_Array1<")[1]
+                    if base_type == "Standard_ShortReal":
+                        wrapper_str += "%apply (float* IN_ARRAY1, int DIM1) { (float* numpyArray1, int nRows1) };\n"
+                        wrapper_str += "%apply (float* ARGOUT_ARRAY1, int DIM1) { (float* numpyArray1Argout, int nRows1Argout) };\n"
+                        wrapper_str += f"Array1NumpyTemplate({template_name}, float, Standard_ShortReal)\n"
+                    elif base_type == "Standard_Real":
+                        wrapper_str += "%apply (double* IN_ARRAY1, int DIM1) { (double* numpyArray1, int nRows1) };\n"
+                        wrapper_str += "%apply (double* ARGOUT_ARRAY1, int DIM1) { (double* numpyArray1Argout, int nRows1Argout) };\n"
+                        wrapper_str += f"Array1NumpyTemplate({template_name}, double, Standard_Real)\n"
+                    elif base_type == "Standard_Integer":
+                        wrapper_str += "%apply (long long* IN_ARRAY1, int DIM1) { (long long* numpyArray1, int nRows1) };\n"
+                        wrapper_str += "%apply (long long* ARGOUT_ARRAY1, int DIM1) { (long long* numpyArray1Argout, int nRows1Argout) };\n"
+                        wrapper_str += f"Array1NumpyTemplate({template_name}, long long, Standard_Integer)\n"
+                    elif base_type == "Poly_Triangle":
+                        wrapper_str += "%apply (long long* IN_ARRAY2, int DIM1, int DIM2) { (long long* numpyArray2, int nRows2, int nDims2) };\n"
+                        wrapper_str += "%apply (long long* ARGOUT_ARRAY1, int DIM1) { (long long* numpyArray2Argout, int aSizeArgout) };\n"
+                        wrapper_str += f"Array1OfTriaNumpyTemplate({template_name}, Poly_Triangle)\n\n"
+
+                    # 2D elements, i.e. that provides X() and Y() methods
+                    elif base_type in ["gp_XY", "gp_Vec2d", "gp_Pnt2d", "gp_Dir2d"]:
+                        wrapper_str += (
+                            f"Array1Of2DNumpyTemplate({template_name}, {base_type})\n"
+                        )
+                    # 3D elements, i.e. that provides X(), Y() and Z() methods
+                    elif base_type in ["gp_XYZ", "gp_Vec", "gp_Pnt", "gp_Dir"]:
+                        wrapper_str += (
+                            f"Array1Of3DNumpyTemplate({template_name}, {base_type})\n"
+                        )
+                    else:  # no numpy support
+                        wrapper_str += f"%template({template_name}) {template_type};\n"
+                        wrapper_str += f"Array1ExtendIter({base_type})\n\n"
                     pyi_str += NCOLLECTION_ARRAY1_EXTEND_TEMPLATE_PYI.substitute(
                         {
                             "NCollection_Array1_Template_Instanciation": template_name,
                             "Type_T": f"{basetype_hint}",
                         }
                     )
+                elif "NCollection_Array2" in template_type:
+                    # same than NCollection_Array1
+                    base_type = template_type.split("NCollection_Array2<")[1].split(
+                        ">"
+                    )[0]
+                    if base_type == "Standard_ShortReal":
+                        wrapper_str += "%apply (float* IN_ARRAY2, int DIM1, int DIM2) { (float* numpyArray2, int nRows2, int nCols2) };\n"
+                        wrapper_str += "%apply (float* ARGOUT_ARRAY1, int DIM1) { (float* numpyArray2Argout, int aSizeArgout) };\n"
+                        wrapper_str += f"Array2NumpyTemplate({template_name}, float, Standard_ShortReal)\n"
+                    elif base_type == "Standard_Real":
+                        wrapper_str += "%apply (double* IN_ARRAY2, int DIM1, int DIM2) { (double* numpyArray2, int nRows2, int nCols2) };\n"
+                        wrapper_str += "%apply (double* ARGOUT_ARRAY1, int DIM1) { (double* numpyArray2Argout, int aSizeArgout) };\n"
+                        wrapper_str += f"Array2NumpyTemplate({template_name}, double, Standard_Real)\n"
+                    elif base_type == "Standard_Integer":
+                        wrapper_str += "%apply (long long* IN_ARRAY2, int DIM1, int DIM2) { (long long* numpyArray2, int nRows2, int nCols2) };\n"
+                        wrapper_str += "%apply (long long* ARGOUT_ARRAY1, int DIM1) { (long long* numpyArray2Argout, int aSizeArgout) };\n"
+                        wrapper_str += f"Array2NumpyTemplate({template_name}, long long, Standard_Integer)\n"
+                    # 2D elements
+                    elif base_type in ["gp_XY", "gp_Vec2d", "gp_Pnt2d", "gp_Dir2d"]:
+                        wrapper_str += (
+                            f"Array2Of2DNumpyTemplate({template_name}, {base_type})\n"
+                        )
+                    # 3D elements
+                    elif base_type in ["gp_XYZ", "gp_Vec", "gp_Pnt", "gp_Dir"]:
+                        wrapper_str += (
+                            f"Array2Of3DNumpyTemplate({template_name}, {base_type})\n"
+                        )
+                    else:
+                        wrapper_str += f"%template({template_name}) {template_type};\n"
                 elif "NCollection_List" in template_type:
+                    wrapper_str += f"%template({template_name}) {template_type};\n"
                     wrapper_str += NCOLLECTION_LIST_EXTEND_TEMPLATE.substitute(
                         {"NCollection_List_Template_Instanciation": template_type}
                     )
@@ -1311,6 +1406,7 @@ def process_templates_from_typedefs(list_of_typedefs):
                         }
                     )
                 elif "NCollection_Sequence" in template_type:
+                    wrapper_str += f"%template({template_name}) {template_type};\n"
                     wrapper_str += NCOLLECTION_SEQUENCE_EXTEND_TEMPLATE.substitute(
                         {"NCollection_Sequence_Template_Instanciation": template_type}
                     )
@@ -1330,6 +1426,7 @@ def process_templates_from_typedefs(list_of_typedefs):
                     # through Python. Se we extend this class with a Keys() method that iterates over
                     # NCollection_DataMap keys and returns a Python list of key objects.
                     # Note : works for standard_Integer keys only so far
+                    wrapper_str += f"%template({template_name}) {template_type};\n"
                     if "<Standard_Integer" in template_type:
                         wrapper_str += NCOLLECTION_DATAMAP_EXTEND_TEMPLATE.substitute(
                             {
@@ -1337,6 +1434,8 @@ def process_templates_from_typedefs(list_of_typedefs):
                                 "NCollection_DataMap_Template_Name": template_name,
                             }
                         )
+                else:
+                    wrapper_str += f"%template({template_name}) {template_type};\n"
 
         elif (
             template_name.endswith("Iter") or "_ListIteratorOf" in template_name
@@ -3219,6 +3318,17 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
                 class_def_str += "\n\t@methodnotwrapped\n"
                 class_def_str += f"\tdef {excluded_method_name}(self):\n\t\tpass\n"
         class_def_str += "\t}\n};\n\n"
+        #
+        # Special extents
+        #
+        if class_name == "Geom2d_Curve":  # see ticket #1381, numpy support
+            class_def_str += "// numpy support for Geom2d_Curve\nCurve2dArrayEvalExtend(Geom2d_Curve)\n\n"
+        if class_name == "Geom_Curve":  # see ticket #1381, numpy support
+            class_def_str += (
+                "// numpy support for Geom_Curve\nCurveArrayEvalExtend(Geom_Curve)\n\n"
+            )
+        if class_name == "Geom_Surface":  # see ticket #1381, numpy support
+            class_def_str += "// numpy support for Geom_Surface\nSurfaceArrayEvalExtend(Geom_Surface)\n\n"
         # increment global number of classes
         NB_TOTAL_CLASSES += 1
     #
@@ -3447,8 +3557,19 @@ class ModuleWrapper:
                 swig_interface_file.write(f"#include<{dep}_module.hxx>\n")
             for add_dep in self._additional_dependencies:
                 swig_interface_file.write(f"#include<{add_dep}_module.hxx>\n")
-
             swig_interface_file.write("%};\n")
+
+            # add numpy related imports for related modules
+            if self._module_name in [
+                "Geom",
+                "Geom2d",
+                "Poly",
+                "TColStd",
+                "TColgp",
+                "TShort",
+            ]:
+                swig_interface_file.write(NUMPY_INIT_TEMPLATE)
+
             for dep in PYTHON_MODULE_DEPENDENCY:
                 if is_module(dep):
                     swig_interface_file.write(f"%import {dep}.i\n")
