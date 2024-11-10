@@ -479,43 +479,6 @@ class $HClassName($SequenceType, Standard_Transient):
 """
 )
 
-NCOLLECTION_ARRAY1_EXTEND_TEMPLATE = Template(
-    """
-%extend $NCollection_Array1_Template_Instanciation {
-    %pythoncode {
-    def __getitem__(self, index):
-        if index + self.Lower() > self.Upper():
-            raise IndexError("index out of range")
-        else:
-            return self.Value(index + self.Lower())
-
-    def __setitem__(self, index, value):
-        if index + self.Lower() > self.Upper():
-            raise IndexError("index out of range")
-        else:
-            self.SetValue(index + self.Lower(), value)
-
-    def __len__(self):
-        return self.Length()
-
-    def __iter__(self):
-        self.low = self.Lower()
-        self.up = self.Upper()
-        self.current = self.Lower() - 1
-        return self
-
-    def next(self):
-        if self.current >= self.Upper():
-            raise StopIteration
-        else:
-            self.current += 1
-        return self.Value(self.current)
-
-    __next__ = next
-    }
-};
-"""
-)
 
 # the related pyi stub string
 NCOLLECTION_ARRAY1_EXTEND_TEMPLATE_PYI = Template(
@@ -952,7 +915,6 @@ https://github.com/tpaviot/pythonocc-core/pull/1381
 #define SWIG_FILE_WITH_INIT
 %}
 %include ../common/numpy.i
-%include ../common/ArrayMacros.i
 
 %init %{
         import_array();
@@ -1324,10 +1286,6 @@ def process_templates_from_typedefs(list_of_typedefs):
                     # if the NCollection_Array1 involves Standard_Integer or Standard_Real
                     # then the NCollection_Array1 can be wrapped as a numpy array and the
                     # macro Array1NumpyTemplate is used.
-                    # TO REMOVE
-                    # wrapper_str += NCOLLECTION_ARRAY1_EXTEND_TEMPLATE.substitute(
-                    #     {"NCollection_Array1_Template_Instanciation": template_type}
-                    # )
                     base_type = template_type[:-1].split("NCollection_Array1<")[1]
                     if base_type == "Standard_ShortReal":
                         wrapper_str += "%apply (float* IN_ARRAY1, int DIM1) { (float* numpyArray1, int nRows1) };\n"
@@ -1348,11 +1306,15 @@ def process_templates_from_typedefs(list_of_typedefs):
 
                     # 2D elements, i.e. that provides X() and Y() methods
                     elif base_type in ["gp_XY", "gp_Vec2d", "gp_Pnt2d", "gp_Dir2d"]:
+                        wrapper_str += "%apply (double* IN_ARRAY2, int DIM1, int DIM2) { (double* numpyArray2, int nRows2, int nDims2) };\n"
+                        wrapper_str += "%apply (double* ARGOUT_ARRAY1, int DIM1) { (double* numpyArray2Argout, int aSizeArgout) };\n"
                         wrapper_str += (
                             f"Array1Of2DNumpyTemplate({template_name}, {base_type})\n"
                         )
                     # 3D elements, i.e. that provides X(), Y() and Z() methods
                     elif base_type in ["gp_XYZ", "gp_Vec", "gp_Pnt", "gp_Dir"]:
+                        wrapper_str += "%apply (double* IN_ARRAY2, int DIM1, int DIM2) { (double* numpyArray2, int nRows2, int nDims2) };\n"
+                        wrapper_str += "%apply (double* ARGOUT_ARRAY1, int DIM1) { (double* numpyArray2Argout, int aSizeArgout) };\n"
                         wrapper_str += (
                             f"Array1Of3DNumpyTemplate({template_name}, {base_type})\n"
                         )
@@ -1384,11 +1346,15 @@ def process_templates_from_typedefs(list_of_typedefs):
                         wrapper_str += f"Array2NumpyTemplate({template_name}, long long, Standard_Integer)\n"
                     # 2D elements
                     elif base_type in ["gp_XY", "gp_Vec2d", "gp_Pnt2d", "gp_Dir2d"]:
+                        wrapper_str += "%apply (double* IN_ARRAY3, int DIM1, int DIM2, int DIM3) { (double* numpyArray3, int nRows3, int nCols3, int nDims3) };\n"
+                        wrapper_str += "%apply (double* ARGOUT_ARRAY1, int DIM1) { (double* numpyArray3Argout, int aSizeArgout) };\n"
                         wrapper_str += (
                             f"Array2Of2DNumpyTemplate({template_name}, {base_type})\n"
                         )
                     # 3D elements
                     elif base_type in ["gp_XYZ", "gp_Vec", "gp_Pnt", "gp_Dir"]:
+                        wrapper_str += "%apply (double* IN_ARRAY3, int DIM1, int DIM2, int DIM3) { (double* numpyArray3, int nRows3, int nCols3, int nDims3) };\n"
+                        wrapper_str += "%apply (double* ARGOUT_ARRAY1, int DIM1) { (double* numpyArray3Argout, int aSizeArgout) };\n"
                         wrapper_str += (
                             f"Array2Of3DNumpyTemplate({template_name}, {base_type})\n"
                         )
@@ -3512,6 +3478,7 @@ class ModuleWrapper:
                 "Operators",
                 "OccHandle",
                 "IOStream",
+                "ArrayMacros",
             ]
             for include in includes:
                 swig_interface_file.write(f"%include ../common/{include}.i\n")
