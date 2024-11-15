@@ -2462,8 +2462,8 @@ def process_function(f, overload=False):
         return TEMPLATE_INITFROMJSON, TEMPLATE_INITFROMJSON_PYI
 
     # enable autocompactargs feature to enable compilation with swig>3.0.3
-    str_function = f"\t\t/****************** {function_name} ******************/\n"
-    str_function += f"\t\t/**** md5 signature: {function_signature_md5} ****/\n"
+    str_function = f"\t\t/****** {f['parent']['name']}::{function_name} ******/\n"
+    str_function += f"\t\t/****** md5 signature: {function_signature_md5} ******/\n"
     str_function += f'\t\t%feature("compactdefaultargs") {function_name};\n'
     str_function += process_function_docstring(f)
     str_function += "\t\t"
