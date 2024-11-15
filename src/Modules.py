@@ -2066,18 +2066,13 @@ OCE_MODULES = [
         ],
         [
             "SelectMgr_Frustum",
-            "SelectMgr_FrustumBuilder",
             "SelectMgr_BaseFrustum",
             "SelectMgr_TriangularFrustum",
             "SelectMgr_RectangularFrustum",
             "SelectMgr_TriangularFrustumSet",
-            "SelectMgr_ToleranceMap",
-            "SelectMgr_ViewerSelector",
-            "SelectMgr_SensitiveEntitySet",
         ],
         {
-            "SelectMgr_SelectableObject": ["BndBoxOfSelected"],
-            "SelectMgr_SelectingVolumeManager": ["ActiveVolume"],
+            "SelectMgr_ViewerSelector": ["ToPixMap"],
             "SelectMgr_SelectionImageFiller": [
                 "CreateFiller"
             ],  # circular import with StdSelect
