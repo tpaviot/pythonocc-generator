@@ -87,7 +87,7 @@ log.addHandler(console_handler)
 ####################
 # Global variables #
 ####################
-DOC_URL = "https://dev.opencascade.org/doc/occt-7.7.0/refman/html"
+DOC_URL = "https://dev.opencascade.org/doc/occt-7.8.0/refman/html"
 
 ##################
 # For statistics #
