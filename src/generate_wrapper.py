@@ -3188,7 +3188,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
 
         # Important special case: For pickling of TopoDS_Shape, we do need WriteToString
         #                         and ReadFromString.
-        if class_name == "BRepTools":
+        if class_name == "BRepTools" or class_name == "BRepTools_ShapeSet":
             class_def_str += """
                     %feature("autodoc", "Serializes TopoDS_Shape to string. If full_precision is False, the default precision of std::stringstream is used which regularly causes rounding.") WriteToString;
                     %extend{
