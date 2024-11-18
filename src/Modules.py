@@ -1947,6 +1947,11 @@ OCE_MODULES = [
             "Graphic3d_ShaderObject": [
                 "CreateFromSource::e558d4a90914c3a4f724c61a93250117"
             ],
+            "Graphic3d_CullingTool": [
+                "SetCullingDistance",
+                "SetCullingSize",
+            ],  # SWIG 4.3.0 issue
+            "Graphic3d_SequenceOfHClipPlane": ["Remove"],  # SWIG 4.3.0 issue
         },
     ),
     (
