@@ -356,7 +356,7 @@ TOOLKIT_VTK = {"TKIVtk": ["IVtk", "IVtkOCC", "IVtkVTK", "IVtkTools"]}
 # (string module_name, list additional headers, list classes_to_exclude,
 # dict member_functions to exclude)
 
-OCE_MODULES = [
+OCCT_MODULES = [
     ###
     ### FOUNDATION
     ###

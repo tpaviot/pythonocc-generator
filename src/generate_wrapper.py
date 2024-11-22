@@ -41,7 +41,7 @@ from Modules import (
     TOOLKIT_DataExchange,
     TOOLKIT_OCAF,
     TOOLKIT_VTK,
-    OCE_MODULES,
+    OCCT_MODULES,
 )
 
 ##############################################
@@ -52,9 +52,9 @@ config.read("wrapper_generator.conf")
 # pythonocc version
 PYTHONOCC_VERSION = config.get("pythonocc-core", "version")
 # oce headers location
-OCE_INCLUDE_DIR = config.get("OCE", "include_dir")
-if not os.path.isdir(OCE_INCLUDE_DIR):
-    raise AssertionError(f"OCE include dir {OCE_INCLUDE_DIR} not found.")
+OCCT_INCLUDE_DIR = config.get("OCCT", "include_dir")
+if not os.path.isdir(OCCT_INCLUDE_DIR):
+    raise AssertionError(f"OCCT include dir {OCCT_INCLUDE_DIR} not found.")
 # swig output path
 PYTHONOCC_CORE_PATH = config.get("pythonocc-core", "path")
 COMMON_OUTPUT_PATH = os.path.join(PYTHONOCC_CORE_PATH, "src", "SWIG_files", "common")
@@ -183,7 +183,7 @@ TYPEDEF_TO_EXCLUDE = [
     "Graphic3d_Vec2u",
     "Graphic3d_Vec3u",
     "Graphic3d_Vec4u",
-    "Select3D_BndBox3d",
+    # "Select3D_BndBox3d",
     "SelectMgr_TriangFrustums",
     "SelectMgr_TriangFrustumsIter",
     "SelectMgr_MapOfObjectSensitives",
@@ -964,7 +964,7 @@ def get_log_header():
     # find the OCC VERSION targeted by the wrapper
     # the OCCT version is available from the Standard_Version.hxx header
     # e.g. define OCC_VERSION_COMPLETE     "7.4.0"
-    standard_version_header = os.path.join(OCE_INCLUDE_DIR, "Standard_Version.hxx")
+    standard_version_header = os.path.join(OCCT_INCLUDE_DIR, "Standard_Version.hxx")
     occ_version = "unknown"
     if os.path.isfile(standard_version_header):
         with open(standard_version_header, "r", encoding="utf8") as f:
@@ -1021,8 +1021,8 @@ def filter_header_list(header_list, exclusion_list):
     The files to be excluded are specified in the exclusion list
     """
     for header_to_remove in exclusion_list:
-        if os.path.join(OCE_INCLUDE_DIR, header_to_remove) in header_list:
-            header_list.remove(os.path.join(OCE_INCLUDE_DIR, header_to_remove))
+        if os.path.join(OCCT_INCLUDE_DIR, header_to_remove) in header_list:
+            header_list.remove(os.path.join(OCCT_INCLUDE_DIR, header_to_remove))
     # remove platform dependent files
     # this is done to have the same SWIG files on every platform
     # wnt specific
@@ -1056,15 +1056,15 @@ def case_sensitive_glob(wildcard):
 
 def get_all_module_headers(module_name):
     """Returns a list with all header names"""
-    mh = case_sensitive_glob(os.path.join(OCE_INCLUDE_DIR, f"{module_name}.hxx"))
-    mh += case_sensitive_glob(os.path.join(OCE_INCLUDE_DIR, f"{module_name}_*.hxx"))
+    mh = case_sensitive_glob(os.path.join(OCCT_INCLUDE_DIR, f"{module_name}.hxx"))
+    mh += case_sensitive_glob(os.path.join(OCCT_INCLUDE_DIR, f"{module_name}_*.hxx"))
     mh = filter_header_list(mh, HXX_TO_EXCLUDE_FROM_BEING_INCLUDED)
     return sorted(map(os.path.basename, mh))
 
 
 def test_get_all_module_headers():
     # 'Standard' should return some files (at lease 10)
-    # this number depends on the OCE version
+    # this number depends on the OCCT version
     headers_list_1 = get_all_module_headers("Standard")
     assert len(list(headers_list_1)) > 10
     # an empty list
@@ -1079,11 +1079,11 @@ def check_has_related_handle(class_name):
     if check_is_persistent(class_name):
         return False
 
-    filename = os.path.join(OCE_INCLUDE_DIR, f"Handle_{class_name}.hxx")
+    filename = os.path.join(OCCT_INCLUDE_DIR, f"Handle_{class_name}.hxx")
     other_possible_filename = filename
     if class_name.startswith("Graphic3d"):
         other_possible_filename = os.path.join(
-            OCE_INCLUDE_DIR, f"{class_name}_Handle.hxx"
+            OCCT_INCLUDE_DIR, f"{class_name}_Handle.hxx"
         )
     return (
         os.path.exists(filename)
@@ -2856,7 +2856,7 @@ def build_inheritance_tree(classes_dict):
                 level_0_classes.append(class_name)
             inheritance_dict[class_name] = upper_class_name_1
         else:
-            # prevent multiple inheritance: OCE only has single
+            # prevent multiple inheritance: OCCT only has single
             # inheritance
             logging.warning(
                 "Class %s has %s ancestors and is skipped.",
@@ -3147,7 +3147,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             members_functions_to_exclude = []
         # if ever the header defines DEFINE STANDARD ALLOC
         # then we wrap a copy constructor. Very convenient
-        # to create python classes that inherit from OCE ones!
+        # to create python classes that inherit from OCCT ones!
         if class_name in ["TopoDS_Shape", "TopoDS_Vertex"]:
             class_def_str += '\t\t%feature("autodoc", "1");\n'
             class_def_str += f"\t\t{class_name}(const {class_name} arg0);\n"
@@ -3333,7 +3333,7 @@ def is_module(module_name):
     'Standard' should return True
     'inj' or whatever should return False
     """
-    for mod in OCE_MODULES:
+    for mod in OCCT_MODULES:
         if mod[0] == module_name:
             return True
     return False
@@ -3350,8 +3350,8 @@ def parse_module(module_name):
     SWIG files. This parser returns :
     module_enums, module_typedefs, module_classes
     """
-    module_headers = glob.glob(f"{OCE_INCLUDE_DIR}/{module_name}_*.hxx")
-    module_headers += glob.glob(f"{OCE_INCLUDE_DIR}/{module_name}.hxx")
+    module_headers = glob.glob(f"{OCCT_INCLUDE_DIR}/{module_name}_*.hxx")
+    module_headers += glob.glob(f"{OCCT_INCLUDE_DIR}/{module_name}.hxx")
     # check if there are some files
     if len(module_headers) == 0:
         logging.warning(
@@ -3492,8 +3492,8 @@ class ModuleWrapper:
                     "#if defined(_WIN32)\n#include <windows.h>\n#endif\n"
                 )
 
-            module_headers = glob.glob(f"{OCE_INCLUDE_DIR}/{self._module_name}_*.hxx")
-            module_headers += glob.glob(f"{OCE_INCLUDE_DIR}/{self._module_name}.hxx")
+            module_headers = glob.glob(f"{OCCT_INCLUDE_DIR}/{self._module_name}_*.hxx")
+            module_headers += glob.glob(f"{OCCT_INCLUDE_DIR}/{self._module_name}.hxx")
             module_headers.sort()
 
             mod_header = open(
@@ -3619,7 +3619,7 @@ class ModuleWrapper:
 
 
 def process_module(module_name):
-    all_modules = OCE_MODULES
+    all_modules = OCCT_MODULES
     module_exist = False
     for module in all_modules:
         if module[0] == module_name:
