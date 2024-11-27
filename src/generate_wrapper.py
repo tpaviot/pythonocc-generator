@@ -361,7 +361,6 @@ NCOLLECTION_HEADER_TEMPLATE = """
 %include "NCollection_BaseMap.hxx";
 %include "NCollection_BasePointerVector.hxx";
 %include "NCollection_Map.hxx";
-%include "NCollection_DefaultHasher.hxx";
 %include "NCollection_List.hxx";
 %include "NCollection_Sequence.hxx";
 %include "NCollection_DataMap.hxx";
