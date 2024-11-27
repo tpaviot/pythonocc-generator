@@ -1629,24 +1629,6 @@ def process_enums(enums_list):
 
     Note: this only makes sense for named enums
     """
-    # first sort the enum list in alphanbetical sort
-    # the enum list is actually a list of dicts which looks like:
-    # [{'name': 'BOPAlgo_CheckStatus', 'namespace': '',
-    #   'typedef': False, 'isclass': False,
-    #   'values': [{'name': 'BOPAlgo_CheckUnknown', 'value': 0}, {'name': 'BOPAlgo_BadType', 'value': 1},
-    enum_names = {}
-    for i, enum in enumerate(enums_list):
-        if "name" in enum:
-            enum_names[enum["name"]] = i
-        else:
-            enum_names[""] = i
-    sorted_enums_list = []
-    for name in sorted(enum_names.keys()):
-        index = enum_names[name]
-        sorted_enums_list.append(enums_list[index])
-    enums_list = sorted_enums_list
-
-    # done, enum lists in alphabetical sort
     enum_str = "/* public enums */\n"
 
     enum_python_proxies = "/* python proxy classes for enums */\n" + "%pythoncode {\n"
@@ -3352,6 +3334,7 @@ def parse_module(module_name):
     """
     module_headers = glob.glob(f"{OCCT_INCLUDE_DIR}/{module_name}_*.hxx")
     module_headers += glob.glob(f"{OCCT_INCLUDE_DIR}/{module_name}.hxx")
+    module_headers.sort()
     # check if there are some files
     if len(module_headers) == 0:
         logging.warning(
