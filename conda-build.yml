@@ -24,7 +24,7 @@ jobs:
         conda create --yes --name pythonoccgen python=${{ parameters.py_maj }}.${{ parameters.py_min }} && \
         conda info -a && \
         source activate pythonoccgen && \
-        conda install -c conda-forge occt=7.8.1 pip && \
+        conda install -c conda-forge occt=7.9.0 pip && \
         pip install -r requirements.txt && \
         conda list
     displayName: 'Install dependencies from conda-forge'
@@ -43,9 +43,9 @@ jobs:
     displayName: 'Run pythonocc-generator'
 
   - bash: |
-        wget https://github.com/Open-Cascade-SAS/OCCT/archive/refs/tags/V7_8_1.tar.gz && \
-        tar -zxvf V7_8_1.tar.gz && \
+        wget https://github.com/Open-Cascade-SAS/OCCT/archive/refs/tags/V7_9_0.tar.gz && \
+        tar -zxvf V7_9_0.tar.gz && \
         cd src && \
         source activate pythonoccgen && \
-        ./export_occt_structure_to_json.py --output occt_toolkits.json ../OCCT-7_8_1
+        ./export_occt_structure_to_json.py --output occt_toolkits.json ../OCCT-7_9_0
     displayName: 'Run occt structure exporter'
