@@ -33,7 +33,7 @@ jobs:
     py_min: 11
 - template: conda-build.yml
   parameters:
-    name: Ubuntu_24_04_python311
+    name: Ubuntu_24_04_python312
     vmImage: 'ubuntu-24.04'
     py_maj: 3
     py_min: 12
