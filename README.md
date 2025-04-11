@@ -35,9 +35,8 @@ Edit/Modify the wrapper-generator.conf file then
 
 Requirements
 ------------
-The current developments target opencascade 7.7.0 (http://dev.opencascade.org).
+The current developments target OpenCascade Technology 7.9.0 (http://dev.opencascade.org).
 
 License
 -------
-You can redistribute it and/or modify it under the terms of the GNU
-General Public License version 3 as published by the Free Software Foundation.
+You can redistribute it and/or modify it under the terms of the GNU General Public License version 3 as published by the Free Software Foundation.
