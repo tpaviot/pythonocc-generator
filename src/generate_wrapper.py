@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-##Copyright 2008-2024 Thomas Paviot (tpaviot@gmail.com)
+##Copyright 2008-2025 Thomas Paviot (tpaviot@gmail.com)
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -87,7 +87,7 @@ log.addHandler(console_handler)
 ####################
 # Global variables #
 ####################
-DOC_URL = "https://dev.opencascade.org/doc/occt-7.8.0/refman/html"
+DOC_URL = "https://dev.opencascade.org/doc/occt-7.9.0/refman/html"
 
 ##################
 # For statistics #
@@ -108,7 +108,7 @@ for tk in ALL_TOOLKITS:
     TOOLKITS |= tk
 
 LICENSE_HEADER = """/*
-Copyright 2008-2024 Thomas Paviot (tpaviot@gmail.com)
+Copyright 2008-2025 Thomas Paviot (tpaviot@gmail.com)
 
 This file is part of pythonOCC.
 pythonOCC is free software: you can redistribute it and/or modify
@@ -143,6 +143,7 @@ HXX_TO_EXCLUDE_FROM_CPPPARSER = [
     "Standard_Dump.hxx",  # to avoid a dependency of Standard over TCollection
     "IMeshData_ParametersListArrayAdaptor.hxx",
     "BRepExtrema_ProximityValueTool.hxx",  # occt-771, file cannot be parsed
+    "Units_Operators.hxx",  # occt-790, create weird operators overloading in the python module
 ]
 
 # some includes fail at being compiled
@@ -196,6 +197,16 @@ TYPEDEF_TO_EXCLUDE = [
     "StdSelect_ViewerSelector3d",  # circular import
     "TopoDS_ListOfShape",
     "TopoDS_ListIteratorOfListOfShape",
+    "NCollection_DelListNode",  # occt790
+    "NCollection_DelSeqNode",
+    "BRepMesh_PluginEntryType",
+    "MinMaxValuesCallback",
+    "TPCallBackFunc",  # in Standard
+    "CallbackOnUpdate_t",
+    "MoniTool_ValueInterpret",
+    "MoniTool_ValueSatisfies",
+    "Interface_ValueInterpret",
+    "Interface_ValueSatisfies",
 ]
 
 # Following are standard integer typedefs. They have to be replaced
@@ -847,6 +858,64 @@ SETSTATE_TEMPLATE = Template(
 """
 )
 
+TOPODS_CLASS = """
+%pythoncode {
+class topods:
+    @staticmethod
+    def Edge(*args, **kwargs):
+        return Edge(*args, **kwargs)
+
+    @staticmethod
+    def Vertex(*args, **kwargs):
+        return Vertex(*args, **kwargs)
+
+    @staticmethod
+    def Face(*args, **kwargs):
+        return Face(*args, **kwargs)
+
+    @staticmethod
+    def Wire(*args, **kwargs):
+        return Wire(*args, **kwargs)
+
+    @staticmethod
+    def Shell(*args, **kwargs):
+        return Shell(*args, **kwargs)
+
+    @staticmethod
+    def Solid(*args, **kwargs):
+        return Solid(*args, **kwargs)
+
+    @staticmethod
+    def CompSolid(*args, **kwargs):
+        return CompSolid(*args, **kwargs)
+
+    @staticmethod
+    def Compound(*args, **kwargs):
+        return Compound(*args, **kwargs)
+};
+
+"""
+
+TOPODS_CLASS_PYI = """
+class topods:
+    @staticmethod
+    def Edge(*args, **kwargs) -> TopoDS_Edge: ...
+    @staticmethod
+    def Vertex(*args, **kwargs) -> TopoDS_Vertex: ...
+    @staticmethod
+    def Face(*args, **kwargs) -> TopoDS_Face: ...
+    @staticmethod
+    def Wire(*args, **kwargs) -> TopoDS_Wire: ...
+    @staticmethod
+    def Shell(*args, **kwargs) -> TopoDS_Shell: ...
+    @staticmethod
+    def Solid(*args, **kwargs) -> TopoDS_Solid: ...
+    @staticmethod
+    def CompSolid(*args, **kwargs) -> TopoDS_CompSolid: ...
+    @staticmethod
+    def Compound(*args, **kwargs) -> TopoDS_Compound: ...
+
+"""
 TOPODS_SHAPE_PICKLE_TEMPLATE = """
 %extend TopoDS_Shape {
 %pythoncode {
@@ -930,6 +999,49 @@ https://github.com/tpaviot/pythonocc-core/pull/1381
 end of numpy support section
 */
 """
+
+BREPTOOLS_WRITE_READ_FROM_STRING = """
+%feature("autodoc", "Serializes TopoDS_Shape to string. If full_precision is False, the default precision of std::stringstream is used which regularly causes rounding.") WriteToString;
+%extend{
+    static std::string WriteToString(const TopoDS_Shape & shape, bool full_precision = true) {
+    std::stringstream s;
+    if(full_precision) {
+        s.precision(17);
+        s.setf(std::ios::scientific);
+    }
+    BRepTools::Write(shape, s);
+    return s.str();}
+};
+%feature("autodoc", "Deserializes TopoDS_Shape from string. Create and return a new TopoDS_Shape each time the method is called.") ReadFromString;
+%extend{
+    static TopoDS_Shape ReadFromString(const std::string & src) {
+        std::istringstream s(std::move(src));
+        TopoDS_Shape shape;
+        BRep_Builder b;
+        BRepTools::Read(shape, s, b);
+        return shape;
+    }
+};
+%feature("autodoc", "Deserializes TopoDS_Shape from string. Take a TopoDS_Shape instance by reference to prevent memory increase.") ReadFromString;
+%extend{
+    static void ReadFromString(const std::string & src, TopoDS_Shape& shape) {
+        std::istringstream s(std::move(src));
+        BRep_Builder b;
+        BRepTools::Read(shape, s, b);
+    }
+};
+
+"""
+
+BREPTOOLS_WRITE_READ_FROM_STRING_PYI = """
+    @staticmethod
+    def WriteToString(sh: TopoDS_Shape) -> str: ...
+    @staticmethod
+    def ReadFromString(s: str) -> TopoDS_Shape: ...
+    @staticmethod
+    def ReadFromString(s: str, topods_shape: TopoDS_Shape) -> None: ...
+"""
+
 ###########################
 # Template for byref enum #
 ###########################
@@ -1160,6 +1272,14 @@ def adapt_header_file(header_content):
     header_content = header_content.replace(
         "NCOLLECTION_HSEQUENCE", "//NCOLLECTION_HSEQUENCE"
     )
+    # Search for Standard_DEPRECATED
+    pattern = re.compile(
+        r'Standard_DEPRECATED\s*\(\s*(".*?(?:\\"|[^"])*?"(?:\s*".*?(?:\\"|[^"])*?")*)\s*\)'
+    )
+    if matches := pattern.findall(header_content):
+        for match in matches:
+            header_content = header_content.replace(match, "//DEPRECATION_WARNING")
+
     header_content = header_content.replace(
         "Standard_DEPRECATED", "//Standard_DEPRECATED"
     )
@@ -1197,15 +1317,13 @@ def adapt_header_file(header_content):
 def parse_header(header_filename):
     """Use CppHeaderParser module to parse header_filename"""
     with open(header_filename, "r", encoding="utf-8") as header_content:
-        # header_content = open(header_filename, "r", encoding="ISO-8859-1").read()
         adapted_header_content = adapt_header_file(header_content.read())
         try:
             cpp_header = CppHeaderParser.CppHeader(adapted_header_content, "string")
         except CppHeaderParser.CppParseError as e:
-            print(e)
-            print(f"Filename : {header_filename}")
-            print("FileContent :\n", adapted_header_content)
-            sys.exit(1)
+            error_message = f"Error: cannot parse {header_filename}\n"
+            error_message += f"Reason: {e}"
+            raise RuntimeError(error_message)
     return cpp_header
 
 
@@ -1219,6 +1337,18 @@ def filter_typedefs(typedef_dict):
         del typedef_dict[":"]
     for key in list(typedef_dict):
         if key in TYPEDEF_TO_EXCLUDE:
+            del typedef_dict[key]
+        # remove typedefs that ends with function callbacks
+        if key.endswith("Function"):
+            logging.info("Skip typedef %s because ends with 'Function'", key)
+            del typedef_dict[key]
+        # remove typedefs tha ends with _fp (means function pointer?)
+        if key.endswith("_fp"):
+            logging.info("Skip typedef %s because ends with '_fp'", key)
+            del typedef_dict[key]
+        # remove typedefs tha ends with _fp (means function pointer?)
+        if key.endswith("Func"):
+            logging.info("Skip typedef %s because ends with 'Func'", key)
             del typedef_dict[key]
     for key in list(typedef_dict):
         typedef_dict[key] = typedef_dict[key].replace(" ::", "::")
@@ -1268,10 +1398,7 @@ def process_templates_from_typedefs(list_of_typedefs):
             # don't consider this
             if "_" not in template_name:
                 wrap_template = False
-                logging.warning(
-                    "Template %s skipped because name doesn't contain '_'.",
-                    template_name,
-                )
+                # del typedef_dict[key]
             if wrap_template:
                 # wrapper_str += f"%template({template_name}) {template_type};\n"
                 # if a NCollection_Array1, extend this template to benefit from pythonic methods
@@ -1435,7 +1562,11 @@ def adapt_type_for_hint_typedef(typedef_type_str):
         typedef_type_str = "int"
     if "double" in typedef_type_str:
         typedef_type_str = "float"
-    if "void" in typedef_type_str or "VOID" in typedef_type_str:
+    if (
+        "void" in typedef_type_str
+        or "VOID" in typedef_type_str
+        and "avoid" not in typedef_type_str
+    ):
         typedef_type_str = "None"
     if "GUID" in typedef_type_str:
         typedef_type_str = "str"
@@ -2024,10 +2155,19 @@ def process_function_docstring(f):
     else:
         returns_string += "None\n"
     returns_string += "\n"
+
     # process doxygen strings
     doxygen_string = "No available documentation.\n"
+    # since occt-7.9.0, doxygen strings are slightly changed
+    # have to remove the first line //@name if ever it is present
     if "doxygen" in f:
         doxygen_string = f["doxygen"]
+        if doxygen_string.startswith("//! @name "):
+            doxy_lines = doxygen_string.split("\n")
+            doxygen_string = "\n".join(doxy_lines[1:])
+    if "doxygen" not in f or len(doxygen_string) <= 5:
+        doxygen_string = "No available documentation.\n"
+    else:  # process doxygen string
         # remove comment separator
         doxygen_string = doxygen_string.replace("//! ", "")
         # replace " with '
@@ -2050,13 +2190,17 @@ def process_function_docstring(f):
         doxygen_string = doxygen_string.replace("TRUE", "True")
         doxygen_string = doxygen_string.replace("FALSE", "False")
         # misc
-        doxygen_string = doxygen_string.replace("@return", "return")
+        doxygen_string = doxygen_string.replace("@return", "\nReturn:")
+        # the input parameters
+        doxygen_string = doxygen_string.replace("@param[in]", "\nInput parameter:")
+        doxygen_string = doxygen_string.replace("@param ", "\nParameter ")
+        # see also
+        doxygen_string = doxygen_string.replace("@sa", "\nSee also:")
         # replace the extra spaces
         doxygen_string = doxygen_string.replace("    ", " ")
         doxygen_string = doxygen_string.replace("   ", " ")
         doxygen_string = doxygen_string.replace("  ", " ")
         doxygen_string = doxygen_string.replace(" : ", ": ")
-        doxygen_string = doxygen_string.capitalize()
         if not doxygen_string.endswith("."):
             doxygen_string = f"{doxygen_string}."
         # then remove spaces from start and end
@@ -2377,6 +2521,7 @@ def process_function(f, overload=False):
     # Cases where the method should not be wrapped #
     ################################################
     # destructors are not wrapped
+
     if f["destructor"]:
         return "", ""
     if f["returns"] == "~":
@@ -2442,10 +2587,17 @@ def process_function(f, overload=False):
     if function_name == "InitFromJson":
         return TEMPLATE_INITFROMJSON, TEMPLATE_INITFROMJSON_PYI
 
+    # we only wrap free functions that are in the current module namespace
+    function_namespace = f["namespace"]
+    function_parent_class_name = f["parent"]["name"] if f["parent"] is not None else ""
+    if function_namespace[:-2] != CURRENT_MODULE and function_parent_class_name == "":
+        return "", ""
+
     # enable autocompactargs feature to enable compilation with swig>3.0.3
     str_function = f"\t\t/****** {f['parent']['name'] if f['parent'] is not None else ''}::{function_name} ******/\n"
     str_function += f"\t\t/****** md5 signature: {function_signature_md5} ******/\n"
     str_function += f'\t\t%feature("compactdefaultargs") {function_name};\n'
+
     str_function += process_function_docstring(f)
     str_function += "\t\t"
     # return type
@@ -3070,6 +3222,8 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         for typedef_value in list(klass["typedefs"]["public"]):
             if ")" in typedef_value:
                 continue
+            if typedef_value in TYPEDEF_TO_EXCLUDE:
+                continue
             typedef_str += (
                 f"typedef {klass._public_typedefs[typedef_value]} {typedef_value};\n"
             )
@@ -3092,30 +3246,34 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             class_def_str += class_enum_def
         # process class properties here
         properties_str = ""
-        for property_value in list(klass["properties"]["public"]):
-            if "NCollection_Vec2" in property_value["type"]:  # issue in Aspect_Touch
-                logging.warning("Wrong type in class property : NCollection_Vec2")
-                continue
-            if "using" in property_value["type"]:
-                logging.warning("Wrong type in class property : using")
-                continue
-            if "return" in property_value["type"]:
-                logging.warning("Wrong type in class property : return")
-                continue
-            if "std::map<" in property_value["type"]:
-                logging.warning("Wrong type in class property std::map")
-                continue
-            if (
-                property_value["constant"]
-                or "virtual" in property_value["raw_type"]
-                or "allback" in property_value["raw_type"]
-            ):
-                continue
-            if "array_size" in property_value:
-                temp = f"\t\t{fix_type(property_value['type'])} {property_value['name']}[{property_value['array_size']}];\n"
-            else:
-                temp = f"\t\t{fix_type(property_value['type'])} {property_value['name']};\n"
-            properties_str += temp
+        if CURRENT_MODULE == "Graphic3d":
+            for property_value in list(klass["properties"]["public"]):
+                # TODO : cppheaderparser fails at finding private class properties
+                if (
+                    "NCollection_Vec2" in property_value["type"]
+                ):  # issue in Aspect_Touch
+                    logging.warning("Wrong type in class property : NCollection_Vec2")
+                    continue
+                if "using" in property_value["type"]:
+                    logging.warning("Wrong type in class property : using")
+                    continue
+                if "return" in property_value["type"]:
+                    logging.warning("Wrong type in class property : return")
+                    continue
+                if "std::map<" in property_value["type"]:
+                    logging.warning("Wrong type in class property std::map")
+                    continue
+                if (
+                    property_value["constant"]
+                    or "virtual" in property_value["raw_type"]
+                    or "allback" in property_value["raw_type"]
+                ):
+                    continue
+                if "array_size" in property_value:
+                    temp = f"\t\t{fix_type(property_value['type'])} {property_value['name']}[{property_value['array_size']}];\n"
+                else:
+                    temp = f"\t\t{fix_type(property_value['type'])} {property_value['name']};\n"
+                properties_str += temp
         # @TODO : wrap class typedefs (for instance BRepGProp_MeshProps)
         class_def_str += properties_str
         # process methods here
@@ -3170,32 +3328,8 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # Important special case: For pickling of TopoDS_Shape, we do need WriteToString
         #                         and ReadFromString.
         if class_name == "BRepTools" or class_name == "BRepTools_ShapeSet":
-            class_def_str += """
-                    %feature("autodoc", "Serializes TopoDS_Shape to string. If full_precision is False, the default precision of std::stringstream is used which regularly causes rounding.") WriteToString;
-                    %extend{
-                        static std::string WriteToString(const TopoDS_Shape & shape, bool full_precision = true) {
-                        std::stringstream s;
-                        if(full_precision) {
-                            s.precision(17);
-                            s.setf(std::ios::scientific);
-                        }
-                        BRepTools::Write(shape, s);
-                        return s.str();}
-                    };
-                    %feature("autodoc", "Deserializes TopoDS_Shape from string") ReadFromString;
-                    %extend{
-                        static TopoDS_Shape ReadFromString(const std::string & src) {
-                        std::stringstream s(src);
-                        TopoDS_Shape shape;
-                        BRep_Builder b;
-                        BRepTools::Read(shape, s, b);
-                        return shape;}
-                    };
-            """
-            class_pyi_str += "    @staticmethod\n"
-            class_pyi_str += "    def WriteToString(sh: TopoDS_Shape) -> str: ...\n"
-            class_pyi_str += "    @staticmethod\n"
-            class_pyi_str += "    def ReadFromString(s: str) -> TopoDS_Shape: ...\n"
+            class_def_str += BREPTOOLS_WRITE_READ_FROM_STRING
+            class_pyi_str += BREPTOOLS_WRITE_READ_FROM_STRING_PYI
         # a special wrapper template for TDF_Label
         # We add a special method for recovering label names
         if class_name == "TDF_Label":
@@ -3498,7 +3632,11 @@ class ModuleWrapper:
                 ):
                     mod_header.write(f"#include<{os.path.basename(module_header)}>\n")
             mod_header.write(f"\n#endif // {self._module_name.upper()}_HXX\n")
-
+            # Issue with opencascade TopoDSToStep_Builder.hxx header
+            if self._module_name in ["TopoDSToStep", "StepToTopoDS"]:
+                swig_interface_file.write(f"#include<StepData_Factors.hxx>\n")
+            if self._module_name == "ShapeProcess":
+                swig_interface_file.write("#include <bitset>\nusing namespace std;\n")
             swig_interface_file.write(f"#include<{self._module_name}_module.hxx>\n")
             swig_interface_file.write("\n//Dependencies\n")
             # Include all dependencies
@@ -3506,6 +3644,10 @@ class ModuleWrapper:
                 swig_interface_file.write(f"#include<{dep}_module.hxx>\n")
             for add_dep in self._additional_dependencies:
                 swig_interface_file.write(f"#include<{add_dep}_module.hxx>\n")
+            # finally, use the current module namespace
+            if CURRENT_MODULE in ["TopoDS"]:
+                swig_interface_file.write(f"using namespace {CURRENT_MODULE};\n")
+
             swig_interface_file.write("%};\n")
 
             # add numpy related imports for related modules
@@ -3557,9 +3699,13 @@ class ModuleWrapper:
             # write deprecated functions
             swig_interface_file.write(self._deprecated_swig_static_functions_str)
             # write free_functions definition
-            # TODO: we should write free functions here,
-            # but it sometimes fail to compile
-            # swig_interface_file.write(self._free_functions_str)
+            swig_interface_file.write(self._free_functions_str)
+
+            # write additionnal topods special class in the TopoDS module. This is for
+            # taking into account the TopoDS::Edge namespace rather than a class.
+            if self._module_name == "TopoDS":
+                swig_interface_file.write(TOPODS_CLASS)
+            # then close the file
             swig_interface_file.close()
 
             # The EnumTemplates.i interface file, for all byref enums
@@ -3596,6 +3742,9 @@ class ModuleWrapper:
         pyi_stub_file.write(self._enums_pyi_str)
         # then write classes and methods
         pyi_stub_file.write(self._classes_pyi_str)
+
+        if self._module_name == "TopoDS":
+            pyi_stub_file.write(TOPODS_CLASS_PYI)
         # and we finally write the aliases for static methods
         pyi_stub_file.close()
 
@@ -3633,7 +3782,8 @@ def process_toolkit(toolkit_name):
 
 
 def process_all_toolkits():
-    for toolkit in sorted(TOOLKITS):
+    # don't sort the toolkits, otherwise dependencies maybe skipped
+    for toolkit in TOOLKITS:
         process_toolkit(toolkit)
 
 

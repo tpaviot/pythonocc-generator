@@ -471,8 +471,8 @@ OCCT_MODULES = [
         },
     ),
     ("BVH", [], ["*"]),
-    ("Expr", [], ["Expr_Sign"]),
-    ("ExprIntrp", [], []),
+    ("Expr", [], ["*"]),
+    ("ExprIntrp", [], ["*"]),
     ###
     ### MODELING DATA
     ###
@@ -1587,6 +1587,14 @@ OCCT_MODULES = [
             "TColGeom",
             "AppParCurves",
             "Adaptor3d",
+            "GeomAdaptor",
+            "TopOpeBRepDS",
+            "Geom2d",
+            "TColStd",
+            "Bnd",
+            "BRepBlend",
+            "IntSurf",
+            "GeomFill",
         ],
         [],
     ),
@@ -1613,6 +1621,9 @@ OCCT_MODULES = [
             "Geom2dAdaptor",
             "Adaptor2d",
             "Adaptor3d",
+            "Geom",
+            "Geom2d",
+            "GeomAdaptor",
         ],
         [],
     ),
@@ -2263,7 +2274,10 @@ OCCT_MODULES = [
             "TopoDS",
             "Resource",
         ],
-        [],
+        [
+            "StepBasic_GeneralPropertyAssociation",
+            "StepRepr_MakeFromUsageOption",
+        ],  # to avoid circular references with StepRepr module
     ),
     (
         "RWStepBasic",
@@ -2628,7 +2642,7 @@ OCCT_MODULES = [
         ],
         [],
         {
-            "STEPControl_Reader": ["ReadStream::670ef148332e793552b9d850beda7220"]
+            "STEPControl_Reader": ["ReadStream::56e2192726935a4eac14c64d046ad127"]
         },  # ReadStream
     ),
     (
