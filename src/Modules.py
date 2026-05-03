@@ -421,7 +421,13 @@ OCCT_MODULES = [
         [],
         {
             "TCollection_ExtendedString": ["ToWideString", "Move"],
-            "TCollection_AsciiString": ["Move"],
+            "TCollection_AsciiString": [
+                "Move",
+                "string_view",
+                # occt-800rc5: this static IsEqual overload is declared in the
+                # header but not exported by libTKernel.so (missing symbol)
+                "IsEqual::46e0e0c57cef5058a5cea402084ff9ed",
+            ],
         },
     ),
     ("TShort", ["Standard"], []),
@@ -441,7 +447,8 @@ OCCT_MODULES = [
     ),
     ("ElCLib", [], []),
     ("ElSLib", [], []),
-    ("BSplCLib", ["Message"], [], {"BSplCLib": ["DN"]}),
+    # occt-800: BSplCLib_CacheParams has deleted copy constructor, cannot be wrapped
+    ("BSplCLib", ["Message"], ["BSplCLib_CacheParams"], {"BSplCLib": ["DN"]}),
     ("BSplSLib", [], []),
     ("PLib", ["Message"], []),
     ("Precision", [], []),
@@ -456,7 +463,8 @@ OCCT_MODULES = [
             "Poly_MakeLoops2D",
         ],
     ),
-    ("CSLib", ["Message"], []),
+    # occt-800: CSLib_Class2d has deleted copy ctor, can't be wrapped
+    ("CSLib", ["Message"], ["CSLib_Class2d"]),
     ("Convert", [], []),
     ("Bnd", [], []),
     ("gp", [], []),
@@ -496,7 +504,7 @@ OCCT_MODULES = [
     ("TColGeom", ["Standard"], []),
     ("GeomAdaptor", ["Geom2d", "Adaptor2d", "Message"], []),
     ("AdvApprox", ["Message"], ["AdvApprox_EvaluatorFunction"]),
-    ("GeomLProp", [], []),
+    ("GeomLProp", [], ["GeomLProp_CLPropsBase", "GeomLProp_SLPropsBase"]),
     ("Adaptor3d", ["Geom2d", "Message"], []),
     ("LProp3d", ["Adaptor2d", "Geom2d", "Geom", "Message"], []),
     ("TopAbs", [], []),
@@ -555,9 +563,11 @@ OCCT_MODULES = [
             "AppDef_MultiLine": ["SetParameter"],
         },
     ),
-    ("GeomTools", ["TColStd", "TColgp"], []),
+    ("GeomTools", ["TColStd", "TColgp", "Geom", "Geom2d"], []),
     ("GC", [], []),
-    ("GCE2d", [], []),
+    # occt-800: GCE2d_* are now using-aliases for GC_*2d which return
+    # Geom/Geom2d handles, so the cast tables reach into the Geom modules
+    ("GCE2d", ["GC", "Geom", "Geom2d"], []),
     ("gce", [], []),
     ### TKBRep
     (
@@ -706,13 +716,17 @@ OCCT_MODULES = [
             "Bnd",
             "AppParCurves",
             "Message",
+            # occt-800: methods now take occ::handle<NCollection_HArray1<gp_X>>
+            # directly; TColgp must be %imported so SWIG sees the typedef
+            # equivalence with TColgp_HArray1OfX
+            "TColgp",
         ],
         [],
         {"Geom2dAPI_Interpolate": ["ClearTangents"]},
     ),
     (
         "Geom2dGcc",
-        ["GccInt", "Adaptor2d", "Message"],
+        ["GccInt", "Adaptor2d", "Geom2d", "Message"],
         ["Geom2dGcc_FunctionTanCuCuCu"],
         {"Geom2dGcc_Lin2dTanObl": ["IsParallel2"]},
     ),
@@ -805,7 +819,7 @@ OCCT_MODULES = [
     ),
     (
         "BRepLib",
-        ["TopoDS", "Adaptor2d", "BRep", "Message", "Bnd", "Poly", "TShort"],
+        ["TopoDS", "Adaptor2d", "BRep", "Message", "Bnd", "Poly", "TShort", "TopTools"],
         [],
         {
             "BRepLib": ["BuildPCurveForEdgesOnPlane"],
@@ -850,7 +864,7 @@ OCCT_MODULES = [
     ),
     (
         "BRepBuilderAPI",
-        ["BRep", "TopLoc", "TShort", "Poly"],
+        ["BRep", "TopLoc", "TShort", "Poly", "TopTools"],
         [],
         {
             "BRepBuilderAPI_FastSewing": ["GetStatuses"],
@@ -889,7 +903,7 @@ OCCT_MODULES = [
     ("Sweep", [], []),
     (
         "BRepPrimAPI",
-        ["TopLoc", "Geom2d", "BRep", "Message", "BRepTools", "Bnd", "Poly", "TShort"],
+        ["TopLoc", "Geom2d", "BRep", "Message", "BRepTools", "Bnd", "Poly", "TShort", "TopTools"],
         [],
     ),
     ### TKBO
@@ -945,8 +959,10 @@ OCCT_MODULES = [
             "TShort",
             "Poly",
             "IntCurvesFace",
+            "TopTools",
         ],
-        [],
+        # occt-800: BRepAlgoAPI_BuilderAlgo deletes its copy ctor; SWIG can't wrap it
+        ["BRepAlgoAPI_BuilderAlgo"],
     ),
     (
         "BOPCol",
@@ -1021,6 +1037,7 @@ OCCT_MODULES = [
             "TShort",
             "Poly",
             "IntCurvesFace",
+            "TopTools",
         ],
         [],
         {
@@ -1073,6 +1090,7 @@ OCCT_MODULES = [
             "Message",
             "Geom2dAdaptor",
             "Adaptor2d",
+            "Bnd",
         ],
         [],
     ),
@@ -1290,7 +1308,7 @@ OCCT_MODULES = [
     ),
     (
         "ShapeAnalysis",
-        ["TColGeom", "Message", "Adaptor2d", "Geom"],
+        ["TColGeom", "Message", "Adaptor2d", "Geom", "TopTools"],
         ["ShapeAnalysis_BoxBndTreeSelector", "ShapeCustom_ConvertToRevolution"],
         {"ShapeAnalysis_FreeBounds": ["ConnectEdgesToWires", "ConnectWiresToWires"]},
     ),
@@ -1309,6 +1327,7 @@ OCCT_MODULES = [
             "GeomAdaptor",
             "Bnd",
             "Geom",
+            "TopTools",
         ],
         ["ShapeFix_WireSegment"],
         {"ShapeFix_Edge": ["Context"]},
@@ -1330,6 +1349,7 @@ OCCT_MODULES = [
             "Adaptor2d",
             "Precision",
             "Geom",
+            "TopTools",
         ],
         [],
     ),
@@ -1373,6 +1393,7 @@ OCCT_MODULES = [
             "Geom",
             "TopLoc",
             "ShapeExtend",
+            "TopTools",
         ],
         [],
     ),
@@ -1393,6 +1414,7 @@ OCCT_MODULES = [
             "Bnd",
             "Poly",
             "TColGeom",
+            "TopTools",
         ],
         [],
     ),
@@ -1680,6 +1702,7 @@ OCCT_MODULES = [
             "TColGeom",
             "TShort",
             "IntSurf",
+            "TopTools",
         ],
         [],
     ),
@@ -1756,6 +1779,7 @@ OCCT_MODULES = [
             "Bnd",
             "Poly",
             "IntCurvesFace",
+            "TopTools",
         ],
         [],
         {"BRepFeat": ["IsInOut"], "BRepFeat_MakeLinearForm": ["TransformShapeFU"]},
@@ -1805,6 +1829,7 @@ OCCT_MODULES = [
             "Geom",
             "BRepAlgo",
             "ChFiDS",
+            "TopTools",
         ],
         [],
         {"BRepOffsetAPI_FindContigousEdges": ["NbEdges"]},
@@ -1850,6 +1875,7 @@ OCCT_MODULES = [
             "BRepBuilderAPI",
             "Adaptor2d",
             "Law",
+            "TopTools",
         ],
         [],
         {
@@ -1857,7 +1883,7 @@ OCCT_MODULES = [
             "BRepOffset_MakeSimpleOffset": ["GetSafeOffset"],
         },
     ),
-    ("Draft", ["BRep", "Bnd", "TShort", "Message", "Poly"], []),
+    ("Draft", ["BRep", "Bnd", "TShort", "Message", "Poly", "TopTools"], []),
     ("BiTgte", ["TopLoc", "Message", "Adaptor2d"], []),
     ###
     ### Visualisation
@@ -1956,7 +1982,10 @@ OCCT_MODULES = [
             "Graphic3d_MediaTextureSet": ["SetCallback"],
             "Graphic3d_GraduatedTrihedron": ["SetCubicAxesCallback"],
             "Graphic3d_ShaderObject": [
-                "CreateFromSource::e558d4a90914c3a4f724c61a93250117"
+                "CreateFromSource::e558d4a90914c3a4f724c61a93250117",
+                # occt-800: signature changed, this overload uses the inner
+                # ShaderVariable type and cannot be wrapped
+                "CreateFromSource::a4745641cdd9d3c11ae4d46134be67e6",
             ],
             "Graphic3d_CullingTool": [
                 "SetCullingDistance",
@@ -2230,6 +2259,7 @@ OCCT_MODULES = [
             "Adaptor2d",
             "BRepAdaptor",
             "Adaptor3d",
+            "Aspect",
         ],
         [],
     ),
@@ -2501,6 +2531,19 @@ OCCT_MODULES = [
             "PCDM",
             "CDF",
             "DE",
+            # occt-800: StepVisual.i now imports types reachable through
+            # XCAF and the visualization stack, so the cast tables in this
+            # module reference Aspect/Graphic3d/Media types directly
+            "Aspect",
+            "Graphic3d",
+            "Media",
+            "StepElement",
+            "TDataStd",
+            "XCAFDimTolObjects",
+            "XCAFDoc",
+            "XCAFNoteObjects",
+            "XCAFView",
+            "Bnd",
         ],
         [],
     ),
@@ -2522,6 +2565,13 @@ OCCT_MODULES = [
             "PCDM",
             "CDF",
             "DE",
+            # occt-800: StepVisual transitively brings the visualization
+            # stack into the cast tables for this module
+            "Aspect",
+            "Graphic3d",
+            "Media",
+            "TDataStd",
+            "Bnd",
         ],
         [],
     ),
@@ -2620,6 +2670,7 @@ OCCT_MODULES = [
             "PCDM",
             "CDF",
             "DE",
+            "MoniTool",
         ],
         [],
     ),
@@ -3002,6 +3053,7 @@ OCCT_MODULES = [
             "TNaming",
             "TDataXtd",
             "DE",
+            "Quantity",
         ],
         [],
     ),
@@ -3035,6 +3087,8 @@ OCCT_MODULES = [
             "TDocStd",
             "XSControl",
             "DE",
+            "Aspect",
+            "Quantity",
         ],
         [],
     ),
@@ -3206,6 +3260,7 @@ OCCT_MODULES = [
             "SelectMgr",
             "PCDM",
             "TShort",
+            "Graphic3d",
         ],
         [],
     ),
@@ -3256,15 +3311,15 @@ OCCT_MODULES = [
     ),
     ### TKXml
     ("XmlDrivers", ["Resource", "PCDM", "TDF", "CDF"], []),
-    ("XmlMDataXtd", ["Resource"], []),
+    ("XmlMDataXtd", ["Message", "Resource"], []),
     ("XmlMNaming", ["Message", "Resource", "TopLoc", "PCDM", "CDF"], []),
-    ("XmlMPrsStd", ["Resource"], []),
+    ("XmlMPrsStd", ["Message", "Resource"], []),
     ### TKXmlL
-    ("XmlLDrivers", ["Resource", "TDF", "CDF"], []),
-    ("XmlMDF", ["Resource"], []),
-    ("XmlMDataStd", ["Resource"], []),
-    ("XmlMDocStd", ["Resource"], []),
-    ("XmlMFunction", ["Resource"], []),
+    ("XmlLDrivers", ["Message", "Resource", "TDF", "CDF"], []),
+    ("XmlMDF", ["Message", "Resource"], []),
+    ("XmlMDataStd", ["Message", "Resource"], []),
+    ("XmlMDocStd", ["Message", "Resource"], []),
+    ("XmlMFunction", ["Message", "Resource"], []),
     ("XmlObjMgt", [], [], {"XmlObjMgt": ["GetInteger"]}),
     ### TKXmlTObj
     ("XmlTObjDrivers", ["Resource", "PCDM", "CDF"], []),
@@ -3286,7 +3341,10 @@ OCCT_MODULES = [
             "Geom",
             "Geom2d",
         ],
-        ["DE_PluginHolder", "DE_ShapeFixConfigurationNode", "DE_ShapeFixParameters"],
+        ["DE_PluginHolder", "DE_MultiPluginHolder", "DE_ShapeFixConfigurationNode", "DE_ShapeFixParameters"],
+        # Read/Write overloads taking ReadStreamList&/WriteStreamList& cannot be wrapped:
+        # SWIG can't bind a Python list to non-const lvalue ref of NCollection_List<ReadStreamNode>
+        {"DE_Provider": ["Read", "Write"]},
     ),
     ### TKXDECascade
     (

@@ -137,6 +137,15 @@ PYTHON_MODULE_DEPENDENCY = []
 HEADER_DEPENDENCY = []
 
 # remove headers that can't be parse by CppHeaderParser
+# occt-800: built lazily by scan_typedef_aliases() — a mapping from canonical
+# template form (e.g. "NCollection_HArray1<gp_Pnt2d>") to the typedef alias
+# (e.g. "TColgp_HArray1OfPnt2d") that pythonocc actually wraps. Many OCCT 8.0
+# headers replaced typedef names with the canonical template form in their
+# function signatures, but the typedef alias is what carries the SWIG type tag,
+# so we have to rewrite back.
+HARRAY_TYPEDEF_REWRITES = []
+
+
 HXX_TO_EXCLUDE_FROM_CPPPARSER = [
     "Standard_CLocaleSentry.hxx",
     "IntWalk_PWalking.hxx",
@@ -144,6 +153,16 @@ HXX_TO_EXCLUDE_FROM_CPPPARSER = [
     "IMeshData_ParametersListArrayAdaptor.hxx",
     "BRepExtrema_ProximityValueTool.hxx",  # occt-771, file cannot be parsed
     "Units_Operators.hxx",  # occt-790, create weird operators overloading in the python module
+    "NCollection_ForwardRange.hxx",  # occt-800, C++17 SFINAE templates not handled by CppHeaderParser
+    # occt-800: deprecated headers that #include a removed header (BOPDS_ListOfPaveBlock,
+    # Graphic3d_MapOfStructure, TObj_SequenceOfObject) - their typedefs reference types
+    # that no longer exist in the install
+    "BOPDS_DataMapOfIntegerListOfPaveBlock.hxx",
+    "BOPDS_DataMapOfPaveBlockListOfPaveBlock.hxx",
+    "BOPDS_IndexedDataMapOfPaveBlockListOfPaveBlock.hxx",
+    "BOPDS_VectorOfListOfPaveBlock.hxx",
+    "Graphic3d_MapIteratorOfMapOfStructure.hxx",
+    "TObj_Container.hxx",
 ]
 
 # some includes fail at being compiled
@@ -159,6 +178,14 @@ HXX_TO_EXCLUDE_FROM_BEING_INCLUDED = [
     "Standard_MemoryUtils.hxx",
     "math_VectorBase.hxx",
     "StepToTopoDS_Builder.hxx",
+    "NCollection_ForwardRange.hxx",  # occt-800, C++17 SFINAE templates
+    # occt-800: deprecated headers that #include a removed header
+    "Graphic3d_MapIteratorOfMapOfStructure.hxx",
+    "BOPDS_DataMapOfIntegerListOfPaveBlock.hxx",
+    "BOPDS_DataMapOfPaveBlockListOfPaveBlock.hxx",
+    "BOPDS_IndexedDataMapOfPaveBlockListOfPaveBlock.hxx",
+    "BOPDS_VectorOfListOfPaveBlock.hxx",
+    "TObj_Container.hxx",
 ]
 
 # some typedefs parsed by CppHeader can't be wrapped
@@ -308,11 +335,22 @@ TEMPLATES_TO_EXCLUDE = [
     "Extrema_Array2OfPOnSurfParams",
     "TopOpeBRepDS_Array1OfDataMapOfIntegerListOfInterference",
     "TopTrans_Array2OfOrientation",
+    # occt-800: NCollection_PackedMap is a heavily-templated class with
+    # constexpr/std::conditional that SWIG cannot parse
+    "NCollection_PackedMap",
+    # occt-800: std::array template, SWIG would emit push_back/insert which
+    # std::array doesn't support
+    "Graphic3d_ArrayOfIndexedMapOfStructure",
     "GccEnt_Array1OfPosition",
     "MAT2d_Array2OfConnexion",
     "StepElement_Array2OfCurveElementPurposeMember",
     "StepElement_Array2OfSurfaceElementPurpose",
     "StepElement_Array2OfSurfaceElementPurposeMember",
+    # occt-800: nested template (Array1 of handle of HSequence)
+    "StepElement_Array1OfHSequenceOfCurveElementPurposeMember",
+    "StepElement_Array1OfHSequenceOfSurfaceElementPurposeMember",
+    "StepElement_HArray1OfHSequenceOfCurveElementPurposeMember",
+    "StepElement_HArray1OfHSequenceOfSurfaceElementPurposeMember",
     "StepDimTol_Array1OfGeometricToleranceModifier",
     "StepGeom_Array2OfCartesianPoint",
     "StepGeom_Array2OfSurfacePatch",
@@ -365,7 +403,6 @@ NCOLLECTION_HEADER_TEMPLATE = """
 %include "Standard_Macro.hxx";
 %include "Standard_DefineAlloc.hxx";
 %include "NCollection_DefineAlloc.hxx";
-%include "NCollection_TypeDef.hxx";
 %include "NCollection_Array1.hxx";
 %include "NCollection_Array2.hxx";
 %include "NCollection_BaseList.hxx";
@@ -378,6 +415,71 @@ NCOLLECTION_HEADER_TEMPLATE = """
 %include "NCollection_IndexedMap.hxx";
 %include "NCollection_IndexedDataMap.hxx";
 %include "NCollection_DoubleMap.hxx";
+// occt-800: HArray1/HArray2/HSequence are now plain template classes
+// (the DEFINE_HARRAY1 / DEFINE_HSEQUENCE macros were removed). Declare
+// SWIG-visible templates inheriting only from Standard_Transient so that
+// %wrap_handle / %make_alias keep working without dragging the
+// NCollection_Array1<T> base (which would force T to be a complete type
+// in every translation unit that references the template instantiation).
+template <typename TheItemType>
+class NCollection_HArray1 : public Standard_Transient
+{
+public:
+  NCollection_HArray1();
+  NCollection_HArray1(const int theLower, const int theUpper);
+  NCollection_HArray1(const int theLower, const int theUpper, const TheItemType& theValue);
+  int Lower() const;
+  int Upper() const;
+  int Length() const;
+  int Size() const;
+  bool IsEmpty() const;
+  void SetValue(const int theIndex, const TheItemType& theItem);
+  const TheItemType& Value(const int theIndex) const;
+  TheItemType& ChangeValue(const int theIndex);
+  const TheItemType& First() const;
+  const TheItemType& Last() const;
+  void Init(const TheItemType& theValue);
+};
+
+template <typename TheItemType>
+class NCollection_HArray2 : public Standard_Transient
+{
+public:
+  NCollection_HArray2(const int theRowLower, const int theRowUpper,
+                      const int theColLower, const int theColUpper);
+  NCollection_HArray2(const int theRowLower, const int theRowUpper,
+                      const int theColLower, const int theColUpper,
+                      const TheItemType& theValue);
+  int LowerRow() const;
+  int UpperRow() const;
+  int LowerCol() const;
+  int UpperCol() const;
+  int NbRows() const;
+  int NbColumns() const;
+  void SetValue(const int theRow, const int theCol, const TheItemType& theItem);
+  const TheItemType& Value(const int theRow, const int theCol) const;
+  TheItemType& ChangeValue(const int theRow, const int theCol);
+  void Init(const TheItemType& theValue);
+};
+
+template <typename TheItemType>
+class NCollection_HSequence : public Standard_Transient
+{
+public:
+  NCollection_HSequence();
+  int Size() const;
+  int Length() const;
+  bool IsEmpty() const;
+  void Clear();
+  void Append(const TheItemType& theItem);
+  void Prepend(const TheItemType& theItem);
+  void Reverse();
+  const TheItemType& First() const;
+  const TheItemType& Last() const;
+  const TheItemType& Value(const int theIndex) const;
+  void SetValue(const int theIndex, const TheItemType& theItem);
+  void Remove(const int theIndex);
+};
 %include "NCollection_DefineAlloc.hxx";
 %include "NCollection_UBTree.hxx";
 %include "NCollection_UBTreeFiller.hxx";
@@ -1273,13 +1375,14 @@ def adapt_header_file(header_content):
         "NCOLLECTION_HSEQUENCE", "//NCOLLECTION_HSEQUENCE"
     )
     # Search for Standard_DEPRECATED
+    # Strip Standard_DEPRECATED("...") entirely (with the parens), so it
+    # disappears from the source rather than leaving a dangling //comment.
+    # OCCT 8.0 places this attribute mid-declaration (e.g. inside `using ... = X;`)
+    # which would otherwise produce malformed C++ after a partial replacement.
     pattern = re.compile(
-        r'Standard_DEPRECATED\s*\(\s*(".*?(?:\\"|[^"])*?"(?:\s*".*?(?:\\"|[^"])*?")*)\s*\)'
+        r'Standard_DEPRECATED\s*\(\s*(?:".*?(?:\\"|[^"])*?"(?:\s*".*?(?:\\"|[^"])*?")*)\s*\)'
     )
-    if matches := pattern.findall(header_content):
-        for match in matches:
-            header_content = header_content.replace(match, "//DEPRECATION_WARNING")
-
+    header_content = pattern.sub("", header_content)
     header_content = header_content.replace(
         "Standard_DEPRECATED", "//Standard_DEPRECATED"
     )
@@ -1293,6 +1396,37 @@ def adapt_header_file(header_content):
     header_content = header_content.replace("DEFINE_STANDARD_ALLOC", "")
     header_content = header_content.replace("Standard_EXPORT", "")
     header_content = header_content.replace("Standard_NODISCARD", "")
+    # occt-800 uses the shorter "occ::handle<...>" alias for opencascade::handle.
+    # Normalize it to the full form so the rest of the pipeline (typedef detection,
+    # dependency tracking, parameter adaptation) keeps working unchanged.
+    header_content = header_content.replace("occ::handle", "opencascade::handle")
+    # occt-800: many headers now use the canonical template form
+    # `NCollection_HArray1<gp_Pnt2d>` directly instead of the typedef
+    # `TColgp_HArray1OfPnt2d`. Rewrite back to the typedef name so SWIG
+    # type tags stay consistent across modules (the typedef is declared
+    # in TColgp.i / TColStd.i). Skip the rewrite when the current header
+    # is itself the typedef declaration (would become self-referential).
+    for tpl, name in HARRAY_TYPEDEF_REWRITES:
+        # don't rewrite inside `typedef ... NAME;` lines defining NAME itself
+        if f"{tpl} {name};" in header_content:
+            continue
+        header_content = header_content.replace(tpl, name)
+    # occt-800: rewrite simple C++11 `using X = Y;` aliases into classic
+    # `typedef Y X;` so the typedef pipeline picks them up. Many OCCT 8.0
+    # headers (GCE2d_MakeEllipse, ...) became `using` aliases for renamed classes.
+    # Skip template aliases (RHS contains '<'): they would produce SWIG
+    # %template instantiations against templates we don't expose.
+    def _using_to_typedef(match):
+        rhs = match.group(2).strip()
+        if "<" in rhs:
+            return match.group(0)
+        return f"typedef {rhs} {match.group(1)};"
+
+    header_content = re.sub(
+        r"\busing\s+([A-Za-z_]\w*)\s*=\s*([^;]+);",
+        _using_to_typedef,
+        header_content,
+    )
     # TODO : use the @deprecated python decorator to raise a Deprecation exception
     # see https://github.com/tantale/deprecated
     # each time this method is used
@@ -1349,6 +1483,11 @@ def filter_typedefs(typedef_dict):
         # remove typedefs tha ends with _fp (means function pointer?)
         if key.endswith("Func"):
             logging.info("Skip typedef %s because ends with 'Func'", key)
+            del typedef_dict[key]
+        # occt-800: skip pointer typedefs (e.g. typedef NCollection_List<X>* Plos)
+        # SWIG cannot generate %template(...) Foo<X>*; with a pointer
+        if key in typedef_dict and typedef_dict[key].rstrip().endswith("*"):
+            logging.info("Skip typedef %s because target is a pointer type", key)
             del typedef_dict[key]
     for key in list(typedef_dict):
         typedef_dict[key] = typedef_dict[key].replace(" ::", "::")
@@ -1518,6 +1657,10 @@ def process_templates_from_typedefs(list_of_typedefs):
                     # through Python. Se we extend this class with a Keys() method that iterates over
                     # NCollection_DataMap keys and returns a Python list of key objects.
                     # Note : works for standard_Integer keys only so far
+                    # occt-800: ignore Items()/KeyValues() returning ItemsView<...>
+                    # which is non-default-constructible and cannot be wrapped by SWIG
+                    wrapper_str += f"%ignore {template_type}::Items;\n"
+                    wrapper_str += f"%ignore {template_type}::KeyValues;\n"
                     wrapper_str += f"%template({template_name}) {template_type};\n"
                     if "<Standard_Integer" in template_type:
                         wrapper_str += NCOLLECTION_DATAMAP_EXTEND_TEMPLATE.substitute(
@@ -1526,6 +1669,38 @@ def process_templates_from_typedefs(list_of_typedefs):
                                 "NCollection_DataMap_Template_Name": template_name,
                             }
                         )
+                elif (
+                    "NCollection_IndexedMap" in template_type
+                    or "NCollection_IndexedDataMap" in template_type
+                ):
+                    # occt-800: NCollection_IndexedMap/IndexedDataMap expose
+                    # IndexedItems()/Items()/KeyValues() returning a non-default-
+                    # constructible View<...>. SWIG cannot wrap them.
+                    wrapper_str += f"%ignore {template_type}::Items;\n"
+                    wrapper_str += f"%ignore {template_type}::KeyValues;\n"
+                    wrapper_str += f"%ignore {template_type}::IndexedItems;\n"
+                    # occt-800rc5 bug: Contained() references a non-existent
+                    # IndexedDataMapNode::Key field (should be Key1)
+                    wrapper_str += f"%ignore {template_type}::Contained;\n"
+                    wrapper_str += f"%template({template_name}) {template_type};\n"
+                elif (
+                    template_type.startswith("NCollection_HArray1<")
+                    or template_type.startswith("NCollection_HArray2<")
+                    or template_type.startswith("NCollection_HSequence<")
+                ):
+                    # occt-800: NCollection_HArray1/HArray2/HSequence are now
+                    # plain template classes deriving from Standard_Transient.
+                    # Register the typedef -> ALL_HARRAY{1,2}/HSEQUENCE so that
+                    # process_handles emits %wrap_handle and process_harrayN
+                    # emits the fake class definition + %make_alias (the same
+                    # path used in OCCT 7.9 with the DEFINE_HARRAY1 macro).
+                    inner = template_type.split("<", 1)[1].rsplit(">", 1)[0].strip()
+                    if template_type.startswith("NCollection_HArray1<"):
+                        ALL_HARRAY1[template_name] = f"NCollection_Array1<{inner}>"
+                    elif template_type.startswith("NCollection_HArray2<"):
+                        ALL_HARRAY2[template_name] = f"NCollection_Array2<{inner}>"
+                    else:
+                        ALL_HSEQUENCE[template_name] = f"NCollection_Sequence<{inner}>"
                 else:
                     wrapper_str += f"%template({template_name}) {template_type};\n"
 
@@ -1784,8 +1959,12 @@ def process_enums(enums_list):
             logging.info("Skipping Enum: %s", enum_name)
             continue
 
+        # occt-800: respect "enum class X" (scoped enum) so values like
+        # gp_Dir::D::X don't collide with member functions like gp_Dir::X()
+        is_enum_class = enum.get("isclass", False)
+        enum_keyword = "enum class" if is_enum_class else "enum"
         logging.info("Enum: %s", enum_name)
-        enum_str += f"enum {enum_name}" + " {\n"
+        enum_str += f"{enum_keyword} {enum_name}" + " {\n"
         if python_proxy:
             enum_python_proxies += f"\nclass {enum_name}(IntEnum):\n"
             enum_pyi_str += f"\nclass {enum_name}(IntEnum):\n"
@@ -1984,6 +2163,10 @@ def check_dependency(item):
     elif item.startswith("Handle_"):
         module = item.split("_")[1]
     elif item.startswith("opencascade::handle<"):
+        item = item.split("<")[1].split(">")[0].strip()
+        module = item.split("_")[0]
+    elif item.startswith("occ::handle<"):
+        # occt-800 introduced the occ::handle alias for opencascade::handle
         item = item.split("<")[1].split(">")[0].strip()
         module = item.split("_")[0]
     elif item.count("_") > 0:  # Standard_Integer or NCollection_CellFilter_InspectorXYZ
@@ -2811,6 +2994,16 @@ def process_free_functions(free_functions_list):
     str_free_functions = ""
     sorted_free_functions_list = sorted(free_functions_list, key=itemgetter("name"))
     for free_function in sorted_free_functions_list:
+        # skip namespaced free functions, SWIG would emit them at file scope
+        # and the C++ compiler would not find the symbol (occt-800 introduces
+        # several functions in inner namespaces such as BVH::EncodeMortonCode)
+        if free_function.get("namespace", ""):
+            logging.info(
+                "    Skipping namespaced free function %s%s",
+                free_function.get("namespace", ""),
+                free_function["name"],
+            )
+            continue
         ok_to_wrap = process_function(free_function)
         if ok_to_wrap:
             str_free_functions += ok_to_wrap
@@ -2855,6 +3048,17 @@ def process_methods(methods_list):
     # create a dict to map function names and the number of occurrences,
     # to determine whether or not use the @overload decorator
     for function in sorted_methods_list:
+        # Skip free functions that live in a namespace different from
+        # CURRENT_MODULE: SWIG would emit them at file scope but the underlying
+        # C symbol lives in the namespace, so the call would fail to link
+        # (occt-800: e.g. BVH::EncodeMortonCode in BVH_RadixSorter.hxx).
+        # When the namespace matches CURRENT_MODULE, the .i file emits
+        # `using namespace X;` so the unqualified call is fine
+        # (e.g. namespace TopoDS::Wire/Edge/Face etc).
+        if not function.get("parent"):
+            ns = function.get("namespace", "").rstrip(":")
+            if ns and ns != CURRENT_MODULE:
+                continue
         # don't process friend methods
         need_overload = False
         if not function["friend"]:
@@ -3173,6 +3377,11 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         if class_name in exclude_classes:
             # if the class has to be excluded,
             # we go on with the next one to be processed
+            continue
+        # occt-800: skip class templates without an explicit instantiation,
+        # they cannot be wrapped by SWIG and produce invalid C++ casts
+        if klass.get("template", ""):
+            logging.info("    %s skipped because it is a class template", class_name)
             continue
         # ensure the class returned by CppHeader is defined in this module
         # otherwise we go on with the next class
@@ -3645,7 +3854,9 @@ class ModuleWrapper:
             for add_dep in self._additional_dependencies:
                 swig_interface_file.write(f"#include<{add_dep}_module.hxx>\n")
             # finally, use the current module namespace
-            if CURRENT_MODULE in ["TopoDS"]:
+            # occt-800: BVH inner namespace also exposes free functions
+            # (e.g. BVH::EncodeMortonCode) that get wrapped by SWIG
+            if CURRENT_MODULE in ["TopoDS", "BVH"]:
                 swig_interface_file.write(f"using namespace {CURRENT_MODULE};\n")
 
             swig_interface_file.write("%};\n")
@@ -3747,6 +3958,48 @@ class ModuleWrapper:
             pyi_stub_file.write(TOPODS_CLASS_PYI)
         # and we finally write the aliases for static methods
         pyi_stub_file.close()
+
+
+def scan_typedef_aliases():
+    """occt-800: scan every OCCT header for `typedef NCollection_X<...> Y;`
+    declarations and populate HARRAY_TYPEDEF_REWRITES so we can rewrite back
+    canonical template forms to their typedef aliases (the names SWIG actually
+    wraps and registers a type tag for). Without this rewrite, modules that use
+    `occ::handle<NCollection_HArray1<gp_Pnt2d>>` directly cannot be passed a
+    Python `TColgp_HArray1OfPnt2d` instance.
+    """
+    nc_pattern = re.compile(
+        r"\btypedef\s+(NCollection_(?:H?Array1|H?Array2|H?Sequence|"
+        r"DataMap|IndexedMap|IndexedDataMap|DoubleMap|Map|List|Vector)"
+        r"<[^;]+?>)\s+([A-Za-z_]\w*)\s*;"
+    )
+    seen = {}
+    for header_path in glob.glob(os.path.join(OCCT_INCLUDE_DIR, "*.hxx")):
+        try:
+            with open(header_path, "r", encoding="utf8", errors="replace") as f:
+                content = f.read()
+        except OSError:
+            continue
+        # normalize for matching
+        content = content.replace("Handle(", "opencascade::handle<").replace(
+            "occ::handle", "opencascade::handle"
+        )
+        # collapse whitespace inside template arguments
+        for match in nc_pattern.finditer(content):
+            tpl = re.sub(r"\s+", "", match.group(1))
+            # rebalance Handle( ) closes: Handle(X) -> opencascade::handle<X>>
+            # the regex already replaced Handle(, but we need the matching ">"
+            # approximated below. Skip overly complex matches.
+            if tpl.count("<") != tpl.count(">"):
+                continue
+            name = match.group(2)
+            # prefer the first declaration we see
+            if tpl not in seen:
+                seen[tpl] = name
+    HARRAY_TYPEDEF_REWRITES.extend(sorted(seen.items(), key=lambda kv: -len(kv[0])))
+    logging.info(
+        "Built %d typedef rewrite mappings from OCCT headers", len(HARRAY_TYPEDEF_REWRITES)
+    )
 
 
 def process_module(module_name):
