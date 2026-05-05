@@ -145,6 +145,32 @@ HEADER_DEPENDENCY = []
 # so we have to rewrite back.
 HARRAY_TYPEDEF_REWRITES = []
 
+# occt-800: classes that SWIG actually wraps via %include in NCollection.i.
+# The generator must NOT emit a @classnotwrapped placeholder for them, since
+# the placeholder would shadow the SWIG-wrapped class and hide its methods
+# (e.g. NCollection_BaseList::Size, IsEmpty, Length).
+NCOLLECTION_WRAPPED_CLASSES = {
+    "NCollection_Array1",
+    "NCollection_Array2",
+    "NCollection_BaseList",
+    "NCollection_BaseMap",
+    "NCollection_DataMap",
+    "NCollection_DoubleMap",
+    "NCollection_HArray1",
+    "NCollection_HArray2",
+    "NCollection_HSequence",
+    "NCollection_IndexedDataMap",
+    "NCollection_IndexedMap",
+    "NCollection_List",
+    "NCollection_Map",
+    "NCollection_Sequence",
+    "NCollection_TListIterator",
+    "NCollection_UBTree",
+    "NCollection_UBTreeFiller",
+    "NCollection_Vector",
+    "NCollection_DynamicArray",
+}
+
 
 HXX_TO_EXCLUDE_FROM_CPPPARSER = [
     "Standard_CLocaleSentry.hxx",
@@ -341,6 +367,8 @@ TEMPLATES_TO_EXCLUDE = [
     # occt-800: std::array template, SWIG would emit push_back/insert which
     # std::array doesn't support
     "Graphic3d_ArrayOfIndexedMapOfStructure",
+    # occt-800: nested NCollection_DynamicArray<NCollection_DynamicArray<...>>
+    "BOPDS_VectorOfVectorOfPair",
     "GccEnt_Array1OfPosition",
     "MAT2d_Array2OfConnexion",
     "StepElement_Array2OfCurveElementPurposeMember",
@@ -407,7 +435,11 @@ NCOLLECTION_HEADER_TEMPLATE = """
 %include "NCollection_Array2.hxx";
 %include "NCollection_BaseList.hxx";
 %include "NCollection_BaseMap.hxx";
-%include "NCollection_BasePointerVector.hxx";
+// occt-800rc5: NCollection_BasePointerVector methods are declared
+// Standard_EXPORT but not exported from libTKernel.so. Skip the header
+// entirely so SWIG does not emit linker references.
+//%include "NCollection_BasePointerVector.hxx";
+%ignore NCollection_BasePointerVector;
 %include "NCollection_Map.hxx";
 %include "NCollection_List.hxx";
 %include "NCollection_Sequence.hxx";
@@ -485,6 +517,28 @@ public:
 %include "NCollection_UBTreeFiller.hxx";
 %include "NCollection_Lerp.hxx";
 %include "NCollection_Vector.hxx";
+// occt-800: NCollection_DynamicArray is a new container deriving from
+// NCollection_BasePointerVector. Forward-declare an empty wrapper so
+// %template instantiations like NCollection_DynamicArray<X> link.
+// (BasePointerVector methods are declared Standard_EXPORT but not actually
+//  exported from libTKernel.so in 8.0rc5, so we cannot wrap them directly.)
+template <class TheItemType>
+class NCollection_DynamicArray
+{
+public:
+  NCollection_DynamicArray();
+  NCollection_DynamicArray(const size_t theIncrement);
+  size_t Length() const;
+  size_t Size() const;
+  bool IsEmpty() const;
+  void Clear();
+  const TheItemType& Value(const size_t theIndex) const;
+  const TheItemType& First() const;
+  const TheItemType& Last() const;
+  TheItemType& ChangeValue(const size_t theIndex);
+  void Append(const TheItemType& theValue);
+  void SetValue(const size_t theIndex, const TheItemType& theValue);
+};
 %include "NCollection_Vec2.hxx";
 %include "NCollection_Vec3.hxx";
 %include "NCollection_Vec4.hxx";
@@ -657,6 +711,13 @@ class $NCollection_List_Template_Instanciation:
 NCOLLECTION_SEQUENCE_EXTEND_TEMPLATE = Template(
     """
 %extend $NCollection_Sequence_Template_Instanciation {
+    // occt-800: NCollection_BaseSequence methods are not wrapped through
+    // SWIG (its inner SeqNode has private new/delete). Re-export them per
+    // instantiation so Python code can call .Size(), .Length(), .IsEmpty()
+    // and use len() on every NCollection_Sequence<...>.
+    size_t Size() const noexcept { return $$self->Size(); }
+    int Length() const noexcept { return $$self->Length(); }
+    bool IsEmpty() const noexcept { return $$self->IsEmpty(); }
     %pythoncode {
     def __len__(self):
         return self.Size()
@@ -1331,9 +1392,20 @@ def adapt_header_file(header_content):
     if matches := outer.findall(header_content):
         for match in matches:
             ALL_STANDARD_HANDLES.append(match.split("(")[1].split(",")[0])
-    # Search for RTTIEXT
-    outer = re.compile("DEFINE_STANDARD_RTTIEXT[\\s]*\\([\\w\\s]+\\,+[\\w\\s]+\\)")
-    matches = outer.findall(header_content)
+    # Search for RTTIEXT / RTTI_INLINE - in OCCT 8.0 many classes that derive
+    # from Standard_Transient no longer carry a DEFINE_STANDARD_HANDLE; they
+    # only have DEFINE_STANDARD_RTTI{,_INLINE,EXT}(C, Parent). Treat that as
+    # an implicit handle declaration so check_has_related_handle picks them up.
+    # Same logic for DEFINE_DERIVED_ATTRIBUTE which marks XCAF shape tools
+    # and similar classes as TDataStd_GenericEmpty subtypes.
+    outer = re.compile(
+        r"DEFINE_(?:STANDARD_RTTI(?:_INLINE|EXT)?|DERIVED_ATTRIBUTE)\s*"
+        r"\(\s*([\w]+)\s*,\s*[\w:]+\s*\)"
+    )
+    if matches := outer.findall(header_content):
+        for match in matches:
+            if match not in ALL_STANDARD_HANDLES:
+                ALL_STANDARD_HANDLES.append(match)
     # Search for HARRAY1
     outer = re.compile("DEFINE_HARRAY1[\\s]*\\([\\w\\s]+\\,+[\\w\\s]+\\)")
     if matches := outer.findall(header_content):
@@ -1375,12 +1447,14 @@ def adapt_header_file(header_content):
         "NCOLLECTION_HSEQUENCE", "//NCOLLECTION_HSEQUENCE"
     )
     # Search for Standard_DEPRECATED
-    # Strip Standard_DEPRECATED("...") entirely (with the parens), so it
-    # disappears from the source rather than leaving a dangling //comment.
-    # OCCT 8.0 places this attribute mid-declaration (e.g. inside `using ... = X;`)
-    # which would otherwise produce malformed C++ after a partial replacement.
+    # Strip Standard_DEPRECATED("...") and Standard_DEPRECATED_STD("...")
+    # entirely (with the parens), so they disappear from the source rather
+    # than leaving a dangling //comment. OCCT 8.0 places these attributes
+    # mid-declaration (e.g. inside `using ... = X;`) which would otherwise
+    # produce malformed C++ after a partial replacement.
     pattern = re.compile(
-        r'Standard_DEPRECATED\s*\(\s*(?:".*?(?:\\"|[^"])*?"(?:\s*".*?(?:\\"|[^"])*?")*)\s*\)'
+        r'Standard_DEPRECATED(?:_STD|_WARNING)?\s*\(\s*'
+        r'(?:".*?(?:\\"|[^"])*?"(?:\s*".*?(?:\\"|[^"])*?")*)\s*\)'
     )
     header_content = pattern.sub("", header_content)
     header_content = header_content.replace(
@@ -1400,17 +1474,6 @@ def adapt_header_file(header_content):
     # Normalize it to the full form so the rest of the pipeline (typedef detection,
     # dependency tracking, parameter adaptation) keeps working unchanged.
     header_content = header_content.replace("occ::handle", "opencascade::handle")
-    # occt-800: many headers now use the canonical template form
-    # `NCollection_HArray1<gp_Pnt2d>` directly instead of the typedef
-    # `TColgp_HArray1OfPnt2d`. Rewrite back to the typedef name so SWIG
-    # type tags stay consistent across modules (the typedef is declared
-    # in TColgp.i / TColStd.i). Skip the rewrite when the current header
-    # is itself the typedef declaration (would become self-referential).
-    for tpl, name in HARRAY_TYPEDEF_REWRITES:
-        # don't rewrite inside `typedef ... NAME;` lines defining NAME itself
-        if f"{tpl} {name};" in header_content:
-            continue
-        header_content = header_content.replace(tpl, name)
     # occt-800: rewrite simple C++11 `using X = Y;` aliases into classic
     # `typedef Y X;` so the typedef pipeline picks them up. Many OCCT 8.0
     # headers (GCE2d_MakeEllipse, ...) became `using` aliases for renamed classes.
@@ -2007,8 +2070,30 @@ def is_return_type_enum(return_type):
     return any(r in ALL_ENUMS for r in return_type.split())
 
 
+def _apply_typedef_rewrites(text):
+    """Repeatedly substitute canonical NCollection template forms with
+    their typedef aliases until the string stabilises. Multiple passes are
+    required because nested templates are usually defined in terms of
+    other typedefs (e.g. NCollection_List<TopoDS_Shape> -> TopTools_ListOfShape
+    must run before the IndexedDataMap that contains it can match)."""
+    if not HARRAY_TYPEDEF_REWRITES:
+        return text
+    for _ in range(5):  # bounded loop, 5 nesting levels is more than enough
+        prev = text
+        for tpl, name in HARRAY_TYPEDEF_REWRITES:
+            if tpl in text:
+                text = text.replace(tpl, name)
+        if text == prev:
+            break
+    return text
+
+
 def adapt_param_type(param_type):
     param_type = param_type.strip()
+    # occt-800: rewrite canonical NCollection<...> forms back to the typedef
+    # alias so SWIG type tags match across modules. The list is built from
+    # TopTools_/TColgp_/TColStd_/... headers in scan_typedef_aliases().
+    param_type = _apply_typedef_rewrites(param_type)
     if "CString" in param_type:
         param_type = param_type.replace("const Standard_CString", "Standard_CString")
         param_type = param_type.replace("Standard_CString &", "Standard_CString")
@@ -2207,6 +2292,8 @@ def adapt_return_type(return_type):
     for replace in replaces:
         return_type = return_type.replace(replace, "")
     return_type = return_type.strip()
+    # occt-800: rewrite canonical NCollection<...> forms back to typedef alias
+    return_type = _apply_typedef_rewrites(return_type)
 
     if (
         "const" in return_type
@@ -3322,6 +3409,24 @@ def process_handles(classes_dict, exclude_classes):
     if exclude_classes == ["*"]:  # don't wrap any class
         return ""
     inheritance_tree_list = build_inheritance_tree(classes_dict)
+    # occt-800: propagate "needs handle" through the inheritance chain. Many
+    # 8.0 classes (e.g. XCAFDoc_ShapeTool) have no DEFINE_STANDARD_RTTI* of
+    # their own but inherit from a Standard_Transient subclass via several
+    # levels - their handle is still required for the typemaps.
+    inherited_handle_classes = set()
+    for klass in inheritance_tree_list:
+        cn = klass["name"]
+        for base in klass.get("inherits", []):
+            base_name = base.get("class") if isinstance(base, dict) else base
+            if base_name and (
+                base_name in ALL_STANDARD_HANDLES
+                or base_name in ALL_STANDARD_TRANSIENTS
+                or base_name in inherited_handle_classes
+            ):
+                inherited_handle_classes.add(cn)
+                if cn not in ALL_STANDARD_HANDLES:
+                    ALL_STANDARD_HANDLES.append(cn)
+                break
     for klass in inheritance_tree_list:
         # class name
         class_name = klass["name"]
@@ -3557,6 +3662,13 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             class_def_str += "\t\t\tdelete[] str;}\n"
             class_def_str += "\t\t\treturn txt;}\n"
             class_def_str += "\t\t};\n"
+        # occt-800: StlAPI_Writer dropped the SetASCIIMode setter and exposes
+        # the flag through `bool& ASCIIMode()` instead. Add a Python-friendly
+        # SetASCIIMode shim so existing callers keep working.
+        if class_name == "StlAPI_Writer":
+            class_def_str += "\t\t%extend{\n"
+            class_def_str += "\t\t\tvoid SetASCIIMode(bool theMode) { self->ASCIIMode() = theMode; }\n"
+            class_def_str += "\t\t};\n"
         # then terminate the class definition
         class_def_str += "};\n\n"
         #
@@ -3629,6 +3741,12 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         class_def_str += "/* python proxy for excluded classes */\n"
         class_def_str += "%pythoncode {\n"
         for excluded_class in exclude_classes:
+            # occt-800: do not emit a placeholder Python class for classes
+            # that SWIG already wraps via the NCollection.i %include lines;
+            # the placeholder would shadow the real wrapped class and hide
+            # inherited methods like Size()/Length()/IsEmpty().
+            if excluded_class in NCOLLECTION_WRAPPED_CLASSES:
+                continue
             class_def_str += "@classnotwrapped\n"
             class_def_str += f"class {excluded_class}:\n\tpass\n\n"
             class_pyi_str += "\n#classnotwrapped\n"
@@ -3961,41 +4079,68 @@ class ModuleWrapper:
 
 
 def scan_typedef_aliases():
-    """occt-800: scan every OCCT header for `typedef NCollection_X<...> Y;`
-    declarations and populate HARRAY_TYPEDEF_REWRITES so we can rewrite back
-    canonical template forms to their typedef aliases (the names SWIG actually
-    wraps and registers a type tag for). Without this rewrite, modules that use
-    `occ::handle<NCollection_HArray1<gp_Pnt2d>>` directly cannot be passed a
-    Python `TColgp_HArray1OfPnt2d` instance.
+    """occt-800: scan a curated subset of OCCT headers for
+    `typedef NCollection_X<...> Y;` declarations and populate
+    HARRAY_TYPEDEF_REWRITES. The rewrite is applied to parameter and return
+    types so SWIG type tags stay consistent across modules - e.g.
+    NCollection_IndexedDataMap<TopoDS_Shape, TopTools_ListOfShape, ...>
+    is rewritten to TopTools_IndexedDataMapOfShapeListOfShape.
+
+    Also pre-populate ALL_HARRAY1 / ALL_HARRAY2 / ALL_HSEQUENCE for every
+    `typedef NCollection_HArrayN<X> Y;` so that process_handles emits a
+    %wrap_handle and process_harrayN emits the fake-class definition that
+    used to be supplied by the (removed) DEFINE_HARRAYN macro.
+
+    We scan only a small set of "leaf" container modules. Scanning every
+    header was tried but introduces too many cross-module typedef
+    equivalences and causes SWIG to emit cast tables for C++ types
+    unavailable in the importing module.
     """
+    target_modules = (
+        "TopTools_", "TColgp_", "TColStd_", "TColGeom_", "TColGeom2d_", "TColQuantity_",
+        "TShort_", "Quantity_", "Poly_", "Storage_",
+    )
     nc_pattern = re.compile(
         r"\btypedef\s+(NCollection_(?:H?Array1|H?Array2|H?Sequence|"
-        r"DataMap|IndexedMap|IndexedDataMap|DoubleMap|Map|List|Vector)"
+        r"DataMap|IndexedMap|IndexedDataMap|DoubleMap|Map|List|Vector|"
+        r"DynamicArray|Buffer|FlatDataMap|OrderedDataMap|PackedMap)"
         r"<[^;]+?>)\s+([A-Za-z_]\w*)\s*;"
     )
     seen = {}
     for header_path in glob.glob(os.path.join(OCCT_INCLUDE_DIR, "*.hxx")):
+        basename = os.path.basename(header_path)
+        if not any(basename.startswith(prefix) for prefix in target_modules):
+            continue
         try:
             with open(header_path, "r", encoding="utf8", errors="replace") as f:
                 content = f.read()
         except OSError:
             continue
-        # normalize for matching
         content = content.replace("Handle(", "opencascade::handle<").replace(
             "occ::handle", "opencascade::handle"
         )
-        # collapse whitespace inside template arguments
         for match in nc_pattern.finditer(content):
             tpl = re.sub(r"\s+", "", match.group(1))
-            # rebalance Handle( ) closes: Handle(X) -> opencascade::handle<X>>
-            # the regex already replaced Handle(, but we need the matching ">"
-            # approximated below. Skip overly complex matches.
             if tpl.count("<") != tpl.count(">"):
                 continue
             name = match.group(2)
-            # prefer the first declaration we see
             if tpl not in seen:
                 seen[tpl] = name
+                seen[tpl.replace(",", ", ")] = name
+            # Also register HArrayN typedefs into ALL_HARRAY{1,2} / ALL_HSEQUENCE
+            # so process_handles / process_harray* generate the right wrapping.
+            if tpl.startswith("NCollection_HArray1<"):
+                inner = tpl[len("NCollection_HArray1<"):-1]
+                if name not in ALL_HARRAY1:
+                    ALL_HARRAY1[name] = f"NCollection_Array1<{inner}>"
+            elif tpl.startswith("NCollection_HArray2<"):
+                inner = tpl[len("NCollection_HArray2<"):-1]
+                if name not in ALL_HARRAY2:
+                    ALL_HARRAY2[name] = f"NCollection_Array2<{inner}>"
+            elif tpl.startswith("NCollection_HSequence<"):
+                inner = tpl[len("NCollection_HSequence<"):-1]
+                if name not in ALL_HSEQUENCE:
+                    ALL_HSEQUENCE[name] = f"NCollection_Sequence<{inner}>"
     HARRAY_TYPEDEF_REWRITES.extend(sorted(seen.items(), key=lambda kv: -len(kv[0])))
     logging.info(
         "Built %d typedef rewrite mappings from OCCT headers", len(HARRAY_TYPEDEF_REWRITES)
@@ -4056,6 +4201,11 @@ def run_unit_tests():
 if __name__ == "__main__":
     # do it each time, does not take too much time, prevent regressions
     run_unit_tests()
+    # occt-800: pre-pass to map canonical NCollection template forms back
+    # to the typedef aliases pythonocc actually wraps. Without this, modules
+    # that take a parameter typed as `NCollection_X<...>` cannot be passed a
+    # Python object of the corresponding TopTools_/TColgp_/... typedef.
+    scan_typedef_aliases()
     logging.info(get_log_header())
     start_time = time.perf_counter()
     if len(sys.argv) > 1:
