@@ -43,6 +43,17 @@ from Modules import (
     TOOLKIT_VTK,
     OCCT_MODULES,
 )
+from _exclusions import (
+    ENUMS_TO_EXLUDE,
+    HXX_TO_EXCLUDE_FROM_BEING_INCLUDED,
+    HXX_TO_EXCLUDE_FROM_CPPPARSER,
+    NCOLLECTION_WRAPPED_CLASSES,
+    NODEFAULTCTOR,
+    STANDARD_INTEGER_TYPEDEF,
+    TEMPLATES_TO_EXCLUDE,
+    TYPEDEF_TO_EXCLUDE,
+)
+from _swig_templates import *  # noqa: F401,F403  (template constants used throughout)
 
 ##############################################
 # Load configuration file and setup settings #
@@ -74,8 +85,8 @@ log = logging.getLogger()
 log.setLevel(logging.INFO)
 log_file_name = os.path.join(SWIG_OUTPUT_PATH, "generator.log")
 # ensure log file is emptied before running the generator
-lf = open(log_file_name, "w", encoding="utf8")
-lf.close()
+with open(log_file_name, "w", encoding="utf8"):
+    pass
 
 file_handler = logging.FileHandler(log_file_name)
 file_handler.setFormatter(log_formatter)
@@ -89,12 +100,6 @@ log.addHandler(console_handler)
 ####################
 DOC_URL = "https://dev.opencascade.org/doc/occt-7.9.0/refman/html"
 
-##################
-# For statistics #
-##################
-NB_TOTAL_CLASSES = 0  # number of wrapped classes
-NB_TOTAL_METHODS = 0  # number of wrapped methods
-
 ALL_TOOLKITS = [
     TOOLKIT_Foundation,
     TOOLKIT_Modeling,
@@ -107,1151 +112,64 @@ TOOLKITS = {}
 for tk in ALL_TOOLKITS:
     TOOLKITS |= tk
 
-LICENSE_HEADER = """/*
-Copyright 2008-2025 Thomas Paviot (tpaviot@gmail.com)
-
-This file is part of pythonOCC.
-pythonOCC is free software: you can redistribute it and/or modify
-it under the terms of the GNU Lesser General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-pythonOCC is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Lesser General Public License for more details.
-
-You should have received a copy of the GNU Lesser General Public License
-along with pythonOCC.  If not, see <http://www.gnu.org/licenses/>.
-*/
-"""
-
 # check if SWIG_OUTPUT_PATH exists, otherwise create it
 if not os.path.isdir(SWIG_OUTPUT_PATH):
     os.mkdir(SWIG_OUTPUT_PATH)
 
-# the following var is set when the module
-# is created
-CURRENT_MODULE = None
-PYTHON_MODULE_DEPENDENCY = []
-HEADER_DEPENDENCY = []
 
-# remove headers that can't be parse by CppHeaderParser
-# occt-800: built lazily by scan_typedef_aliases() — a mapping from canonical
-# template form (e.g. "NCollection_HArray1<gp_Pnt2d>") to the typedef alias
-# (e.g. "TColgp_HArray1OfPnt2d") that pythonocc actually wraps. Many OCCT 8.0
-# headers replaced typedef names with the canonical template form in their
-# function signatures, but the typedef alias is what carries the SWIG type tag,
-# so we have to rewrite back.
-HARRAY_TYPEDEF_REWRITES = []
+class GeneratorState:
+    """Mutable state shared across the generation pipeline.
 
-# occt-800: classes that SWIG actually wraps via %include in NCollection.i.
-# The generator must NOT emit a @classnotwrapped placeholder for them, since
-# the placeholder would shadow the SWIG-wrapped class and hide its methods
-# (e.g. NCollection_BaseList::Size, IsEmpty, Length).
-NCOLLECTION_WRAPPED_CLASSES = {
-    "NCollection_Array1",
-    "NCollection_Array2",
-    "NCollection_BaseList",
-    "NCollection_BaseMap",
-    "NCollection_DataMap",
-    "NCollection_DoubleMap",
-    "NCollection_HArray1",
-    "NCollection_HArray2",
-    "NCollection_HSequence",
-    "NCollection_IndexedDataMap",
-    "NCollection_IndexedMap",
-    "NCollection_List",
-    "NCollection_Map",
-    "NCollection_Sequence",
-    "NCollection_TListIterator",
-    "NCollection_UBTree",
-    "NCollection_UBTreeFiller",
-    "NCollection_Vector",
-    "NCollection_DynamicArray",
-}
-
-
-HXX_TO_EXCLUDE_FROM_CPPPARSER = [
-    "Standard_CLocaleSentry.hxx",
-    "IntWalk_PWalking.hxx",
-    "Standard_Dump.hxx",  # to avoid a dependency of Standard over TCollection
-    "IMeshData_ParametersListArrayAdaptor.hxx",
-    "BRepExtrema_ProximityValueTool.hxx",  # occt-771, file cannot be parsed
-    "Units_Operators.hxx",  # occt-790, create weird operators overloading in the python module
-    "NCollection_ForwardRange.hxx",  # occt-800, C++17 SFINAE templates not handled by CppHeaderParser
-    # occt-800: deprecated headers that #include a removed header (BOPDS_ListOfPaveBlock,
-    # Graphic3d_MapOfStructure, TObj_SequenceOfObject) - their typedefs reference types
-    # that no longer exist in the install
-    "BOPDS_DataMapOfIntegerListOfPaveBlock.hxx",
-    "BOPDS_DataMapOfPaveBlockListOfPaveBlock.hxx",
-    "BOPDS_IndexedDataMapOfPaveBlockListOfPaveBlock.hxx",
-    "BOPDS_VectorOfListOfPaveBlock.hxx",
-    "Graphic3d_MapIteratorOfMapOfStructure.hxx",
-    "TObj_Container.hxx",
-]
-
-# some includes fail at being compiled
-HXX_TO_EXCLUDE_FROM_BEING_INCLUDED = [
-    # report the 3 following to upstream, buggy
-    # error: ‘ChFiDS_ChamfMode’ does not name a type;
-    "ChFiKPart_ComputeData_ChPlnPln.hxx",
-    "ChFiKPart_ComputeData_ChPlnCyl.hxx",
-    "ChFiKPart_ComputeData_ChPlnCon.hxx",
-    # others
-    "IntWalk_PWalking.hxx",
-    "IMeshData_ParametersListArrayAdaptor.hxx",
-    "Standard_MemoryUtils.hxx",
-    "math_VectorBase.hxx",
-    "StepToTopoDS_Builder.hxx",
-    "NCollection_ForwardRange.hxx",  # occt-800, C++17 SFINAE templates
-    # occt-800: deprecated headers that #include a removed header
-    "Graphic3d_MapIteratorOfMapOfStructure.hxx",
-    "BOPDS_DataMapOfIntegerListOfPaveBlock.hxx",
-    "BOPDS_DataMapOfPaveBlockListOfPaveBlock.hxx",
-    "BOPDS_IndexedDataMapOfPaveBlockListOfPaveBlock.hxx",
-    "BOPDS_VectorOfListOfPaveBlock.hxx",
-    "TObj_Container.hxx",
-]
-
-# some typedefs parsed by CppHeader can't be wrapped
-# and generate SWIG syntax errors. We just forget
-# about wrapping those typedefs
-TYPEDEF_TO_EXCLUDE = [
-    "Handle_Standard_Transient",
-    "NCollection_DelMapNode",
-    "BOPDS_DataMapOfPaveBlockCommonBlock",
-    # BOPCol following templates are already wrapped in TColStd
-    # which causes issues with SWIg
-    "BOPCol_MapOfInteger",
-    "BOPCol_SequenceOfReal",
-    "BOPCol_DataMapOfIntegerInteger",
-    "BOPCol_DataMapOfIntegerReal",
-    "BOPCol_IndexedMapOfInteger",
-    "BOPCol_ListOfInteger",
-    "IntWalk_VectorOfWalkingData",
-    "IntWalk_VectorOfInteger",
-    "TopoDS_AlertWithShape",
-    "gp_TrsfNLerp",
-    "TopOpeBRepTool_IndexedDataMapOfSolidClassifier",
-    "Graphic3d_Vec2u",
-    "Graphic3d_Vec3u",
-    "Graphic3d_Vec4u",
-    # "Select3D_BndBox3d",
-    "SelectMgr_TriangFrustums",
-    "SelectMgr_TriangFrustumsIter",
-    "SelectMgr_MapOfObjectSensitives",
-    "Graphic3d_IndexedMapOfAddress",
-    "Graphic3d_MapOfObject",
-    "Storage_PArray",
-    "Interface_StaticSatisfies",
-    "IMeshData::ICurveArrayAdaptor",
-    "Prs3d_ShapeTool",  # circular import
-    "StdSelect_ViewerSelector3d",  # circular import
-    "TopoDS_ListOfShape",
-    "TopoDS_ListIteratorOfListOfShape",
-    "NCollection_DelListNode",  # occt790
-    "NCollection_DelSeqNode",
-    "BRepMesh_PluginEntryType",
-    "MinMaxValuesCallback",
-    "TPCallBackFunc",  # in Standard
-    "CallbackOnUpdate_t",
-    "MoniTool_ValueInterpret",
-    "MoniTool_ValueSatisfies",
-    "Interface_ValueInterpret",
-    "Interface_ValueSatisfies",
-]
-
-# Following are standard integer typedefs. They have to be replaced
-# with int, in the function adapt_param_type
-STANDARD_INTEGER_TYPEDEF = [
-    "Graphic3d_ArrayFlags",
-    "Graphic3d_ZLayerId",
-    "MeshVS_BuilderPriority",
-    "MeshVS_BuilderPriority",
-    "MeshVS_DisplayModeFlags",
-    "XCAFPrs_DocumentExplorerFlags",
-]
-
-# enums to skip
-ENUMS_TO_EXLUDE = ["ShapeMapGroup", "AllocatorType"]  # RWGtlf.i  # Standard.i
-
-# The list of all enums defined in oce
-ALL_ENUMS = []
-
-# The list of all enums passed and returned by reference
-# and need a SWIG specific template
-ALL_BYREF_ENUMS = []
-
-# HArray1 apperead in occt 7x
-# They are a kind of collection defined in NCollection_DefineHArray1
-# a macro define this kind of object
-ALL_HARRAY1 = {}
-# same for NCollection_DefineHarray2
-ALL_HARRAY2 = {}
-# same for NCollection_DefineHSequence
-ALL_HSEQUENCE = {}
-
-# the list of all handles defined by the
-# DEFINE_STANDARD_HANDLE occ macro
-ALL_STANDARD_HANDLES = []
-
-# the list of al classes that inherit from Standard_Transient
-# and, as a consequence, need the %wrap_handle and %make_alias macros
-ALL_STANDARD_TRANSIENTS = ["Standard_Transient"]
-
-# classes that must not wrap a default constructor
-NODEFAULTCTOR = [
-    "IFSelect_SelectBase",
-    "IFSelect_SelectControl",
-    "IFSelect_SelectDeduct",
-    "PCDM_RetrievalDriver",
-    "MeshVS_DataSource3D",
-    "AIS_Dimension",
-    "Graphic3d_Layer",
-    "Expr_BinaryExpression",
-    "Expr_NamedExpression",
-    "Expr_UnaryExpression",
-    "Expr_SingleExpression",
-    "Expr_SingleRelation",
-    "Expr_UnaryExpression",
-    "Geom_SweptSurface",
-    "Geom_BoundedSurface",
-    "ShapeCustom_Modification",
-    "SelectMgr_CompositionFilter",
-    "BRepMeshData_Wire",
-    "BRepMeshData_PCurve",
-    "BRepMeshData_Face",
-    "BRepMeshData_Edge",
-    "BRepMeshData_Curve",
-    "Graphic3d_BvhCStructureSet",
-    "PrsDim_Dimension",
-]
-
-
-TEMPLATES_TO_EXCLUDE = [
-    "gp_TrsfNLerp",
-    # IntPolyh templates don't work
-    "IntPolyh_Array",
-    # and this one also
-    "NCollection_CellFilter",
-    "BVH_PrimitiveSet",
-    "BVH_Builder",
-    "pair",  # for std::pair
-    # for Graphic3d to compile
-    "Graphic3d_UniformValue",
-    "NCollection_Shared",
-    "NCollection_Handle",
-    "NCollection_DelMapNode",
-    "BOPTools_BoxSet",
-    "BOPTools_PairSelector",
-    "BOPTools_BoxSet",
-    "BOPTools_BoxSelector",
-    "BOPTools_PairSelector",
-    "BVH_Box",
-    "Prs3d_Point",
-    "OSD_StreamBuffer",  # occt762
-    "TColStd_Array1OfListOfInteger",  ## occt781
-    "TopTools_Array1OfListOfShape",
-    "TColGeom_Array2OfBezierSurface",
-    "FEmTool_AssemblyTable",
-    "Extrema_Array2OfPOnCurv",
-    "Extrema_Array2OfPOnCurv2d",
-    "Extrema_Array2OfPOnSurf",
-    "Extrema_Array2OfPOnSurfParams",
-    "TopOpeBRepDS_Array1OfDataMapOfIntegerListOfInterference",
-    "TopTrans_Array2OfOrientation",
-    # occt-800: std::array template, SWIG would emit push_back/insert which
-    # std::array doesn't support
-    "Graphic3d_ArrayOfIndexedMapOfStructure",
-    # occt-800: nested NCollection_DynamicArray<NCollection_DynamicArray<...>>
-    "BOPDS_VectorOfVectorOfPair",
-    "GccEnt_Array1OfPosition",
-    "MAT2d_Array2OfConnexion",
-    "StepElement_Array2OfCurveElementPurposeMember",
-    "StepElement_Array2OfSurfaceElementPurpose",
-    "StepElement_Array2OfSurfaceElementPurposeMember",
-    # occt-800: nested template (Array1 of handle of HSequence)
-    "StepElement_Array1OfHSequenceOfCurveElementPurposeMember",
-    "StepElement_Array1OfHSequenceOfSurfaceElementPurposeMember",
-    "StepElement_HArray1OfHSequenceOfCurveElementPurposeMember",
-    "StepElement_HArray1OfHSequenceOfSurfaceElementPurposeMember",
-    "StepDimTol_Array1OfGeometricToleranceModifier",
-    "StepGeom_Array2OfCartesianPoint",
-    "StepGeom_Array2OfSurfacePatch",
-    "TFunction_Array1OfDataMapOfGUIDDriver",
-    "TopoDS_ListOfShape",  # shadows TopTools_ListOfShape
-    "TopoDS_ListIteratorOfListOfShape",  # shadows TopTools_ListIteratorOfListOfShape
-]
-
-##########################
-# Templates for includes #
-##########################
-
-BOPDS_HEADER_TEMPLATE = """
-%include "BOPCol_NCVector.hxx";
-"""
-
-INTPOLYH_HEADER_TEMPLATE = """
-%include "IntPolyh_Array.hxx";
-%include "IntPolyh_ArrayOfTriangles.hxx";
-%include "IntPolyh_SeqOfStartPoints.hxx";
-%include "IntPolyh_ArrayOfEdges.hxx";
-%include "IntPolyh_ArrayOfTangentZones.hxx";
-%include "IntPolyh_ArrayOfSectionLines.hxx";
-%include "IntPolyh_ListOfCouples.hxx";
-%include "IntPolyh_ArrayOfPoints.hxx";
-"""
-
-BVH_HEADER_TEMPLATE = """
-%include "BVH_PrimitiveSet.hxx";
-"""
-
-PRS3D_HEADER_TEMPLATE = """
-%include "Prs3d_Point.hxx";
-"""
-
-BREPALGOAPI_HEADER = """
-%include "BRepAlgoAPI_Algo.hxx";
-"""
-
-GRAPHIC3D_DEFINE_HEADER = """
-%define Handle_Graphic3d_TextureSet Handle(Graphic3d_TextureSet)
-%enddef
-%define Handle_Aspect_DisplayConnection Handle(Aspect_DisplayConnection)
-%enddef
-%define Handle_Graphic3d_NMapOfTransient Handle(Graphic3d_NMapOfTransient)
-%enddef
-"""
-
-NCOLLECTION_HEADER_TEMPLATE = """
-%include "Standard_Macro.hxx";
-%include "Standard_DefineAlloc.hxx";
-%include "NCollection_DefineAlloc.hxx";
-%include "NCollection_Array1.hxx";
-%include "NCollection_Array2.hxx";
-%include "NCollection_BaseList.hxx";
-%include "NCollection_BaseMap.hxx";
-// occt-800rc5: NCollection_BasePointerVector methods are declared
-// Standard_EXPORT but not exported from libTKernel.so. Skip the header
-// entirely so SWIG does not emit linker references.
-//%include "NCollection_BasePointerVector.hxx";
-%ignore NCollection_BasePointerVector;
-%include "NCollection_Map.hxx";
-%include "NCollection_List.hxx";
-%include "NCollection_Sequence.hxx";
-%include "NCollection_DataMap.hxx";
-%include "NCollection_IndexedMap.hxx";
-%include "NCollection_IndexedDataMap.hxx";
-%include "NCollection_DoubleMap.hxx";
-// occt-800: HArray1/HArray2/HSequence are now plain template classes
-// (the DEFINE_HARRAY1 / DEFINE_HSEQUENCE macros were removed). Declare
-// SWIG-visible templates inheriting only from Standard_Transient so that
-// %wrap_handle / %make_alias keep working without dragging the
-// NCollection_Array1<T> base (which would force T to be a complete type
-// in every translation unit that references the template instantiation).
-template <typename TheItemType>
-class NCollection_HArray1 : public Standard_Transient
-{
-public:
-  NCollection_HArray1();
-  NCollection_HArray1(const int theLower, const int theUpper);
-  NCollection_HArray1(const int theLower, const int theUpper, const TheItemType& theValue);
-  int Lower() const;
-  int Upper() const;
-  int Length() const;
-  int Size() const;
-  bool IsEmpty() const;
-  void SetValue(const int theIndex, const TheItemType& theItem);
-  const TheItemType& Value(const int theIndex) const;
-  TheItemType& ChangeValue(const int theIndex);
-  const TheItemType& First() const;
-  const TheItemType& Last() const;
-  void Init(const TheItemType& theValue);
-};
-
-template <typename TheItemType>
-class NCollection_HArray2 : public Standard_Transient
-{
-public:
-  NCollection_HArray2(const int theRowLower, const int theRowUpper,
-                      const int theColLower, const int theColUpper);
-  NCollection_HArray2(const int theRowLower, const int theRowUpper,
-                      const int theColLower, const int theColUpper,
-                      const TheItemType& theValue);
-  int LowerRow() const;
-  int UpperRow() const;
-  int LowerCol() const;
-  int UpperCol() const;
-  int NbRows() const;
-  int NbColumns() const;
-  void SetValue(const int theRow, const int theCol, const TheItemType& theItem);
-  const TheItemType& Value(const int theRow, const int theCol) const;
-  TheItemType& ChangeValue(const int theRow, const int theCol);
-  void Init(const TheItemType& theValue);
-};
-
-// occt-800: NCollection_PackedMap is a heavily-templated class with
-// constexpr/std::conditional that SWIG cannot fully parse. Declare a
-// minimal SWIG-visible shim so %template instantiations like
-// `TColStd_PackedMapOfInteger = NCollection_PackedMap<int>` link and
-// expose the small surface that pythonocc users actually need.
-template <typename IntType>
-class NCollection_PackedMap
-{
-public:
-  NCollection_PackedMap();
-  size_t Size() const;
-  size_t Extent() const;
-  size_t NbBuckets() const;
-  bool IsEmpty() const;
-  void Clear();
-  bool Add(IntType theValue);
-  bool Contains(IntType theValue) const;
-  bool Remove(IntType theValue);
-};
-
-template <typename TheItemType>
-class NCollection_HSequence : public Standard_Transient
-{
-public:
-  NCollection_HSequence();
-  int Size() const;
-  int Length() const;
-  bool IsEmpty() const;
-  void Clear();
-  void Append(const TheItemType& theItem);
-  void Prepend(const TheItemType& theItem);
-  void Reverse();
-  const TheItemType& First() const;
-  const TheItemType& Last() const;
-  const TheItemType& Value(const int theIndex) const;
-  void SetValue(const int theIndex, const TheItemType& theItem);
-  void Remove(const int theIndex);
-};
-%include "NCollection_DefineAlloc.hxx";
-%include "NCollection_UBTree.hxx";
-%include "NCollection_UBTreeFiller.hxx";
-%include "NCollection_Lerp.hxx";
-%include "NCollection_Vector.hxx";
-// occt-800: NCollection_DynamicArray is a new container deriving from
-// NCollection_BasePointerVector. Forward-declare an empty wrapper so
-// %template instantiations like NCollection_DynamicArray<X> link.
-// (BasePointerVector methods are declared Standard_EXPORT but not actually
-//  exported from libTKernel.so in 8.0rc5, so we cannot wrap them directly.)
-template <class TheItemType>
-class NCollection_DynamicArray
-{
-public:
-  NCollection_DynamicArray();
-  NCollection_DynamicArray(const size_t theIncrement);
-  size_t Length() const;
-  size_t Size() const;
-  bool IsEmpty() const;
-  void Clear();
-  const TheItemType& Value(const size_t theIndex) const;
-  const TheItemType& First() const;
-  const TheItemType& Last() const;
-  TheItemType& ChangeValue(const size_t theIndex);
-  void Append(const TheItemType& theValue);
-  void SetValue(const size_t theIndex, const TheItemType& theValue);
-};
-%include "NCollection_Vec2.hxx";
-%include "NCollection_Vec3.hxx";
-%include "NCollection_Vec4.hxx";
-%include "NCollection_Mat4.hxx";
-%include "NCollection_TListIterator.hxx";
-%include "NCollection_UtfString.hxx";
-%include "NCollection_UtfIterator.hxx";
-%include "NCollection_SparseArray.hxx";
-
-%ignore NCollection_List::First();
-%ignore NCollection_List::Last();
-%ignore NCollection_TListIterator::Value();
-
-%ignore NCollection_Array2::Value();
-%ignore NCollection_Array2::ChangeValue();
-%ignore NCollection_Array2::operator();
-"""
-
-MATH_HEADER_TEMPLATE = """
-%include "math_VectorBase.hxx";
-%template(math_Vector) math_VectorBase<double>;
-typedef math_VectorBase<double> math_Vector;
-"""
-
-HARRAY1_TEMPLATE = Template(
+    Replaces a dozen module-level globals so the dependencies between passes
+    are explicit. A single instance, ``state`` below, is the only authority.
     """
-class $HClassName : public $Array1Type, public Standard_Transient {
-  public:
-    $HClassName(const Standard_Integer theLower, const Standard_Integer theUpper);
-    $HClassName(const Standard_Integer theLower, const Standard_Integer theUpper, const $Array1Type::value_type& theValue);
-    $HClassName(const $Array1Type& theOther);
-    const $Array1Type& Array1();
-    $Array1Type& ChangeArray1();
-};
-%make_alias($HClassName)
 
-"""
-)
-
-HARRAY1_TEMPLATE_PYI = Template(
-    """
-class $HClassName($Array1Type, Standard_Transient):
-    def __init__(self, theLower: int, theUpper: int) -> None: ...
-    def Array1(self) -> $Array1Type: ...
-
-"""
-)
-
-HARRAY2_TEMPLATE = Template(
-    """
-class $HClassName : public $Array2Type, public Standard_Transient {
-  public:
-    $HClassName(const Standard_Integer theRowLow, const Standard_Integer theRowUpp, const Standard_Integer theColLow,
-                const Standard_Integer theColUpp);
-    $HClassName(const Standard_Integer theRowLow, const Standard_Integer theRowUpp, const Standard_Integer theColLow,
-               const Standard_Integer theColUpp, const $Array2Type::value_type& theValue);
-    $HClassName(const $Array2Type& theOther);
-    const $Array2Type& Array2 ();
-    $Array2Type& ChangeArray2 (); 
-};
-%make_alias($HClassName)
-
-"""
-)
-
-HARRAY2_TEMPLATE_PYI = Template(
-    """
-class $HClassName($Array2Type, Standard_Transient):
-    @overload
-    def __init__(self, theRowLow: int, theRowUpp: int, theColLow: int, theColUpp: int) -> None: ...
-    @overload
-    def __init__(self, theOther: $Array2Type) -> None: ...
-    def Array2(self) -> $Array2Type: ...
-
-"""
-)
-
-HSEQUENCE_TEMPLATE = Template(
-    """
-class $HClassName : public $SequenceType, public Standard_Transient {
-  public:
-    $HClassName();
-    $HClassName(const $SequenceType& theOther);
-    const $SequenceType& Sequence();
-    void Append (const $SequenceType::value_type& theItem);
-    void Append ($SequenceType& theSequence);
-    $SequenceType& ChangeSequence();
-};
-%make_alias($HClassName)
-
-"""
-)
-
-HSEQUENCE_TEMPLATE_PYI = Template(
-    """
-class $HClassName($SequenceType, Standard_Transient):
-    @overload
-    def __init__(self) -> None: ...
-    @overload
-    def __init__(self, other: $SequenceType) -> None: ...
-    def Sequence(self) -> $SequenceType: ...
-    def Append(self, theSequence: $SequenceType) -> None: ...
-
-"""
-)
-
-
-# the related pyi stub string
-NCOLLECTION_ARRAY1_EXTEND_TEMPLATE_PYI = Template(
-    """
-class $NCollection_Array1_Template_Instanciation:
-    @overload
-    def __init__(self) -> None: ...
-    @overload
-    def __init__(self, theLower: int, theUpper: int) -> None: ...
-    def __getitem__(self, index: int) -> $Type_T: ...
-    def __setitem__(self, index: int, value: $Type_T) -> None: ...
-    def __len__(self) -> int: ...
-    def __iter__(self) -> Iterator[$Type_T]: ...
-    def next(self) -> $Type_T: ...
-    __next__ = next
-    def Init(self, theValue: $Type_T) -> None: ...
-    def Size(self) -> int: ...
-    def Length(self) -> int: ...
-    def IsEmpty(self) -> bool: ...
-    def Lower(self) -> int: ...
-    def Upper(self) -> int: ...
-    def IsDetectable(self) -> bool: ...
-    def IsAllocated(self) -> bool: ...
-    def First(self) -> $Type_T: ...
-    def Last(self) -> $Type_T: ...
-    def Value(self, theIndex: int) -> $Type_T: ...
-    def SetValue(self, theIndex: int, theValue: $Type_T) -> None: ...
-"""
-)
-
-NCOLLECTION_LIST_EXTEND_TEMPLATE = Template(
-    """
-%extend $NCollection_List_Template_Instanciation {
-    // occt-800: re-export Size/Length/IsEmpty per instantiation; the
-    // NCollection_BaseList header is wrapped but its inherited methods
-    // don't propagate cleanly to the typedef-aliased Python class.
-    size_t Size() const noexcept { return $$self->Size(); }
-    int Length() const noexcept { return $$self->Length(); }
-    bool IsEmpty() const noexcept { return $$self->IsEmpty(); }
-    %pythoncode {
-    def __len__(self):
-        return self.Size()
-
-    def __iter__(self):
-        it = $NCollection_ListIterator_Name(self)
-        while it.More():
-            yield it.Value()
-            it.Next()
-    }
-};
-"""
-)
-
-# the related pyi stub string
-NCOLLECTION_LIST_EXTEND_TEMPLATE_PYI = Template(
-    """
-class $NCollection_List_Template_Instanciation:
-    def __init__(self) -> None: ...
-    def __len__(self) -> int: ...
-    def Size(self) -> int: ...
-    def Clear(self) -> None: ...
-    def First(self) -> $Type_T: ...
-    def Last(self) -> $Type_T: ...
-    def Append(self, theItem: $Type_T) -> $Type_T: ...
-    def Prepend(self, theItem: $Type_T) -> $Type_T: ...
-    def RemoveFirst(self) -> None: ...
-    def Reverse(self) -> None: ...
-    def Value(self, theIndex: int) -> $Type_T: ...
-    def SetValue(self, theIndex: int, theValue: $Type_T) -> None: ...
-"""
-)
-
-# NCollection_Sequence and NCollection_List shares the
-# same pyi and extension templates. It's just a copy/paste
-# from the previous templates, it may change in the future
-NCOLLECTION_SEQUENCE_EXTEND_TEMPLATE = Template(
-    """
-%extend $NCollection_Sequence_Template_Instanciation {
-    // occt-800: NCollection_BaseSequence methods are not wrapped through
-    // SWIG (its inner SeqNode has private new/delete). Re-export them per
-    // instantiation so Python code can call .Size(), .Length(), .IsEmpty()
-    // and use len() on every NCollection_Sequence<...>.
-    size_t Size() const noexcept { return $$self->Size(); }
-    int Length() const noexcept { return $$self->Length(); }
-    bool IsEmpty() const noexcept { return $$self->IsEmpty(); }
-    %pythoncode {
-    def __len__(self):
-        return self.Size()
-    }
-};
-"""
-)
-
-# the related pyi stub string
-NCOLLECTION_SEQUENCE_EXTEND_TEMPLATE_PYI = Template(
-    """
-class $NCollection_Sequence_Template_Instanciation:
-    def __init__(self) -> None: ...
-    def __len__(self) -> int: ...
-    def Size(self) -> int: ...
-    def Clear(self) -> None: ...
-    def First(self) -> $Type_T: ...
-    def Last(self) -> $Type_T: ...
-    def Length(self) -> int: ...
-    def Append(self, theItem: $Type_T) -> $Type_T: ...
-    def Prepend(self, theItem: $Type_T) -> $Type_T: ...
-    def RemoveFirst(self) -> None: ...
-    def Reverse(self) -> None: ...
-    def Value(self, theIndex: int) -> $Type_T: ...
-    def SetValue(self, theIndex: int, theValue: $Type_T) -> None: ...
-"""
-)
-
-SHAPE_ANALYSIS_FREE_BOUNDS_TEMPLATE = """
-%extend ShapeAnalysis_FreeBounds {
-    static Handle(TopTools_HSequenceOfShape) ConnectEdgesToWires(opencascade::handle<TopTools_HSequenceOfShape> & edges,
-              const Standard_Real toler,
-              const Standard_Boolean shared)
-        {
-            Handle(TopTools_HSequenceOfShape) owires = new TopTools_HSequenceOfShape;
-            ShapeAnalysis_FreeBounds::ConnectEdgesToWires(edges, toler, shared, owires);
-            return owires;
-        }
-    };
-
-%extend ShapeAnalysis_FreeBounds {
-    static Handle(TopTools_HSequenceOfShape) ConnectWiresToWires(opencascade::handle<TopTools_HSequenceOfShape> & iwires,
-              const Standard_Real toler,
-              const Standard_Boolean shared)
-        {
-            Handle(TopTools_HSequenceOfShape) owires = new TopTools_HSequenceOfShape;
-            ShapeAnalysis_FreeBounds::ConnectWiresToWires(iwires, toler, shared, owires);
-            return owires;
-        }
-    };
-"""
-
-SHAPE_ANALYSIS_FREE_BOUNDS_TEMPLATE_PYI = """    @staticmethod
-    def ConnectEdgesToWires(edges: TopTools_HSequenceOfShape, toler: float, shared: bool) -> TopTools_HSequenceOfShape: ...
-    @staticmethod
-    def ConnectWiresToWires(iwires: TopTools_HSequenceOfShape, toler: float, shared: bool) ->  TopTools_HSequenceOfShape: ...
-"""
-
-
-# We extend the NCollection_DataMap template with a Keys
-# method that returns a list of Keys
-# TODO: do the same for other Key types
-NCOLLECTION_DATAMAP_EXTEND_TEMPLATE = Template(
-    """
-%extend $NCollection_DataMap_Template_Instanciation {
-    PyObject* Keys() {
-        PyObject *l=PyList_New(0);
-        for ($NCollection_DataMap_Template_Name::Iterator anIt1(*self); anIt1.More(); anIt1.Next()) {
-          PyObject *o = PyLong_FromLong(anIt1.Key());
-          PyList_Append(l, o);
-          Py_DECREF(o);
-        }
-    return l;
-    }
-};
-"""
-)
-
-TEMPLATE__EQ__ = Template(
-    """
-%extend{
-    bool __eq_wrapper__($TYPE other) {
-        if (*self==other) return true;
-        else return false;
-    }
-}
-%pythoncode {
-def __eq__(self, right):
-    try:
-        return self.__eq_wrapper__(right)
-    except:
-        return False
-}
-"""
-)
-
-TEMPLATE__IMUL__ = Template(
-    """
-%extend{
-    void __imul_wrapper__($TYPE other) {
-    *self *= other;
-    }
-}
-%pythoncode {
-def __imul__(self, right):
-    self.__imul_wrapper__(right)
-    return self
-}
-"""
-)
-
-TEMPLATE__NE__ = Template(
-    """
-%extend{
-    bool __ne_wrapper__($TYPE other) {
-        if (*self!=other) return true;
-        else return false;
-    }
-}
-%pythoncode {
-def __ne__(self, right):
-    try:
-        return self.__ne_wrapper__(right)
-    except:
-        return True
-}
-"""
-)
-
-TEMPLATE__IADD__ = Template(
-    """
-%extend{
-    void __iadd_wrapper__($TYPE other) {
-    *self += other;
-    }
-}
-%pythoncode {
-def __iadd__(self, right):
-    self.__iadd_wrapper__(right)
-    return self
-}
-"""
-)
-
-TEMPLATE__ISUB__ = Template(
-    """
-%extend{
-    void __isub_wrapper__($TYPE other) {
-    *self -= other;
-    }
-}
-%pythoncode {
-def __isub__(self, right):
-    self.__isub_wrapper__(right)
-    return self
-}
-"""
-)
-
-TEMPLATE__ITRUEDIV__ = Template(
-    """
-%extend{
-    void __itruediv_wrapper__($TYPE other) {
-    *self /= other;
-    }
-}
-%pythoncode {
-def __itruediv__(self, right):
-    self.__itruediv_wrapper__(right)
-    return self
-}
-"""
-)
-
-TEMPLATE_DUMPJSON = """
-        /****************** DumpJson ******************/
-        %feature("autodoc", "
-Parameters
-----------
-depth: int, default=-1
-
-Return
--------
-str
-
-Description
------------
-Dump the object to JSON string.
-") DumpJson;
-        %extend{
-            std::string DumpJson(int depth=-1) {
-            std::stringstream s;
-            self->DumpJson(s, depth);
-            return "{" + s.str() + "}" ;}
-        };
-"""
-
-TEMPLATE_DUMPJSON_PYI = "    def DumpJson(self, depth: Optional[int]=-1) -> str: ...\n"
-
-TEMPLATE_INITFROMJSON = """
-        /****************** InitFromJson ******************/
-        %feature("autodoc", "
-Parameters
-----------
-json_string: the string
-
-Return
--------
-bool
-
-Description
------------
-Init the object from a JSON string.
-") InitFromJson;
-        %extend{
-            bool InitFromJson(std::string json_string) {
-            std::stringstream s(json_string);
-            Standard_Integer pos=2;
-            return self->InitFromJson(s, pos);}
-        };
-"""
-
-TEMPLATE_INITFROMJSON_PYI = (
-    "    def InitFromJson(self, json_string: str) -> bool: ...\n"
-)
-
-TEMPLATE_GETTER_SETTER = Template(
-    """
-        %feature("autodoc","1");
-        %extend {
-            ${Return_Type} Get${Function_Name}(${Getter_Parameters_Types_Names}) {
-            return (${Return_Type}) $$self->${Function_Name}(${Getter_Parameters_Names});
-            }
-        };
-        %feature("autodoc","1");
-        %extend {
-            void Set${Function_Name}(${Setter_Parameters_Types_Names}) {
-            $$self->${Function_Name}(${Getter_Parameters_Names})=value;
-            }
-        };
-"""
-)
-
-TEMPLATE_GETTER_PYI = Template(
-    "    def Get${Function_Name}(${Getter_Parameters_Hints}) -> ${Hint_Output_Type}: ...\n"
-)
-
-TEMPLATE_SETTER_PYI = Template(
-    "    def Set${Function_Name}(${Setter_Parameters_Hints}) -> None: ...\n"
-)
-
-TIMESTAMP_TEMPLATE = Template(
-    """
-############################
-Running pythonocc-generator.
-############################
-git revision : $GITREVISION
-
-operating system : $OS
-
-occt version targeted : $OCCTVERSION
-
-date : $DATE
-############################
-"""
-)
-
-WIN_PRAGMAS = """
-%{
-#ifdef WNT
-#pragma warning(disable : 4716)
-#endif
-%}
-
-"""
-
-GETSTATE_TEMPLATE = Template(
-    """
-%extend ${CLASSNAME} {
-%pythoncode {
-    def __getstate__(self):
-        return self.DumpJson()
-    }
-};
-"""
-)
-
-
-SETSTATE_TEMPLATE = Template(
-    """
-%extend ${CLASSNAME} {
-%pythoncode {
-    def __setstate__(self, state):
-        inst = ${CLASSNAME}()
-        if inst.InitFromJson(state):
-            self.this = inst.this
-        else:
-            raise IOError('Failed to set state of ${CLASSNAME}')
-    }
-};
-"""
-)
-
-TOPODS_CLASS = """
-%pythoncode {
-class topods:
-    @staticmethod
-    def Edge(*args, **kwargs):
-        return Edge(*args, **kwargs)
-
-    @staticmethod
-    def Vertex(*args, **kwargs):
-        return Vertex(*args, **kwargs)
-
-    @staticmethod
-    def Face(*args, **kwargs):
-        return Face(*args, **kwargs)
-
-    @staticmethod
-    def Wire(*args, **kwargs):
-        return Wire(*args, **kwargs)
-
-    @staticmethod
-    def Shell(*args, **kwargs):
-        return Shell(*args, **kwargs)
-
-    @staticmethod
-    def Solid(*args, **kwargs):
-        return Solid(*args, **kwargs)
-
-    @staticmethod
-    def CompSolid(*args, **kwargs):
-        return CompSolid(*args, **kwargs)
-
-    @staticmethod
-    def Compound(*args, **kwargs):
-        return Compound(*args, **kwargs)
-};
-
-"""
-
-TOPODS_CLASS_PYI = """
-class topods:
-    @staticmethod
-    def Edge(*args, **kwargs) -> TopoDS_Edge: ...
-    @staticmethod
-    def Vertex(*args, **kwargs) -> TopoDS_Vertex: ...
-    @staticmethod
-    def Face(*args, **kwargs) -> TopoDS_Face: ...
-    @staticmethod
-    def Wire(*args, **kwargs) -> TopoDS_Wire: ...
-    @staticmethod
-    def Shell(*args, **kwargs) -> TopoDS_Shell: ...
-    @staticmethod
-    def Solid(*args, **kwargs) -> TopoDS_Solid: ...
-    @staticmethod
-    def CompSolid(*args, **kwargs) -> TopoDS_CompSolid: ...
-    @staticmethod
-    def Compound(*args, **kwargs) -> TopoDS_Compound: ...
-
-"""
-TOPODS_SHAPE_PICKLE_TEMPLATE = """
-%extend TopoDS_Shape {
-%pythoncode {
-    def __getstate__(self):
-        from .BRepTools import breptools
-        str_shape = breptools.WriteToString(self, True)
-        return str_shape
-    def __setstate__(self, state):
-        from .BRepTools import breptools
-        the_shape = breptools.ReadFromString(state)
-        self.this = the_shape.this
-    }
-};
-"""
-
-HASH_TOPODS_SHAPE_TEMPLATE = """
-%extend TopoDS_Shape {
-    size_t __hash__() {
-        std::hash<TopoDS_Shape> shapeHasher;
-        size_t hashValue = shapeHasher(*self);
-        return hashValue;
-    }
-};
-"""
-
-STANDARD_TRANSIENT_OPERATORS_TEMPLATE = """
-%extend Standard_Transient {
-    %pythoncode {
-    __repr__ = _dumps_object
-
-    def __eq__(self, right):
-        if not isinstance(right, Standard_Transient):
-            return False
-        return self.__eq_wrapper__(right)
-
-    def __ne__(self, right):
-        if not isinstance(right, Standard_Transient):
-            return True
-        return self.__ne_wrapper__(right)
-    }
-};
-
-%extend Standard_Transient {
-    bool __eq_wrapper__(const opencascade::handle<Standard_Transient> & other) {
-        if (self==other) return true;
-        else return false;
-    }
-    bool __ne_wrapper__(const opencascade::handle<Standard_Transient> & other) {
-        if (self!=other) return true;
-        else return false;
-    }
-    size_t __hash__() {
-        return opencascade::hash(self);
-    }
-};
-"""
-
-# for Geom, Geom2d, Poly, TColStd, TColgp, TShort
-NUMPY_INIT_TEMPLATE = """
-/*
-numpy support for Geom, Geom2d, Poly, TColStd, TColgp, TShort see
-https://github.com/tpaviot/pythonocc-core/pull/1381
-*/
-%{
-#define SWIG_FILE_WITH_INIT
-%}
-%include ../common/numpy.i
-
-%init %{
-        import_array();
-%}
-
-%pythoncode {
-    import numpy as np
-}
-%apply (double* IN_ARRAY1, int DIM1) { (double* numpyArrayU, int nRowsU) };
-%apply (double* IN_ARRAY2, int DIM1, int DIM2) { (double* numpyArrayUV, int nRowsUV, int nColUV) };
-%apply (double* ARGOUT_ARRAY1, int DIM1) { (double* numpyArrayResultArgout, int aSizeArgout) };
-
-/*
-end of numpy support section
-*/
-"""
-
-BREPTOOLS_WRITE_READ_FROM_STRING = """
-%feature("autodoc", "Serializes TopoDS_Shape to string. If full_precision is False, the default precision of std::stringstream is used which regularly causes rounding.") WriteToString;
-%extend{
-    static std::string WriteToString(const TopoDS_Shape & shape, bool full_precision = true) {
-    std::stringstream s;
-    if(full_precision) {
-        s.precision(17);
-        s.setf(std::ios::scientific);
-    }
-    BRepTools::Write(shape, s);
-    return s.str();}
-};
-%feature("autodoc", "Deserializes TopoDS_Shape from string. Create and return a new TopoDS_Shape each time the method is called.") ReadFromString;
-%extend{
-    static TopoDS_Shape ReadFromString(const std::string & src) {
-        std::istringstream s(std::move(src));
-        TopoDS_Shape shape;
-        BRep_Builder b;
-        BRepTools::Read(shape, s, b);
-        return shape;
-    }
-};
-%feature("autodoc", "Deserializes TopoDS_Shape from string. Take a TopoDS_Shape instance by reference to prevent memory increase.") ReadFromString;
-%extend{
-    static void ReadFromString(const std::string & src, TopoDS_Shape& shape) {
-        std::istringstream s(std::move(src));
-        BRep_Builder b;
-        BRepTools::Read(shape, s, b);
-    }
-};
-
-"""
-
-BREPTOOLS_WRITE_READ_FROM_STRING_PYI = """
-    @staticmethod
-    def WriteToString(sh: TopoDS_Shape) -> str: ...
-    @staticmethod
-    def ReadFromString(s: str) -> TopoDS_Shape: ...
-    @staticmethod
-    def ReadFromString(s: str, topods_shape: TopoDS_Shape) -> None: ...
-"""
-
-###########################
-# Template for byref enum #
-###########################
-BYREF_ENUM_TEMPLATE = "ENUM_OUTPUT_TYPEMAPS(%s);\n"
-
-########################
-# Since the move up to swig-4.1.1, statuc functions are not
-# renamed anymore to free function
-# for example, with 4.0.2
-# it is possible to use either
-# XCAFDoc_DocumentTool_ColorTool
-# or
-# XCAFDoc_DocumentTool.ColorTool
-# in swig-4.1.1, only the later is possible
-# for backward compatibility,
-# XCAFDoc_DocumentTool_ColorTool is marked as deprecated
-# and cool the XCAFDoc_DocumentTool.ColorTool method
-DEPRECATED_STATIC_FUNCTIONS = []
+    def __init__(self):
+        # set by ModuleWrapper.__init__ for the module currently being wrapped
+        self.current_module = None
+        # python modules the current module imports (transitive deps).
+        # Reassigned per module; check_dependency() and process_typedefs()
+        # append to it.
+        self.python_module_dependency = []
+        # Like above but for additional headers; reset at every module via
+        # reset_header_depency().
+        self.header_dependency = []
+
+        # occt-800: built lazily by scan_typedef_aliases() — a mapping from
+        # canonical template form (e.g. "NCollection_HArray1<gp_Pnt2d>") to
+        # the typedef alias (e.g. "TColgp_HArray1OfPnt2d") that pythonocc
+        # actually wraps. Many OCCT 8.0 headers replaced typedef names with
+        # the canonical template form in their function signatures, but the
+        # typedef alias is what carries the SWIG type tag, so we have to
+        # rewrite back.
+        self.harray_typedef_rewrites = []
+
+        # All enums seen so far; populated by process_enums().
+        self.all_enums = []
+        # Enums passed/returned by reference; need a SWIG-specific template.
+        self.all_byref_enums = []
+
+        # HArray1/HArray2/HSequence registries: name -> base type. Populated
+        # both from DEFINE_HARRAY{1,2}/DEFINE_HSEQUENCE macros and from
+        # `typedef NCollection_HArrayN<X> Y;` aliases scanned upfront.
+        self.all_harray1 = {}
+        self.all_harray2 = {}
+        self.all_hsequence = {}
+
+        # Classes that need %wrap_handle / %make_alias.
+        self.all_standard_handles = []
+        self.all_standard_transients = ["Standard_Transient"]
+
+        # since SWIG 4.1.1, static functions can no longer be called as free
+        # functions; we emit deprecation shims for the old name.
+        self.deprecated_static_functions = []
+
+        # statistics
+        self.nb_total_classes = 0
+        self.nb_total_methods = 0
+
+
+state = GeneratorState()
 
 
 def get_log_header():
@@ -1296,8 +214,7 @@ SWIG interface file generation completed in {:.2f}s
 
 
 def reset_header_depency():
-    global HEADER_DEPENDENCY
-    HEADER_DEPENDENCY = ["TColgp", "TColStd", "TCollection", "Storage"]
+    state.header_dependency = ["TColgp", "TColStd", "TCollection", "Storage"]
 
 
 def check_is_persistent(class_name):
@@ -1339,13 +256,6 @@ def filter_header_list(header_list, exclusion_list):
     return header_list
 
 
-def test_filter_header_list():
-    if sys.platform != "win32":
-        assert filter_header_list(
-            ["something", "somethingWNT"], HXX_TO_EXCLUDE_FROM_CPPPARSER
-        ) == ["something"]
-
-
 def case_sensitive_glob(wildcard):
     """
     Case sensitive glob for Windows.
@@ -1363,16 +273,6 @@ def get_all_module_headers(module_name):
     mh += case_sensitive_glob(os.path.join(OCCT_INCLUDE_DIR, f"{module_name}_*.hxx"))
     mh = filter_header_list(mh, HXX_TO_EXCLUDE_FROM_BEING_INCLUDED)
     return sorted(map(os.path.basename, mh))
-
-
-def test_get_all_module_headers():
-    # 'Standard' should return some files (at lease 10)
-    # this number depends on the OCCT version
-    headers_list_1 = get_all_module_headers("Standard")
-    assert len(list(headers_list_1)) > 10
-    # an empty list
-    headers_list_2 = list(get_all_module_headers("something_else"))
-    assert not headers_list_2
 
 
 def check_has_related_handle(class_name):
@@ -1400,143 +300,145 @@ def need_handle(class_name):
     Handle to be defined. This is useful when headers define
     handles but no header"""
     # @TODO what about DEFINE_RTTI ?
-    return class_name in ALL_STANDARD_HANDLES or class_name in ALL_STANDARD_TRANSIENTS
+    return class_name in state.all_standard_handles or class_name in state.all_standard_transients
 
 
-def adapt_header_file(header_content):
-    """take an header filename as input.
-    Returns the output of a tempfile with :
-    * all occurrences of Handle(something) moved to Handle_Something
-    otherwise CppHeaderParser is confused ;
-    * all define RTTI moved
-    """
-    # no need to deal with Deprecated headers
-    if ("Deprecated alias to moved class" in header_content) or (
-        "Alias to moved class" in header_content
+_DEFINE_STANDARD_HANDLE_RE = re.compile(
+    r"DEFINE_STANDARD_HANDLE[\s]*\([\w\s]+,+[\w\s]+\)"
+)
+# occt-800: many classes that derive from Standard_Transient no longer carry
+# a DEFINE_STANDARD_HANDLE; they only have DEFINE_STANDARD_RTTI{,_INLINE,EXT}
+# (C, Parent). Treat that as an implicit handle declaration so
+# check_has_related_handle picks them up. DEFINE_DERIVED_ATTRIBUTE marks XCAF
+# shape tools and similar classes as TDataStd_GenericEmpty subtypes.
+_DEFINE_RTTI_RE = re.compile(
+    r"DEFINE_(?:STANDARD_RTTI(?:_INLINE|EXT)?|DERIVED_ATTRIBUTE)\s*"
+    r"\(\s*([\w]+)\s*,\s*[\w:]+\s*\)"
+)
+_DEFINE_HARRAY1_RE = re.compile(r"DEFINE_HARRAY1[\s]*\([\w\s]+,+[\w\s]+\)")
+_DEFINE_HARRAY2_RE = re.compile(r"DEFINE_HARRAY2[\s]*\([\w\s]+,+[\w\s]+\)")
+_DEFINE_HSEQUENCE_RE = re.compile(r"DEFINE_HSEQUENCE[\s]*\([\w\s]+,+[\w\s]+\)")
+# Strip Standard_DEPRECATED("...") and Standard_DEPRECATED_STD("...") entirely
+# (with the parens), so they disappear from the source rather than leaving a
+# dangling //comment. OCCT 8.0 places these attributes mid-declaration (e.g.
+# inside `using ... = X;`) which would otherwise produce malformed C++.
+_STANDARD_DEPRECATED_RE = re.compile(
+    r'Standard_DEPRECATED(?:_STD|_WARNING)?\s*\(\s*'
+    r'(?:".*?(?:\\"|[^"])*?"(?:\s*".*?(?:\\"|[^"])*?")*)\s*\)'
+)
+_USING_ALIAS_RE = re.compile(r"\busing\s+([A-Za-z_]\w*)\s*=\s*([^;]+);")
+_HANDLE_PARENS_RE = re.compile(r"Handle[\s]*\([\w\s]*\)")
+
+
+def _collect_handle_macros(header_content):
+    """Populate state.all_standard_handles with names declared via DEFINE_STANDARD_HANDLE
+    or one of the DEFINE_STANDARD_RTTI* / DEFINE_DERIVED_ATTRIBUTE macros."""
+    for match in _DEFINE_STANDARD_HANDLE_RE.findall(header_content):
+        state.all_standard_handles.append(match.split("(")[1].split(",")[0])
+    for match in _DEFINE_RTTI_RE.findall(header_content):
+        if match not in state.all_standard_handles:
+            state.all_standard_handles.append(match)
+
+
+def _collect_harray_macros(header_content):
+    """Populate state.all_harray1/2 and state.all_hsequence from DEFINE_HARRAY{1,2} /
+    DEFINE_HSEQUENCE macros."""
+    for regex, store, label in (
+        (_DEFINE_HARRAY1_RE, state.all_harray1, "HARRAY1"),
+        (_DEFINE_HARRAY2_RE, state.all_harray2, "HARRAY2"),
+        (_DEFINE_HSEQUENCE_RE, state.all_hsequence, "HSEQUENCE"),
     ):
-        return ""  # return empty header
+        for match in regex.findall(header_content):
+            typename = match.split("(")[1].split(",")[0]
+            base_typename = match.split(",")[1].split(")")[0]
+            logging.info("Found %s definition %s:%s", label, typename, base_typename)
+            store[typename] = base_typename.strip()
 
-    # search for STANDARD_HANDLE
-    outer = re.compile("DEFINE_STANDARD_HANDLE[\\s]*\\([\\w\\s]+\\,+[\\w\\s]+\\)")
-    if matches := outer.findall(header_content):
-        for match in matches:
-            ALL_STANDARD_HANDLES.append(match.split("(")[1].split(",")[0])
-    # Search for RTTIEXT / RTTI_INLINE - in OCCT 8.0 many classes that derive
-    # from Standard_Transient no longer carry a DEFINE_STANDARD_HANDLE; they
-    # only have DEFINE_STANDARD_RTTI{,_INLINE,EXT}(C, Parent). Treat that as
-    # an implicit handle declaration so check_has_related_handle picks them up.
-    # Same logic for DEFINE_DERIVED_ATTRIBUTE which marks XCAF shape tools
-    # and similar classes as TDataStd_GenericEmpty subtypes.
-    outer = re.compile(
-        r"DEFINE_(?:STANDARD_RTTI(?:_INLINE|EXT)?|DERIVED_ATTRIBUTE)\s*"
-        r"\(\s*([\w]+)\s*,\s*[\w:]+\s*\)"
-    )
-    if matches := outer.findall(header_content):
-        for match in matches:
-            if match not in ALL_STANDARD_HANDLES:
-                ALL_STANDARD_HANDLES.append(match)
-    # Search for HARRAY1
-    outer = re.compile("DEFINE_HARRAY1[\\s]*\\([\\w\\s]+\\,+[\\w\\s]+\\)")
-    if matches := outer.findall(header_content):
-        for match in matches:
-            # @TODO find inheritance name
-            typename = match.split("(")[1].split(",")[0]
-            base_typename = match.split(",")[1].split(")")[0]
-            logging.info("Found HARRAY1 definition %s:%s", typename, base_typename)
-            ALL_HARRAY1[typename] = base_typename.strip()
-    # Search for HARRAY2
-    outer = re.compile("DEFINE_HARRAY2[\\s]*\\([\\w\\s]+\\,+[\\w\\s]+\\)")
-    if matches := outer.findall(header_content):
-        for match in matches:
-            # @TODO find inheritance name
-            typename = match.split("(")[1].split(",")[0]
-            base_typename = match.split(",")[1].split(")")[0]
-            logging.info("Found HARRAY2 definition %s:%s", typename, base_typename)
-            ALL_HARRAY2[typename] = base_typename.strip()
-    # Search for HSEQUENCE
-    outer = re.compile("DEFINE_HSEQUENCE[\\s]*\\([\\w\\s]+\\,+[\\w\\s]+\\)")
-    if matches := outer.findall(header_content):
-        for match in matches:
-            # @TODO find inheritance name
-            typename = match.split("(")[1].split(",")[0]
-            base_typename = match.split(",")[1].split(")")[0]
-            logging.info("Found HSEQUENCE definition %s:%s", typename, base_typename)
-            ALL_HSEQUENCE[typename] = base_typename.strip()
-    # skip some defines that prevent header parsing
-    header_content = header_content.replace(
-        "DEFINE_STANDARD_HANDLE", "//DEFINE_STANDARD_HANDLE"
-    )
-    header_content = header_content.replace(
-        "DEFINE_STANDARD_RTTIEXT", "//DEFINE_STANDARD_RTTIEXT"
-    )
-    header_content = header_content.replace(
-        "DEFINE_STANDARD_RTTI_INLINE", "//DEFINE_STANDARD_RTTI_INLINE"
-    )
-    header_content = header_content.replace(
-        "NCOLLECTION_HSEQUENCE", "//NCOLLECTION_HSEQUENCE"
-    )
-    # Search for Standard_DEPRECATED
-    # Strip Standard_DEPRECATED("...") and Standard_DEPRECATED_STD("...")
-    # entirely (with the parens), so they disappear from the source rather
-    # than leaving a dangling //comment. OCCT 8.0 places these attributes
-    # mid-declaration (e.g. inside `using ... = X;`) which would otherwise
-    # produce malformed C++ after a partial replacement.
-    pattern = re.compile(
-        r'Standard_DEPRECATED(?:_STD|_WARNING)?\s*\(\s*'
-        r'(?:".*?(?:\\"|[^"])*?"(?:\s*".*?(?:\\"|[^"])*?")*)\s*\)'
-    )
-    header_content = pattern.sub("", header_content)
-    header_content = header_content.replace(
-        "Standard_DEPRECATED", "//Standard_DEPRECATED"
-    )
-    header_content = header_content.replace(
-        "DECLARE_TOBJOCAF_PERSISTENCE", "//DECLARE_TOBJOCAF_PERSISTENCE"
-    )
-    header_content = header_content.replace(
-        "DEFINE_DERIVED_ATTRIBUTE", "//DEFINE_DERIVED_ATTRIBUTE"
-    )
-    # remove stuff that prevent CppHeaderPArser to work correctly
-    header_content = header_content.replace("DEFINE_STANDARD_ALLOC", "")
-    header_content = header_content.replace("Standard_EXPORT", "")
-    header_content = header_content.replace("Standard_NODISCARD", "")
-    # occt-800 uses the shorter "occ::handle<...>" alias for opencascade::handle.
-    # Normalize it to the full form so the rest of the pipeline (typedef detection,
-    # dependency tracking, parameter adaptation) keeps working unchanged.
-    header_content = header_content.replace("occ::handle", "opencascade::handle")
-    # occt-800: rewrite simple C++11 `using X = Y;` aliases into classic
-    # `typedef Y X;` so the typedef pipeline picks them up. Many OCCT 8.0
-    # headers (GCE2d_MakeEllipse, ...) became `using` aliases for renamed classes.
-    # Skip template aliases (RHS contains '<'): they would produce SWIG
-    # %template instantiations against templates we don't expose.
-    def _using_to_typedef(match):
+
+def _comment_out_macros(header_content):
+    """Replace macros that confuse CppHeaderParser by their //commented form."""
+    for token in (
+        "DEFINE_STANDARD_HANDLE",
+        "DEFINE_STANDARD_RTTIEXT",
+        "DEFINE_STANDARD_RTTI_INLINE",
+        "NCOLLECTION_HSEQUENCE",
+    ):
+        header_content = header_content.replace(token, f"//{token}")
+    # Standard_DEPRECATED("...") form: drop the whole macro+parens first, then
+    # //comment any bare leftover identifier. Order matters.
+    header_content = _STANDARD_DEPRECATED_RE.sub("", header_content)
+    for token in (
+        "Standard_DEPRECATED",
+        "DECLARE_TOBJOCAF_PERSISTENCE",
+        "DEFINE_DERIVED_ATTRIBUTE",
+    ):
+        header_content = header_content.replace(token, f"//{token}")
+    return header_content
+
+
+def _strip_macros(header_content):
+    """Drop attribute macros that prevent CppHeaderParser from working."""
+    for token in ("DEFINE_STANDARD_ALLOC", "Standard_EXPORT", "Standard_NODISCARD"):
+        header_content = header_content.replace(token, "")
+    return header_content
+
+
+def _rewrite_handle_parens(header_content):
+    """Rewrite legacy `Handle(X)` syntax to `opencascade::handle<X>`."""
+    for match in _HANDLE_PARENS_RE.findall(header_content):
+        # matches are of the form ['Handle(Graphic3d_Structure)',
+        # 'Handle(Graphic3d_DataStructureManager)']
+        normalized = match.replace(" ", "")
+        class_name = normalized.split("Handle(")[1].split(")")[0]
+        if class_name == "" or not class_name[0].isupper():
+            continue
+        header_content = header_content.replace(
+            normalized, f"opencascade::handle<{class_name}>"
+        )
+    return header_content
+
+
+def _convert_using_to_typedef(header_content):
+    """occt-800: rewrite simple C++11 `using X = Y;` aliases into classic
+    `typedef Y X;` so the typedef pipeline picks them up. Many OCCT 8.0
+    headers (GCE2d_MakeEllipse, ...) became `using` aliases for renamed
+    classes. Skip template aliases (RHS contains '<'): they would produce SWIG
+    %template instantiations against templates we don't expose."""
+    def _replace(match):
         rhs = match.group(2).strip()
         if "<" in rhs:
             return match.group(0)
         return f"typedef {rhs} {match.group(1)};"
 
-    header_content = re.sub(
-        r"\busing\s+([A-Za-z_]\w*)\s*=\s*([^;]+);",
-        _using_to_typedef,
-        header_content,
-    )
-    # TODO : use the @deprecated python decorator to raise a Deprecation exception
-    # see https://github.com/tantale/deprecated
-    # each time this method is used
-    # then we look for Handle(Something) use
-    # and replace with opencascade::handle<Something>
-    outer = re.compile("Handle[\\s]*\\([\\w\\s]*\\)")
-    if matches := outer.findall(header_content):
-        for match in matches:
-            # matches are of the form :
-            # ['Handle(Graphic3d_Structure)',
-            # 'Handle(Graphic3d_DataStructureManager)']
-            match = match.replace(" ", "")
-            class_name = (match.split("Handle(")[1]).split(")")[0]
-            if class_name == "" or not class_name[0].isupper():
-                continue
-            header_content = header_content.replace(
-                match, f"opencascade::handle<{class_name}>"
-            )
+    return _USING_ALIAS_RE.sub(_replace, header_content)
+
+
+def adapt_header_file(header_content):
+    """Pre-process an OCCT header so CppHeaderParser can parse it.
+
+    - Skips OCCT 8.0 deprecated alias headers entirely.
+    - Collects DEFINE_STANDARD_HANDLE / DEFINE_STANDARD_RTTI* / DEFINE_HARRAY*
+      / DEFINE_HSEQUENCE declarations into the corresponding global registries.
+    - Strips or //comments out macros that the parser cannot handle.
+    - Normalizes `occ::handle` and `Handle(X)` to `opencascade::handle<X>`.
+    - Rewrites simple `using X = Y;` aliases to `typedef Y X;`.
+    """
+    if ("Deprecated alias to moved class" in header_content) or (
+        "Alias to moved class" in header_content
+    ):
+        return ""
+
+    _collect_handle_macros(header_content)
+    _collect_harray_macros(header_content)
+    header_content = _comment_out_macros(header_content)
+    header_content = _strip_macros(header_content)
+    # occ::handle must be normalized before using-to-typedef (a `using X =
+    # occ::handle<Z>;` is template-aliased and intentionally skipped by the
+    # rewrite); Handle(X) rewriting comes last because it introduces template
+    # syntax that earlier passes don't expect.
+    header_content = header_content.replace("occ::handle", "opencascade::handle")
+    header_content = _convert_using_to_typedef(header_content)
+    header_content = _rewrite_handle_parens(header_content)
     return header_content
 
 
@@ -1587,23 +489,11 @@ def filter_typedefs(typedef_dict):
     return typedef_dict
 
 
-def test_filter_typedefs():
-    a_dict = {"1": "one", "{": "two", "NCollection_DelMapNode": "3"}
-    assert filter_typedefs(a_dict) == {"1": "one"}
-
-
 def get_type_for_ncollection_array(ncollection_array: str) -> str:
     """input : NCollection_Array1<Standard_Real>
     output : Standard_Real
     """
     return ncollection_array.split("<")[1].split(">")[0].strip()
-
-
-def test_get_type_for_ncollection_array() -> None:
-    assert (
-        get_type_for_ncollection_array("NCollection_Array1<Standard_Real>")
-        == "Standard_Real"
-    )
 
 
 def process_templates_from_typedefs(list_of_typedefs):
@@ -1797,11 +687,11 @@ def process_templates_from_typedefs(list_of_typedefs):
                     # path used in OCCT 7.9 with the DEFINE_HARRAY1 macro).
                     inner = template_type.split("<", 1)[1].rsplit(">", 1)[0].strip()
                     if template_type.startswith("NCollection_HArray1<"):
-                        ALL_HARRAY1[template_name] = f"NCollection_Array1<{inner}>"
+                        state.all_harray1[template_name] = f"NCollection_Array1<{inner}>"
                     elif template_type.startswith("NCollection_HArray2<"):
-                        ALL_HARRAY2[template_name] = f"NCollection_Array2<{inner}>"
+                        state.all_harray2[template_name] = f"NCollection_Array2<{inner}>"
                     else:
-                        ALL_HSEQUENCE[template_name] = f"NCollection_Sequence<{inner}>"
+                        state.all_hsequence[template_name] = f"NCollection_Sequence<{inner}>"
                 else:
                     wrapper_str += f"%template({template_name}) {template_type};\n"
 
@@ -1887,10 +777,10 @@ def process_typedefs(typedefs_dict):
                 )
                 continue
             module = h_typ.split("_")[0]
-            if module != CURRENT_MODULE:
+            if module != state.current_module:
                 # need to be added to the list of dependent object
-                if (module not in PYTHON_MODULE_DEPENDENCY) and (is_module(module)):
-                    PYTHON_MODULE_DEPENDENCY.append(module)
+                if (module not in state.python_module_dependency) and (is_module(module)):
+                    state.python_module_dependency.append(module)
 
     sorted_list_of_typedefs = sorted(filtered_typedef_dict.keys())
     for typedef_value in sorted_list_of_typedefs:
@@ -1920,7 +810,7 @@ def process_typedefs(typedefs_dict):
             #
             typedef_module_name = typedef_type.split("_")[0]
             if is_module(typedef_module_name):
-                if CURRENT_MODULE == typedef_module_name:
+                if state.current_module == typedef_module_name:
                     typedef_aliases_str += f"{typedef_value}={typedef_type}\n"
                 else:
                     typedef_aliases_str += f"{typedef_value}=OCC.Core.{typedef_module_name}.{typedef_type}\n"
@@ -2053,8 +943,8 @@ def process_enums(enums_list):
             python_proxy = False
         else:
             enum_name = enum["name"]
-            if enum_name not in ALL_ENUMS:
-                ALL_ENUMS.append(enum_name)
+            if enum_name not in state.all_enums:
+                state.all_enums.append(enum_name)
 
         if enum_name in ENUMS_TO_EXLUDE:
             logging.info("Skipping Enum: %s", enum_name)
@@ -2071,7 +961,7 @@ def process_enums(enums_list):
             enum_pyi_str += f"\nclass {enum_name}(IntEnum):\n"
         for enum_value in enum["values"]:
             adapted_enum_value = adapt_enum_value(enum_value["value"])
-            if CURRENT_MODULE == "Quantity":
+            if state.current_module == "Quantity":
                 # special case for Quantity_Color
                 if isinstance(adapted_enum_value, str):
                     # if adapted_enum_value.isalpha():
@@ -2106,7 +996,7 @@ def is_return_type_enum(return_type):
     BRepCheck_Status &
     BRepCheck_Status
     """
-    return any(r in ALL_ENUMS for r in return_type.split())
+    return any(r in state.all_enums for r in return_type.split())
 
 
 def _apply_typedef_rewrites(text):
@@ -2115,14 +1005,14 @@ def _apply_typedef_rewrites(text):
     required because nested templates are usually defined in terms of
     other typedefs (e.g. NCollection_List<TopoDS_Shape> -> TopTools_ListOfShape
     must run before the IndexedDataMap that contains it can match)."""
-    if not HARRAY_TYPEDEF_REWRITES:
+    if not state.harray_typedef_rewrites:
         return text
     # CppHeaderParser emits ">>" as "> >" - collapse the gap so the rewrite
     # keys (which are normalized) match.
     text = re.sub(r">\s+>", ">>", text)
     for _ in range(5):  # bounded loop, 5 nesting levels is more than enough
         prev = text
-        for tpl, name in HARRAY_TYPEDEF_REWRITES:
+        for tpl, name in state.harray_typedef_rewrites:
             if tpl in text:
                 text = text.replace(tpl, name)
         if text == prev:
@@ -2176,7 +1066,6 @@ def adapt_param_type_and_name(param_type_and_name):
     """We sometime need to replace some argument type and name
     to properly deal with byref values
     """
-    global ALL_BYREF_ENUMS
     # bool, int and double passed by reference in c++
     if (
         ("Standard_Real &" in param_type_and_name)
@@ -2219,12 +1108,12 @@ def adapt_param_type_and_name(param_type_and_name):
     # TopAbs_Orientation &Or
     # FairCurve_AnalysisCode &Code
     # etc.
-    elif (param_type_and_name.split()[0] in ALL_ENUMS) and (
+    elif (param_type_and_name.split()[0] in state.all_enums) and (
         param_type_and_name.split()[1].startswith("&")
     ):
         enum_name = param_type_and_name.split()[0]
-        if enum_name not in ALL_BYREF_ENUMS:
-            ALL_BYREF_ENUMS.append(enum_name)
+        if enum_name not in state.all_byref_enums:
+            state.all_byref_enums.append(enum_name)
         logging.info(
             "Enum passed by reference: %s changed to %s &OutValue",
             param_type_and_name,
@@ -2236,21 +1125,6 @@ def adapt_param_type_and_name(param_type_and_name):
     if "& &" in adapted_param_type_and_name:
         adapted_param_type_and_name = adapted_param_type_and_name.replace("& &", "&")
     return adapted_param_type_and_name
-
-
-def test_adapt_param_type_and_name():
-    p1 = "Standard_Real & Xp"
-    ad_p1 = adapt_param_type_and_name(p1)
-    assert ad_p1 == "Standard_Real &OutValue"
-    p2 = "Standard_Integer & I"
-    ad_p2 = adapt_param_type_and_name(p2)
-    assert ad_p2 == "Standard_Integer &OutValue"
-    p3 = "int & j"
-    ad_p3 = adapt_param_type_and_name(p3)
-    assert ad_p3 == "Standard_Integer &OutValue"
-    p4 = "double & x"
-    ad_p4 = adapt_param_type_and_name(p4)
-    assert ad_p4 == "Standard_Real &OutValue"
 
 
 def check_dependency(item):
@@ -2305,22 +1179,11 @@ def check_dependency(item):
     # TODO : is the following line really necessary ?
     if module == "Font":  # forget about Font dependencies, issues with FreeType
         return True
-    if module != CURRENT_MODULE:
+    if module != state.current_module:
         # need to be added to the list of dependent object
-        if (module not in PYTHON_MODULE_DEPENDENCY) and (is_module(module)):
-            PYTHON_MODULE_DEPENDENCY.append(module)
+        if (module not in state.python_module_dependency) and (is_module(module)):
+            state.python_module_dependency.append(module)
     return module
-
-
-def test_check_dependency():
-    dep1 = check_dependency("Handle_Geom_Curve")
-    assert dep1 == "Geom"
-    dep2 = check_dependency("Handle ( Geom2d_Curve)")
-    assert dep2 == "Geom2d"
-    dep3 = check_dependency("opencascade::handle<TopoDS_TShape>")
-    assert dep3 == "TopoDS"
-    dep4 = check_dependency("Standard_Integer")
-    assert dep4 == "Standard"
 
 
 def adapt_return_type(return_type):
@@ -2374,19 +1237,10 @@ def adapt_return_type(return_type):
     return return_type
 
 
-def test_adapt_return_type():
-    adapted_2 = adapt_return_type("gp_Dir &")
-    assert adapted_2 == "gp_Dir"
-
-
 def adapt_function_name(f_name):
     """Some function names may result in errors with SWIG"""
     f_name = f_name.replace("operator", "operator ")
     return f_name
-
-
-def test_adapt_function_name():
-    assert adapt_function_name("operator*") == "operator *"
 
 
 def get_module_docstring(module_name):
@@ -2542,10 +1396,6 @@ def adapt_default_value_parmlist(param):
     """adapts default value to be used in swig parameter list"""
     def_value = param["defaultValue"]
     return def_value.replace(" ", "")
-
-
-def test_adapt_default_value():
-    pass  # assert adapt_default_value(": : MeshDim_3D") == "MeshDim_3D"
 
 
 def filter_member_functions(
@@ -2792,132 +1642,92 @@ def get_function_md5_signature(f):
     return hashlib.md5(bytes(function_signature, encoding="utf8")).hexdigest()
 
 
-def process_function(f, overload=False):
-    """
-    Processes a C++ function represented as a dictionary and generates SWIG interface code
-    for creating Python bindings. This method handles various aspects of function wrapping
-    including name adaptation, operator overloading, and special case handling for specific
-    function patterns. It generates and returns SWIG compliant string representations along
-    with Python type hints for enhanced development experience.
+_OPERATOR_WRAPPERS = {
+    "+": None,  # wrapped by SWIG, no need for a custom template
+    "-": None,
+    "*": None,
+    "/": None,
+    "==": TEMPLATE__EQ__,
+    "!=": TEMPLATE__NE__,
+    "+=": TEMPLATE__IADD__,
+    "*=": TEMPLATE__IMUL__,
+    "-=": TEMPLATE__ISUB__,
+    "/=": TEMPLATE__ITRUEDIV__,
+}
 
-    Parameters:
-    - f (dict): A dictionary containing information about the C++ function to be processed.
-      The dictionary must include keys such as 'name', 'template', 'destructor', 'returns',
-      'rtnType', 'parameters', etc., representing the function's signature and characteristics.
-    - overload (bool, optional): Indicates whether the function is an overloaded version of
-      another function with the same name. Defaults to False. When True, additional handling
-      is applied to differentiate the overloaded functions in the SWIG interface.
+_PRIMITIVE_BY_REF_RETURNS = {
+    "Standard_Integer &", "Standard_Real &", "Standard_Boolean &",
+    "Standard_Integer&", "Standard_Real&", "Standard_Boolean&",
+}
 
-    Returns:
-    - tuple: A tuple containing two elements. The first element is a string with the generated
-      SWIG interface code for the function. The second element is a string with Python type
-      hints for the function, intended for use in .pyi stub files. In cases where the function
-      cannot be wrapped or is intentionally skipped, the returned strings may be empty or
-      indicative of the reason for skipping.
 
-    Global Variables:
-    - NB_TOTAL_METHODS (int): A counter tracking the total number of methods processed. This
-      function increments the counter for each successfully processed function.
-    - CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES (list): A list maintaining aliases for static
-      methods in the current module, used for generating Python type hints.
-    """
-    global NB_TOTAL_METHODS, CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES
-    # compute signature md5
-    function_signature_md5 = get_function_md5_signature(f)
-    if f["template"]:
-        return False, ""
-    # first, adapt function name, if needed
-    function_name = adapt_function_name(f["name"])
-
-    ################################################
-    # Cases where the method should not be wrapped #
-    ################################################
-    # destructors are not wrapped
-
-    if f["destructor"]:
+def _wrap_operator(f, function_name, parent_class_name):
+    """If f is a wrappable C++ operator, return (swig_str, '') or ('', ''); None
+    if function_name is not an operator at all."""
+    if "operator" not in function_name:
+        return None
+    operand = function_name.split("operator ")[1].strip()
+    if operand not in _OPERATOR_WRAPPERS:
+        logging.info("    operand %s cannot be wrapped", operand)
         return "", ""
-    if f["returns"] == "~":
-        return "", ""  # a destructor that should be considered as a destructor
-    if "TYPENAME" in f["rtnType"]:  # TODO remove
-        return "", ""  # something in NCollection
-    if function_name == "DEFINE_STANDARD_RTTIEXT":  # TODO remove
-        return "", ""
-    if function_name == "Handle":  # TODO: make it possible!
-        # this is because Handle (something) some function can not be
-        # handled by swig
-        return "", ""
-    #
-    # Parent class
-    #
-    if f["static"] and f["parent"] is not None:
-        parent_class_name = f["parent"]["name"]
-        if parent_class_name == CURRENT_MODULE:
-            parent_class_name = parent_class_name.lower()
-    else:
-        parent_class_name = None
-    #############
-    # Operators #
-    #############
-    operator_wrapper = {
-        "+": None,  # wrapped by SWIG, no need for a custom template
-        "-": None,  # wrapped by SWIG, no need for a custom template
-        "*": None,  # wrapped by SWIG, no need for a custom template
-        "/": None,  # wrapped by SWIG, no need for a custom template
-        "==": TEMPLATE__EQ__,
-        "!=": TEMPLATE__NE__,
-        "+=": TEMPLATE__IADD__,
-        "*=": TEMPLATE__IMUL__,
-        "-=": TEMPLATE__ISUB__,
-        "/=": TEMPLATE__ITRUEDIV__,
-    }
-    if "operator" in function_name:
-        operand = function_name.split("operator ")[1].strip()
-        # if not allowed, just skip it
-        if operand not in operator_wrapper:
-            logging.info("    operand %s cannot be wrapped", operand)
-            return "", ""
-        ##############################################
-        # Cases where the method is actually wrapped #
-        ##############################################
-        if operator_wrapper[operand] is not None:
-            param = f["parameters"][0]
-            param_type = param["type"].replace("&", "").strip()
-            return (
-                operator_wrapper[operand].substitute(
-                    {"TYPE": param_type, "CLASS": parent_class_name}
-                ),
-                "",
-            )  # not hint for operator
+    template = _OPERATOR_WRAPPERS[operand]
+    if template is None:
+        return None  # SWIG handles +,-,*,/ natively
+    param_type = f["parameters"][0]["type"].replace("&", "").strip()
+    return (
+        template.substitute({"TYPE": param_type, "CLASS": parent_class_name}),
+        "",
+    )
 
-    # at this point, we can increment the method counter
-    NB_TOTAL_METHODS += 1
 
-    # special wrapper for DumpJson and InitFromJson
-    if function_name == "DumpJson":
-        return TEMPLATE_DUMPJSON, TEMPLATE_DUMPJSON_PYI
+def _build_getter_setter_pair(f, function_name, return_type):
+    """Generate a Get*/Set* pair when a method returns a primitive by-ref.
+    Returns (swig_str, type_hint_str)."""
+    logging.info("    Creating Get and Set methods for method %s", function_name)
+    modified_return_type = return_type.split(" ")[0]
+    getter_params_type_and_names = []
+    getter_params_only_names = []
+    getter_param_hints = ["self"]
+    for param in f["parameters"]:
+        adapted_type = adapt_param_type(param["type"])
+        getter_params_type_and_names.append(f"{adapted_type} {param['name']}")
+        getter_params_only_names.append(param["name"])
+        getter_param_hints.append(f"{param['name']}: {adapt_type_for_hint(adapted_type)}")
 
-    if function_name == "InitFromJson":
-        return TEMPLATE_INITFROMJSON, TEMPLATE_INITFROMJSON_PYI
+    setter_params_type_and_names = getter_params_type_and_names + [
+        f"{modified_return_type} value"
+    ]
+    hint_output_type = adapt_type_for_hint(modified_return_type)
+    setter_param_hints = getter_param_hints + [f"value: {hint_output_type}"]
 
-    # we only wrap free functions that are in the current module namespace
-    function_namespace = f["namespace"]
-    function_parent_class_name = f["parent"]["name"] if f["parent"] is not None else ""
-    if function_namespace[:-2] != CURRENT_MODULE and function_parent_class_name == "":
-        return "", ""
+    swig_str = TEMPLATE_GETTER_SETTER.substitute(
+        {
+            "Return_Type": modified_return_type,
+            "Function_Name": function_name,
+            "Getter_Parameters_Types_Names": ",".join(getter_params_type_and_names),
+            "Getter_Parameters_Names": ",".join(getter_params_only_names),
+            "Setter_Parameters_Types_Names": ",".join(setter_params_type_and_names),
+        }
+    )
+    getter_hint_str = TEMPLATE_GETTER_PYI.substitute(
+        {
+            "Function_Name": function_name,
+            "Getter_Parameters_Hints": ", ".join(getter_param_hints),
+            "Hint_Output_Type": hint_output_type,
+        }
+    )
+    setter_hint_str = TEMPLATE_SETTER_PYI.substitute(
+        {
+            "Function_Name": function_name,
+            "Setter_Parameters_Hints": ", ".join(setter_param_hints),
+        }
+    )
+    return swig_str, getter_hint_str + setter_hint_str
 
-    # enable autocompactargs feature to enable compilation with swig>3.0.3
-    str_function = f"\t\t/****** {f['parent']['name'] if f['parent'] is not None else ''}::{function_name} ******/\n"
-    str_function += f"\t\t/****** md5 signature: {function_signature_md5} ******/\n"
-    str_function += f'\t\t%feature("compactdefaultargs") {function_name};\n'
 
-    str_function += process_function_docstring(f)
-    str_function += "\t\t"
-    # return type
-    # Careful: for constructors, we have to remove the "void"
-    # return type from the SWIG wrapper
-    # otherwise it causes the compiler to fail
-    # with "incorrect use of ..."
-    # function name
+def _compute_return_type(f):
+    """Derive the SWIG-ready return type, accounting for constructors,
+    virtual, and static modifiers."""
     if f["constructor"]:
         return_type = ""
     else:
@@ -2928,192 +1738,192 @@ def process_function(f, overload=False):
         return_type = "static " + return_type
     if f["static"] and f["parent"] is None:
         return_type = "static " + return_type
-    # Case where primitive values are accessed by reference
-    # one method Get* that returns the object
-    # one method Set* that sets the object
-    if return_type in [
-        "Standard_Integer &",
-        "Standard_Real &",
-        "Standard_Boolean &",
-        "Standard_Integer&",
-        "Standard_Real&",
-        "Standard_Boolean&",
-    ]:
-        logging.info("    Creating Get and Set methods for method %s", function_name)
-        modified_return_type = return_type.split(" ")[0]
-        # compute the parameters type and name, separated with comma
-        getter_params_type_and_names = []
-        getter_params_only_names = []
-        getter_param_hints = ["self"]
-        for param in f["parameters"]:
-            param_type_and_name = f"{adapt_param_type(param['type'])} {param['name']}"
-            getter_params_type_and_names.append(param_type_and_name)
-            getter_params_only_names.append(param["name"])
-            # process hints
-            type_for_hint = adapt_type_for_hint(adapt_param_type(param["type"]))
-            getter_param_hints.append(f"{param['name']}: {type_for_hint}")
+    return return_type
 
-        setter_params_type_and_names = getter_params_type_and_names + [
-            f"{modified_return_type} value"
-        ]
-        # the setter hint
-        hint_output_type = adapt_type_for_hint(modified_return_type)
-        hint_value = [f"value: {hint_output_type}"]
-        setter_param_hints = getter_param_hints + hint_value
 
-        getter_params_type_and_names_str_csv = ",".join(getter_params_type_and_names)
-        setter_params_type_and_names_str_csv = ",".join(setter_params_type_and_names)
-        getter_params_only_names_str_csv = ",".join(getter_params_only_names)
-
-        str_function = TEMPLATE_GETTER_SETTER.substitute(
-            {
-                "Return_Type": modified_return_type,
-                "Function_Name": function_name,
-                "Getter_Parameters_Types_Names": getter_params_type_and_names_str_csv,
-                "Getter_Parameters_Names": getter_params_only_names_str_csv,
-                "Setter_Parameters_Types_Names": setter_params_type_and_names_str_csv,
-            }
-        )
-        # process type hint for this case
-        getter_hint_str = TEMPLATE_GETTER_PYI.substitute(
-            {
-                "Function_Name": function_name,
-                "Getter_Parameters_Hints": ", ".join(getter_param_hints),
-                "Hint_Output_Type": hint_output_type,
-            }
-        )
-        setter_hint_str = TEMPLATE_SETTER_PYI.substitute(
-            {
-                "Function_Name": function_name,
-                "Setter_Parameters_Hints": ", ".join(setter_param_hints),
-            }
-        )
-        # finally returns the method definition and hint
-        type_hint_str = getter_hint_str + setter_hint_str
-        return str_function, type_hint_str
-
-    str_function += f"{return_type} "
-    # function name
-    str_function += f"{function_name}"
-    # process parameters
+def _build_swig_parameter_list(f):
+    """Build the SWIG parameter list for a function. Returns
+    (parameters_types_and_names, parameters_definition_strs, has_handle_t_ref).
+    has_handle_t_ref = True means this function should be skipped entirely."""
     parameters_types_and_names = []
     parameters_definition_strs = []
-    # num_parameters = len(f["parameters"])
     for param in f["parameters"]:
-        param_string = ""
         param_type = adapt_param_type(param["type"])
-
         if "Handle_T &" in param_type:
-            return (
-                False,
-                "",
-            )  # skip this function, it will raise a compilation exception, it's something like a template
+            # something like a template; would raise a compilation exception
+            return None, None, True
 
         if "array_size" in param:
-            # create a list of types/names tuples
-            # a liste with 3 items [type, name, default_value]
-            # if there's no default value, False
-            # other wise the default value as a string
-            param_type_and_name = [
-                f"{param_type}",
-                f"{param['name']}[{param['array_size']}]",
-            ]
+            # entries are [type, name] or [type, name, default_value]
+            param_type_and_name = [param_type, f"{param['name']}[{param['array_size']}]"]
         else:
-            param_type_and_name = [f"{param_type}", f"{param['name']}"]
+            param_type_and_name = [param_type, param["name"]]
 
-        param_string += adapt_param_type_and_name(" ".join(param_type_and_name))
-
+        param_string = adapt_param_type_and_name(" ".join(param_type_and_name))
         if "defaultValue" in param:
             def_value = adapt_default_value_parmlist(param)
             param_string += f" = {def_value}"
-            # we add the default value to the end of the list param_type_and_name
             param_type_and_name.append(def_value)
 
         parameters_types_and_names.append(param_type_and_name)
         parameters_definition_strs.append(param_string)
-    # generate the parameters string
-    str_function += "(" + ", ".join(parameters_definition_strs) + ");\n"
-    #
-    # The following stuff is all related to type hints
-    # function type hints
-    #
-    canceled = False
+    return parameters_types_and_names, parameters_definition_strs, False
+
+
+def _build_typehint(f, function_name, parameters_types_and_names, return_type,
+                    parent_class_name, overload):
+    """Build the .pyi type-hint string for a function."""
+    if "operator" in function_name:
+        return ""
+
     str_typehint = ""
-    # below is the list of types returned by the method
-    # generally, all c++ methods return either zero (void) values
-    # or 1. In some special cases, by ref returned parameters are wrapped
-    # to python types and added to the return values
-    # thus, some method may return a tuple
-    types_returned = [f"{adapt_type_for_hint(return_type)}"]  # by default, nothing
+    # f"" wrap preserves a string even when adapt_type_for_hint returns False;
+    # downstream str.join would otherwise blow up.
+    types_returned = [f"{adapt_type_for_hint(return_type)}"]
+    all_parameters_type_hint = ["self"]
 
     if overload:
         str_typehint += "    @overload\n"
-    if "operator" not in function_name:
-        all_parameters_type_hint = [
-            "self"
-        ]  # by default, this is a class method not static
-        if f["constructor"]:
-            # add the overload decorator to handle
-            # multiple constructors
-            str_typehint += "    def __init__("
-        else:
-            if f["static"]:
-                str_typehint += "    @staticmethod\n"
-                all_parameters_type_hint = []  # if static, not self
-                if (
-                    parent_class_name is not None
-                    and "<" not in parent_class_name
-                    and function_name.isalnum()
-                ):
-                    DEPRECATED_STATIC_FUNCTIONS.append(
-                        (parent_class_name, function_name)
-                    )
-            str_typehint += f"    def {function_name}("
-
-        if parameters_types_and_names:
-            for par in parameters_types_and_names:
-                par_typ = adapt_type_for_hint(par[0])
-                if not par_typ:
-                    canceled = True
-                    break
-                # check if there is some OutValue
-                ov = adapt_param_type_and_name(" ".join(par))
-                if "OutValue" in ov:
-                    type_to_add = f"{adapt_type_for_hint(ov)}"
-                    if types_returned[0] == "None":
-                        types_returned[0] = type_to_add
-                    else:
-                        types_returned.append(type_to_add)
-                    continue
-                # if there's a default value, the type becomes Optional[type] = value
-                if len(par) == 3:
-                    (
-                        hint_def_value,
-                        adapt_type_hint_default_value_success,
-                    ) = adapt_type_hint_default_value(par[2])
-                    if adapt_type_hint_default_value_success:
-                        par_typ = f"Optional[{par_typ}] = {hint_def_value}"
-                    else:  # no default value
-                        par_typ = f"Optional[{par_typ}]"
-                par_nam, success = adapt_type_hint_parameter_name(par[1])
-                if not success:
-                    canceled = True
-                if par_nam.endswith("_list"):  # it's a list
-                    par_typ = f"List[{par_typ}]"
-                all_parameters_type_hint.append(f"{par_nam}: {par_typ}")
-        str_typehint += ", ".join(all_parameters_type_hint)
-        if len(types_returned) == 1:
-            returned_type_hint = types_returned[0]
-        elif len(types_returned) > 1:  # it's a tuple
-            returned_type_hint = f"Tuple[{(', '.join(types_returned))}]"
-        else:
-            raise AssertionError("Method should at least have one returned type.")
-        str_typehint += f") -> {returned_type_hint}: ...\n"
+    if f["constructor"]:
+        str_typehint += "    def __init__("
     else:
-        str_typehint = ""
+        if f["static"]:
+            str_typehint += "    @staticmethod\n"
+            all_parameters_type_hint = []  # static methods don't take self
+            if (
+                parent_class_name is not None
+                and "<" not in parent_class_name
+                and function_name.isalnum()
+            ):
+                state.deprecated_static_functions.append(
+                    (parent_class_name, function_name)
+                )
+        str_typehint += f"    def {function_name}("
+
+    canceled = False
+    for par in parameters_types_and_names:
+        par_typ = adapt_type_for_hint(par[0])
+        if not par_typ:
+            canceled = True
+            break
+        ov = adapt_param_type_and_name(" ".join(par))
+        if "OutValue" in ov:
+            type_to_add = f"{adapt_type_for_hint(ov)}"
+            if types_returned[0] == "None":
+                types_returned[0] = type_to_add
+            else:
+                types_returned.append(type_to_add)
+            continue
+        # if there's a default value, the type becomes Optional[type] = value
+        if len(par) == 3:
+            hint_def_value, adapted = adapt_type_hint_default_value(par[2])
+            par_typ = (
+                f"Optional[{par_typ}] = {hint_def_value}" if adapted
+                else f"Optional[{par_typ}]"
+            )
+        par_nam, success = adapt_type_hint_parameter_name(par[1])
+        if not success:
+            canceled = True
+        if par_nam.endswith("_list"):
+            par_typ = f"List[{par_typ}]"
+        all_parameters_type_hint.append(f"{par_nam}: {par_typ}")
+
     if canceled:
-        str_typehint = ""
-    # if the function is HashCode, we add immediately after
+        return ""
+
+    str_typehint += ", ".join(all_parameters_type_hint)
+    if len(types_returned) == 1:
+        returned_type_hint = types_returned[0]
+    elif len(types_returned) > 1:
+        returned_type_hint = f"Tuple[{', '.join(types_returned)}]"
+    else:
+        raise AssertionError("Method should at least have one returned type.")
+    str_typehint += f") -> {returned_type_hint}: ...\n"
+    return str_typehint
+
+
+def _should_skip_function(f, function_name):
+    """Early-return cases where the function should not be wrapped at all."""
+    if f["destructor"] or f["returns"] == "~":
+        return True
+    if "TYPENAME" in f["rtnType"]:  # something in NCollection
+        return True
+    if function_name in ("DEFINE_STANDARD_RTTIEXT", "Handle"):
+        # Handle (something) func can not be handled by swig
+        return True
+    return False
+
+
+def process_function(f, overload=False):
+    """Generate SWIG bindings + a .pyi type hint for a single C++ function.
+
+    Returns (swig_str, type_hint_str). Either may be empty when the function
+    is intentionally skipped; swig_str may be False when the function would
+    cause a SWIG compilation error.
+    """
+    function_signature_md5 = get_function_md5_signature(f)
+    if f["template"]:
+        return False, ""
+    function_name = adapt_function_name(f["name"])
+
+    if _should_skip_function(f, function_name):
+        return "", ""
+
+    if f["static"] and f["parent"] is not None:
+        parent_class_name = f["parent"]["name"]
+        if parent_class_name == state.current_module:
+            parent_class_name = parent_class_name.lower()
+    else:
+        parent_class_name = None
+
+    operator_result = _wrap_operator(f, function_name, parent_class_name)
+    if operator_result is not None:
+        return operator_result
+
+    state.nb_total_methods += 1
+
+    if function_name == "DumpJson":
+        return TEMPLATE_DUMPJSON, TEMPLATE_DUMPJSON_PYI
+    if function_name == "InitFromJson":
+        return TEMPLATE_INITFROMJSON, TEMPLATE_INITFROMJSON_PYI
+
+    # only wrap free functions that live in the current module's namespace
+    function_namespace = f["namespace"]
+    function_parent_class_name = f["parent"]["name"] if f["parent"] is not None else ""
+    if function_namespace[:-2] != state.current_module and function_parent_class_name == "":
+        return "", ""
+
+    # Build the docstring before _compute_return_type so the order of
+    # check_dependency() calls (which append to state.python_module_dependency)
+    # matches the legacy single-block implementation: parameter deps land
+    # before return-type deps.
+    docstring = process_function_docstring(f)
+    return_type = _compute_return_type(f)
+    if return_type in _PRIMITIVE_BY_REF_RETURNS:
+        return _build_getter_setter_pair(f, function_name, return_type)
+
+    # SWIG declaration prefix
+    str_function = (
+        f"\t\t/****** {function_parent_class_name}::{function_name} ******/\n"
+        f"\t\t/****** md5 signature: {function_signature_md5} ******/\n"
+        f'\t\t%feature("compactdefaultargs") {function_name};\n'
+        + docstring
+        + f"\t\t{return_type} {function_name}"
+    )
+
+    parameters_types_and_names, parameters_definition_strs, skip = (
+        _build_swig_parameter_list(f)
+    )
+    if skip:
+        return False, ""
+
+    str_function += "(" + ", ".join(parameters_definition_strs) + ");\n"
+    str_typehint = _build_typehint(
+        f, function_name, parameters_types_and_names, return_type,
+        parent_class_name, overload,
+    )
+
+    # collapse occasional duplicate "const const" produced by adapt_return_type
     str_function = str_function.replace("const const", "const") + "\n"
     return str_function, str_typehint
 
@@ -3178,15 +1988,15 @@ def process_methods(methods_list):
     # to determine whether or not use the @overload decorator
     for function in sorted_methods_list:
         # Skip free functions that live in a namespace different from
-        # CURRENT_MODULE: SWIG would emit them at file scope but the underlying
+        # state.current_module: SWIG would emit them at file scope but the underlying
         # C symbol lives in the namespace, so the call would fail to link
         # (occt-800: e.g. BVH::EncodeMortonCode in BVH_RadixSorter.hxx).
-        # When the namespace matches CURRENT_MODULE, the .i file emits
+        # When the namespace matches state.current_module, the .i file emits
         # `using namespace X;` so the unqualified call is fine
         # (e.g. namespace TopoDS::Wire/Edge/Face etc).
         if not function.get("parent"):
             ns = function.get("namespace", "").rstrip(":")
-            if ns and ns != CURRENT_MODULE:
+            if ns and ns != state.current_module:
                 continue
         # don't process friend methods
         need_overload = False
@@ -3270,7 +2080,6 @@ def build_inheritance_tree(classes_dict):
     the more specialized. The more abstract will be
     processed first.
     """
-    global ALL_STANDARD_TRANSIENTS
     # first, we build two dictionaries
     # the first one, level_0_classes
     # contain class names that does not inherit from
@@ -3296,7 +2105,7 @@ def build_inheritance_tree(classes_dict):
             upper_class_name = upper_classes[0]["class"]
             # if the upper class depends on another module
             # add it to the level 0 list.
-            if upper_class_name.split("_")[0] != CURRENT_MODULE:
+            if upper_class_name.split("_")[0] != state.current_module:
                 level_0_classes.append(class_name)
             # else build the inheritance tree
             else:
@@ -3307,14 +2116,14 @@ def build_inheritance_tree(classes_dict):
             class_1_module = upper_class_name_1.split("_")[0]
             upper_class_name_2 = upper_classes[1]["class"]
             class_2_module = upper_class_name_2.split("_")[0]
-            if class_1_module == upper_class_name_2 == CURRENT_MODULE:
+            if class_1_module == upper_class_name_2 == state.current_module:
                 logging.warning(
                     "This is a special case, where the 2 ancestors belong the same module. Class %s skipped.",
                     class_name,
                 )
-            if class_1_module == CURRENT_MODULE:
+            if class_1_module == state.current_module:
                 inheritance_dict[class_name] = upper_class_name_1
-            elif class_2_module == CURRENT_MODULE:
+            elif class_2_module == state.current_module:
                 inheritance_dict[class_name] = upper_class_name_2
             elif (
                 upper_class_name_1 == upper_class_name_2
@@ -3365,11 +2174,11 @@ def build_inheritance_tree(classes_dict):
         class_name = klass["name"]
         if upper_class:
             upper_class_name = klass["inherits"][0]["class"]
-            if upper_class_name in ALL_STANDARD_TRANSIENTS:
+            if upper_class_name in state.all_standard_transients:
                 # this class inherits from a Standard_Transient base class
-                # so we add it to the ALL_STANDARD_TRANSIENTS list:
-                if klass not in ALL_STANDARD_TRANSIENTS:
-                    ALL_STANDARD_TRANSIENTS.append(class_name)
+                # so we add it to the state.all_standard_transients list:
+                if klass not in state.all_standard_transients:
+                    state.all_standard_transients.append(class_name)
     return class_list
 
 
@@ -3393,9 +2202,9 @@ def process_harray1():
     """
     wrapper_str = "/* harray1 classes */\n"
     pyi_str = "\n# harray1 classes\n"
-    for HClassName in ALL_HARRAY1:
-        if HClassName.startswith(CURRENT_MODULE + "_"):
-            array1_type = ALL_HARRAY1[HClassName]
+    for HClassName in state.all_harray1:
+        if HClassName.startswith(state.current_module + "_"):
+            array1_type = state.all_harray1[HClassName]
             wrapper_str += HARRAY1_TEMPLATE.substitute(
                 {"HClassName": f"{HClassName}", "Array1Type": f"{array1_type}"}
             )
@@ -3409,9 +2218,9 @@ def process_harray1():
 def process_harray2():
     wrapper_str = "/* harray2 classes */"
     pyi_str = "# harray2 classes\n"
-    for HClassName in ALL_HARRAY2:
-        if HClassName.startswith(CURRENT_MODULE + "_"):
-            array2_type = ALL_HARRAY2[HClassName]
+    for HClassName in state.all_harray2:
+        if HClassName.startswith(state.current_module + "_"):
+            array2_type = state.all_harray2[HClassName]
             wrapper_str += HARRAY2_TEMPLATE.substitute(
                 {"HClassName": f"{HClassName}", "Array2Type": f"{array2_type}"}
             )
@@ -3426,9 +2235,9 @@ def process_harray2():
 def process_hsequence():
     wrapper_str = "/* hsequence classes */"
     pyi_str = "# hsequence classes\n"
-    for HClassName in ALL_HSEQUENCE:
-        if HClassName.startswith(CURRENT_MODULE + "_"):
-            sequence_type = ALL_HSEQUENCE[HClassName]
+    for HClassName in state.all_hsequence:
+        if HClassName.startswith(state.current_module + "_"):
+            sequence_type = state.all_hsequence[HClassName]
             wrapper_str += HSEQUENCE_TEMPLATE.substitute(
                 {"HClassName": f"{HClassName}", "SequenceType": f"{sequence_type}"}
             )
@@ -3461,13 +2270,13 @@ def process_handles(classes_dict, exclude_classes):
         for base in klass.get("inherits", []):
             base_name = base.get("class") if isinstance(base, dict) else base
             if base_name and (
-                base_name in ALL_STANDARD_HANDLES
-                or base_name in ALL_STANDARD_TRANSIENTS
+                base_name in state.all_standard_handles
+                or base_name in state.all_standard_transients
                 or base_name in inherited_handle_classes
             ):
                 inherited_handle_classes.add(cn)
-                if cn not in ALL_STANDARD_HANDLES:
-                    ALL_STANDARD_HANDLES.append(cn)
+                if cn not in state.all_standard_handles:
+                    state.all_standard_handles.append(cn)
                 break
     for klass in inheritance_tree_list:
         # class name
@@ -3478,17 +2287,115 @@ def process_handles(classes_dict, exclude_classes):
             continue
         if check_has_related_handle(class_name) or class_name == "Standard_Transient":
             wrap_handle_str += f"%wrap_handle({class_name})\n"
-    for HClassName in ALL_HARRAY1:
-        if HClassName.startswith(CURRENT_MODULE + "_"):
+    for HClassName in state.all_harray1:
+        if HClassName.startswith(state.current_module + "_"):
             wrap_handle_str += f"%wrap_handle({HClassName})\n"
-    for HClassName in ALL_HARRAY2:
-        if HClassName.startswith(CURRENT_MODULE + "_"):
+    for HClassName in state.all_harray2:
+        if HClassName.startswith(state.current_module + "_"):
             wrap_handle_str += f"%wrap_handle({HClassName})\n"
-    for HClassName in ALL_HSEQUENCE:
-        if HClassName.startswith(CURRENT_MODULE + "_"):
+    for HClassName in state.all_hsequence:
+        if HClassName.startswith(state.current_module + "_"):
             wrap_handle_str += f"%wrap_handle({HClassName})\n"
     wrap_handle_str += "/* end handles declaration */\n\n"
     return wrap_handle_str
+
+
+_PRIMITIVE_REF_TO_CTYPE = {
+    "Standard_Real": "double",
+    "double": "double",
+    "Standard_Integer": "int",
+    "int": "int",
+    "Standard_Boolean": "bool",
+    "bool": "bool",
+}
+
+
+def _synthesize_primitive_ref_getter_setters(class_name, other_methods):
+    """occt-800: synthesize SetXxx/GetXxx pairs for parameterless methods that
+    return a reference to a primitive (Standard_Real&, Standard_Integer&,
+    Standard_Boolean&). OCCT 8.0 dropped the explicit setters, exposing only
+    a `Type& Foo()` accessor that Python cannot assign through. Restores the
+    API pythonocc has exposed since 2014 (commit 78c320c3)."""
+    out = ""
+    for m in other_methods:
+        rtype = (m.get("rtnType") or "").strip()
+        if "&" not in rtype or m.get("parameters"):
+            continue
+        if rtype.startswith("const") or " const " in rtype:
+            continue
+        base = rtype.replace("&", "").strip()
+        cpp_type = _PRIMITIVE_REF_TO_CTYPE.get(base)
+        if cpp_type is None:
+            continue
+        mname = m["name"]
+        if mname == class_name or mname.startswith("~"):
+            continue
+        out += "\t\t%extend{\n"
+        out += f"\t\t\t{cpp_type} Get{mname}() {{ return self->{mname}(); }}\n"
+        out += f"\t\t\tvoid Set{mname}({cpp_type} value) {{ self->{mname}() = value; }}\n"
+        out += "\t\t};\n"
+    return out
+
+
+def _class_specific_extensions(class_name, class_def_str):
+    """Return (extra_def_str, extra_pyi_str) for classes that need ad-hoc SWIG
+    extensions (TDF_Label name accessor, BRepTools serialization, math_*
+    setters, TopoDS_Shape pickling, ...). Takes class_def_str so far so we
+    can detect DumpJson/InitFromJson presence."""
+    extra_def, extra_pyi = "", ""
+    if class_name in ("BRepTools", "BRepTools_ShapeSet"):
+        extra_def += BREPTOOLS_WRITE_READ_FROM_STRING
+        extra_pyi += BREPTOOLS_WRITE_READ_FROM_STRING_PYI
+    if class_name == "TDF_Label":
+        extra_def += '%feature("autodoc", "Returns the label name") GetLabelName;\n'
+        extra_def += "\t\t%extend{\n"
+        extra_def += "\t\t\tstd::string GetLabelName() {\n"
+        extra_def += "\t\t\tstd::string txt;\n"
+        extra_def += "\t\t\tHandle(TDataStd_Name) name;\n"
+        extra_def += "\t\t\tif (!self->IsNull() && self->FindAttribute(TDataStd_Name::GetID(),name)) {\n"
+        extra_def += "\t\t\tTCollection_ExtendedString extstr = name->Get();\n"
+        extra_def += "\t\t\tchar* str = new char[extstr.LengthOfCString()+1];\n"
+        extra_def += "\t\t\textstr.ToUTF8CString(str);\n"
+        extra_def += "\t\t\ttxt = str;\n"
+        extra_def += "\t\t\tdelete[] str;}\n"
+        extra_def += "\t\t\treturn txt;}\n"
+        extra_def += "\t\t};\n"
+    # occt-800: StlAPI_Writer dropped SetASCIIMode and exposes the flag
+    # through `bool& ASCIIMode()`. Add a Python-friendly setter shim.
+    if class_name == "StlAPI_Writer":
+        extra_def += "\t\t%extend{\n"
+        extra_def += "\t\t\tvoid SetASCIIMode(bool theMode) { self->ASCIIMode() = theMode; }\n"
+        extra_def += "\t\t};\n"
+    # occt-800: math_Matrix / math_Vector still expose mutable Value() returning
+    # a reference but Python cannot assign through it - add Get/SetValue shims.
+    if class_name == "math_Matrix":
+        extra_def += "\t\t%extend{\n"
+        extra_def += "\t\t\tdouble GetValue(int row, int col) const { return self->Value(row, col); }\n"
+        extra_def += "\t\t\tvoid SetValue(int row, int col, double v) { self->Value(row, col) = v; }\n"
+        extra_def += "\t\t};\n"
+    if class_name == "math_Vector":
+        extra_def += "\t\t%extend{\n"
+        extra_def += "\t\t\tdouble GetValue(int idx) const { return self->Value(idx); }\n"
+        extra_def += "\t\t\tvoid SetValue(int idx, double v) { self->Value(idx) = v; }\n"
+        extra_def += "\t\t};\n"
+    return extra_def, extra_pyi
+
+
+def _render_excluded_classes_proxies(exclude_classes):
+    """Emit Python placeholders that raise ClassNotWrapped at use time, plus
+    matching .pyi entries. Skips classes that NCollection.i actually wraps,
+    since the placeholder would shadow them."""
+    if not exclude_classes:
+        return "", ""
+    def_str = "/* python proxy for excluded classes */\n%pythoncode {\n"
+    pyi_str = ""
+    for excluded_class in exclude_classes:
+        if excluded_class in NCOLLECTION_WRAPPED_CLASSES:
+            continue
+        def_str += f"@classnotwrapped\nclass {excluded_class}:\n\tpass\n\n"
+        pyi_str += f"\n#classnotwrapped\nclass {excluded_class}: ...\n"
+    def_str += "}\n/* end python proxy for excluded classes */\n"
+    return def_str, pyi_str
 
 
 def process_classes(classes_dict, exclude_classes, exclude_member_functions):
@@ -3499,7 +2406,6 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
     exclude_member_functions is a dict with classes names as keys and member
     function names as values
     """
-    global NB_TOTAL_CLASSES
     if exclude_classes == ["*"]:  # don't wrap any class
         # that is to say we add all classes to the list of exclude_member_functions
         new_exclude_classes = []
@@ -3532,7 +2438,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             continue
         # ensure the class returned by CppHeader is defined in this module
         # otherwise we go on with the next class
-        if not class_name.startswith(CURRENT_MODULE):
+        if not class_name.startswith(state.current_module):
             continue
         # we rename the class if the module is the same name
         # for instance TopoDS is both a module and a class
@@ -3541,7 +2447,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # the class type hint
         class_name_for_pyi = class_name.split("<")[0]
 
-        if class_name == CURRENT_MODULE:
+        if class_name == state.current_module:
             class_def_str += f"%rename({class_name.lower()}) {class_name};\n"
             class_name_for_pyi = class_name_for_pyi.lower()
         # then process the class itself
@@ -3602,7 +2508,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             class_def_str += class_enum_def
         # process class properties here
         properties_str = ""
-        if CURRENT_MODULE == "Graphic3d":
+        if state.current_module == "Graphic3d":
             for property_value in list(klass["properties"]["public"]):
                 # TODO : cppheaderparser fails at finding private class properties
                 if (
@@ -3666,46 +2572,9 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         )
         class_def_str += other_method_definitions
         class_pyi_str += other_method_type_hints
-        # occt-800: synthesize SetXxx/GetXxx pairs for parameterless methods
-        # that return a reference to a primitive type (Standard_Real&,
-        # Standard_Integer&, Standard_Boolean&). OCCT 8.0 dropped the
-        # explicit setters, exposing only a `Type& Foo()` accessor that
-        # Python cannot assign through. Restores the API pythonocc has
-        # exposed since 2014 (commit 78c320c3).
-        for m in other_methods:
-            rtype = (m.get("rtnType") or "").strip()
-            if "&" not in rtype:
-                continue
-            if m.get("parameters"):
-                continue
-            # skip when the reference is const (read-only) - we cannot emit
-            # a setter through it
-            if rtype.startswith("const") or " const " in rtype:
-                continue
-            # only primitive scalars
-            base = rtype.replace("&", "").strip()
-            primitive_map = {
-                "Standard_Real": "double",
-                "double": "double",
-                "Standard_Integer": "int",
-                "int": "int",
-                "Standard_Boolean": "bool",
-                "bool": "bool",
-            }
-            if base not in primitive_map:
-                continue
-            cpp_type = primitive_map[base]
-            mname = m["name"]
-            if mname == class_name or mname.startswith("~"):
-                continue
-            class_def_str += "\t\t%extend{\n"
-            class_def_str += (
-                f"\t\t\t{cpp_type} Get{mname}() {{ return self->{mname}(); }}\n"
-            )
-            class_def_str += (
-                f"\t\t\tvoid Set{mname}({cpp_type} value) {{ self->{mname}() = value; }}\n"
-            )
-            class_def_str += "\t\t};\n"
+        class_def_str += _synthesize_primitive_ref_getter_setters(
+            class_name, other_methods
+        )
 
         # after that change, we remove the "pass" if it appears to be unnecessary
         # for example
@@ -3721,50 +2590,9 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             "pass\n    @staticmethod", "@staticmethod"
         )
 
-        # Important special case: For pickling of TopoDS_Shape, we do need WriteToString
-        #                         and ReadFromString.
-        if class_name == "BRepTools" or class_name == "BRepTools_ShapeSet":
-            class_def_str += BREPTOOLS_WRITE_READ_FROM_STRING
-            class_pyi_str += BREPTOOLS_WRITE_READ_FROM_STRING_PYI
-        # a special wrapper template for TDF_Label
-        # We add a special method for recovering label names
-        if class_name == "TDF_Label":
-            class_def_str += (
-                '%feature("autodoc", "Returns the label name") GetLabelName;\n'
-            )
-            class_def_str += "\t\t%extend{\n"
-            class_def_str += "\t\t\tstd::string GetLabelName() {\n"
-            class_def_str += "\t\t\tstd::string txt;\n"
-            class_def_str += "\t\t\tHandle(TDataStd_Name) name;\n"
-            class_def_str += "\t\t\tif (!self->IsNull() && self->FindAttribute(TDataStd_Name::GetID(),name)) {\n"
-            class_def_str += "\t\t\tTCollection_ExtendedString extstr = name->Get();\n"
-            class_def_str += "\t\t\tchar* str = new char[extstr.LengthOfCString()+1];\n"
-            class_def_str += "\t\t\textstr.ToUTF8CString(str);\n"
-            class_def_str += "\t\t\ttxt = str;\n"
-            class_def_str += "\t\t\tdelete[] str;}\n"
-            class_def_str += "\t\t\treturn txt;}\n"
-            class_def_str += "\t\t};\n"
-        # occt-800: StlAPI_Writer dropped the SetASCIIMode setter and exposes
-        # the flag through `bool& ASCIIMode()` instead. Add a Python-friendly
-        # SetASCIIMode shim so existing callers keep working.
-        if class_name == "StlAPI_Writer":
-            class_def_str += "\t\t%extend{\n"
-            class_def_str += "\t\t\tvoid SetASCIIMode(bool theMode) { self->ASCIIMode() = theMode; }\n"
-            class_def_str += "\t\t};\n"
-        # occt-800: math_Matrix / math_Vector still expose a mutable
-        # `Value()` returning a reference but Python cannot assign through
-        # a returned reference - add Get/SetValue shims (the names match
-        # the signatures pythonocc has been using since 7.x).
-        if class_name == "math_Matrix":
-            class_def_str += "\t\t%extend{\n"
-            class_def_str += "\t\t\tdouble GetValue(int row, int col) const { return self->Value(row, col); }\n"
-            class_def_str += "\t\t\tvoid SetValue(int row, int col, double v) { self->Value(row, col) = v; }\n"
-            class_def_str += "\t\t};\n"
-        if class_name == "math_Vector":
-            class_def_str += "\t\t%extend{\n"
-            class_def_str += "\t\t\tdouble GetValue(int idx) const { return self->Value(idx); }\n"
-            class_def_str += "\t\t\tvoid SetValue(int idx, double v) { self->Value(idx) = v; }\n"
-            class_def_str += "\t\t};\n"
+        extra_def, extra_pyi = _class_specific_extensions(class_name, class_def_str)
+        class_def_str += extra_def
+        class_pyi_str += extra_pyi
         # then terminate the class definition
         class_def_str += "};\n\n"
         #
@@ -3828,27 +2656,10 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         if class_name == "Geom_Surface":  # see ticket #1381, numpy support
             class_def_str += "// numpy support for Geom_Surface\nSurfaceArrayEvalExtend(Geom_Surface)\n\n"
         # increment global number of classes
-        NB_TOTAL_CLASSES += 1
-    #
-    # Finally, we create a python proxy for each exclude class
-    # to raise a python exception ClassNotWrapped
-    # and we do the same in the stub file
-    if exclude_classes:  # if the list is not empty
-        class_def_str += "/* python proxy for excluded classes */\n"
-        class_def_str += "%pythoncode {\n"
-        for excluded_class in exclude_classes:
-            # occt-800: do not emit a placeholder Python class for classes
-            # that SWIG already wraps via the NCollection.i %include lines;
-            # the placeholder would shadow the real wrapped class and hide
-            # inherited methods like Size()/Length()/IsEmpty().
-            if excluded_class in NCOLLECTION_WRAPPED_CLASSES:
-                continue
-            class_def_str += "@classnotwrapped\n"
-            class_def_str += f"class {excluded_class}:\n\tpass\n\n"
-            class_pyi_str += "\n#classnotwrapped\n"
-            class_pyi_str += f"class {excluded_class}: ...\n"
-        class_def_str += "}\n"
-        class_def_str += "/* end python proxy for excluded classes */\n"
+        state.nb_total_classes += 1
+    excluded_def, excluded_pyi = _render_excluded_classes_proxies(exclude_classes)
+    class_def_str += excluded_def
+    class_pyi_str += excluded_pyi
     return class_def_str, class_pyi_str
 
 
@@ -3875,11 +2686,6 @@ def is_module(module_name):
         if mod[0] == module_name:
             return True
     return False
-
-
-def test_is_module():
-    assert is_module("Standard") is True
-    assert is_module("something") is False
 
 
 def parse_module(module_name):
@@ -3926,16 +2732,15 @@ class ModuleWrapper:
         exclude_member_functions,
     ):
         # Reinit global variables
-        global CURRENT_MODULE, PYTHON_MODULE_DEPENDENCY, DEPRECATED_STATIC_FUNCTIONS
-        CURRENT_MODULE = module_name
-        DEPRECATED_STATIC_FUNCTIONS = []
+        state.current_module = module_name
+        state.deprecated_static_functions = []
         # CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES = ""
         # all modules depend, by default, upon Standard, NCollection and others
         if module_name not in ["Standard", "NCollection"]:
-            PYTHON_MODULE_DEPENDENCY = ["Standard", "NCollection"]
+            state.python_module_dependency = ["Standard", "NCollection"]
             reset_header_depency()
         else:
-            PYTHON_MODULE_DEPENDENCY = []
+            state.python_module_dependency = []
 
         logging.info("## Processing module %s", module_name)
         self._module_name = module_name
@@ -3974,215 +2779,174 @@ class ModuleWrapper:
             free_functions
         )
         # other dependencies
-        self._additional_dependencies = additional_dependencies + HEADER_DEPENDENCY
+        self._additional_dependencies = additional_dependencies + state.header_dependency
 
         # deprecated static functions after move to swig-4.1.1
         self._deprecated_swig_static_functions_str = process_deprecated(
-            DEPRECATED_STATIC_FUNCTIONS
+            state.deprecated_static_functions
         )
 
         # generate swig file
         self.generate_SWIG_files()
 
+    # Module-specific header injections (matched on module name).
+    _MODULE_TEMPLATE_INJECTIONS = (
+        ("NCollection", "NCOLLECTION_HEADER_TEMPLATE"),
+        ("math", "MATH_HEADER_TEMPLATE"),
+        ("BVH", "BVH_HEADER_TEMPLATE"),
+        ("Prs3d", "PRS3D_HEADER_TEMPLATE"),
+        ("Graphic3d", "GRAPHIC3D_DEFINE_HEADER"),
+        ("BRepAlgoAPI", "BREPALGOAPI_HEADER"),
+    )
+
+    _COMMON_INCLUDES = (
+        "CommonIncludes",
+        "ExceptionCatcher",
+        "FunctionTransformers",
+        "EnumTemplates",
+        "Operators",
+        "OccHandle",
+        "IOStream",
+        "ArrayMacros",
+    )
+
+    _NUMPY_MODULES = {"Geom", "Geom2d", "Poly", "TColStd", "TColgp", "TShort"}
+
     def generate_SWIG_files(self):
-        #
-        # The SWIG .i file
-        #
         if GENERATE_SWIG_FILES:
-            swig_interface_file = open(
-                os.path.join(SWIG_OUTPUT_PATH, f"{self._module_name}.i"),
-                "w",
-                encoding="utf8",
-            )
-            # write header
-            swig_interface_file.write(LICENSE_HEADER)
-            # write module docstring
-            # for instante define GPDOCSTRING
-            docstring_macro = f"{self._module_name.upper()}DOCSTRING"
-            swig_interface_file.write(f"%define {docstring_macro}\n")
-            swig_interface_file.write(f'"{self._module_docstring}"\n')
-            swig_interface_file.write("%enddef\n")
-            # module name
-            swig_interface_file.write(
-                f'%module (package="OCC.Core", docstring={docstring_macro}) {self._module_name}\n\n'
-            )
-            # write windows pragmas to avoid compiler errors
-            swig_interface_file.write(WIN_PRAGMAS)
-            # common includes
-            includes = [
-                "CommonIncludes",
-                "ExceptionCatcher",
-                "FunctionTransformers",
-                "EnumTemplates",
-                "Operators",
-                "OccHandle",
-                "IOStream",
-                "ArrayMacros",
-            ]
-            for include in includes:
-                swig_interface_file.write(f"%include ../common/{include}.i\n")
-            swig_interface_file.write("\n\n")
-            # Here we write required dependencies, headers, as well as
-            # other swig interface files
-            swig_interface_file.write("%{\n")
+            self._write_module_header_file()
+            self._write_swig_interface_file()
+            self._write_enum_templates_file()
+        self._write_pyi_stub_file()
 
-            if self._module_name == "AdvApp2Var":  # windows compilation issues
-                swig_interface_file.write(
-                    "#if defined(_WIN32)\n#include <windows.h>\n#endif\n"
-                )
-
-            module_headers = glob.glob(f"{OCCT_INCLUDE_DIR}/{self._module_name}_*.hxx")
-            module_headers += glob.glob(f"{OCCT_INCLUDE_DIR}/{self._module_name}.hxx")
-            module_headers.sort()
-
-            mod_header = open(
-                os.path.join(HEADERS_OUTPUT_PATH, f"{self._module_name}_module.hxx"),
-                "w",
-                encoding="utf8",
-            )
-            mod_header.write(LICENSE_HEADER)
-            mod_header.write(f"#ifndef {self._module_name.upper()}_HXX\n")
-            mod_header.write(f"#define {self._module_name.upper()}_HXX\n\n\n")
-
+    def _write_module_header_file(self):
+        """Generate <module>_module.hxx, the C++ aggregate header included by .i."""
+        path = os.path.join(HEADERS_OUTPUT_PATH, f"{self._module_name}_module.hxx")
+        module_headers = glob.glob(f"{OCCT_INCLUDE_DIR}/{self._module_name}_*.hxx")
+        module_headers += glob.glob(f"{OCCT_INCLUDE_DIR}/{self._module_name}.hxx")
+        module_headers.sort()
+        with open(path, "w", encoding="utf8") as f:
+            f.write(LICENSE_HEADER)
+            f.write(f"#ifndef {self._module_name.upper()}_HXX\n")
+            f.write(f"#define {self._module_name.upper()}_HXX\n\n\n")
             if self._module_name == "XCAFDoc":
-                mod_header.write("#include<TDF_Label.hxx>\n")
+                f.write("#include<TDF_Label.hxx>\n")
             for module_header in filter_header_list(
                 module_headers, HXX_TO_EXCLUDE_FROM_BEING_INCLUDED
             ):
-                if (
-                    os.path.basename(module_header)
-                    not in HXX_TO_EXCLUDE_FROM_BEING_INCLUDED
-                ):
-                    mod_header.write(f"#include<{os.path.basename(module_header)}>\n")
-            mod_header.write(f"\n#endif // {self._module_name.upper()}_HXX\n")
-            # Issue with opencascade TopoDSToStep_Builder.hxx header
-            if self._module_name in ["TopoDSToStep", "StepToTopoDS"]:
-                swig_interface_file.write(f"#include<StepData_Factors.hxx>\n")
-            if self._module_name == "ShapeProcess":
-                swig_interface_file.write("#include <bitset>\nusing namespace std;\n")
-            swig_interface_file.write(f"#include<{self._module_name}_module.hxx>\n")
-            swig_interface_file.write("\n//Dependencies\n")
-            # Include all dependencies
-            for dep in PYTHON_MODULE_DEPENDENCY:
-                swig_interface_file.write(f"#include<{dep}_module.hxx>\n")
-            for add_dep in self._additional_dependencies:
-                swig_interface_file.write(f"#include<{add_dep}_module.hxx>\n")
-            # finally, use the current module namespace
-            # occt-800: BVH inner namespace also exposes free functions
-            # (e.g. BVH::EncodeMortonCode) that get wrapped by SWIG
-            if CURRENT_MODULE in ["TopoDS", "BVH"]:
-                swig_interface_file.write(f"using namespace {CURRENT_MODULE};\n")
+                basename = os.path.basename(module_header)
+                if basename not in HXX_TO_EXCLUDE_FROM_BEING_INCLUDED:
+                    f.write(f"#include<{basename}>\n")
+            f.write(f"\n#endif // {self._module_name.upper()}_HXX\n")
 
-            swig_interface_file.write("%};\n")
-
-            # add numpy related imports for related modules
-            if self._module_name in [
-                "Geom",
-                "Geom2d",
-                "Poly",
-                "TColStd",
-                "TColgp",
-                "TShort",
-            ]:
-                swig_interface_file.write(NUMPY_INIT_TEMPLATE)
-
-            for dep in PYTHON_MODULE_DEPENDENCY:
-                if is_module(dep):
-                    swig_interface_file.write(f"%import {dep}.i\n")
-            #
-            # The Exceptions and decorator
-            #
-            swig_interface_file.write("\n%pythoncode {\n")
-            swig_interface_file.write("from enum import IntEnum\n")
-            swig_interface_file.write("from OCC.Core.Exception import *\n")
-            swig_interface_file.write("};\n\n")
-
-            # for NCollection, we add template classes that can be processed
-            # automatically with SWIG
-            if self._module_name == "NCollection":
-                swig_interface_file.write(NCOLLECTION_HEADER_TEMPLATE)
-            if self._module_name == "math":
-                swig_interface_file.write(MATH_HEADER_TEMPLATE)
-            if self._module_name == "BVH":
-                swig_interface_file.write(BVH_HEADER_TEMPLATE)
-            if self._module_name == "Prs3d":
-                swig_interface_file.write(PRS3D_HEADER_TEMPLATE)
-            if self._module_name == "Graphic3d":
-                swig_interface_file.write(GRAPHIC3D_DEFINE_HEADER)
-            if self._module_name == "BRepAlgoAPI":
-                swig_interface_file.write(BREPALGOAPI_HEADER)
-            # write public enums
-            swig_interface_file.write(self._enums_str)
-            # write wrap_handles
-            swig_interface_file.write(self._wrap_handle_str)
-            # write type_defs
-            swig_interface_file.write(self._typedefs_str)
-            # write classes_definition
-            swig_interface_file.write(self._classes_str)
-            # write classes aliases
-            swig_interface_file.write(self._typedef_aliases_str)
-            # write deprecated functions
-            swig_interface_file.write(self._deprecated_swig_static_functions_str)
-            # write free_functions definition
-            swig_interface_file.write(self._free_functions_str)
-
-            # write additionnal topods special class in the TopoDS module. This is for
-            # taking into account the TopoDS::Edge namespace rather than a class.
+    def _write_swig_interface_file(self):
+        """Generate <module>.i, the SWIG interface file."""
+        path = os.path.join(SWIG_OUTPUT_PATH, f"{self._module_name}.i")
+        with open(path, "w", encoding="utf8") as f:
+            self._write_swig_preamble(f)
+            self._write_swig_cxx_includes(f)
+            self._write_swig_python_imports(f)
+            self._write_swig_module_specific_templates(f)
+            self._write_swig_body(f)
             if self._module_name == "TopoDS":
-                swig_interface_file.write(TOPODS_CLASS)
-            # then close the file
-            swig_interface_file.close()
+                f.write(TOPODS_CLASS)
 
-            # The EnumTemplates.i interface file, for all byref enums
-            enum_template_interface_file = open(
-                os.path.join(COMMON_OUTPUT_PATH, "EnumTemplates.i"),
-                "w",
-                encoding="utf8",
-            )
-            for enum_name in ALL_BYREF_ENUMS:
-                enum_template_interface_file.write(BYREF_ENUM_TEMPLATE % enum_name)
-            enum_template_interface_file.close()
-
-        #
-        # write pyi stub file
-        #
-        pyi_stub_file = open(
-            os.path.join(SWIG_OUTPUT_PATH, f"{self._module_name}.pyi"),
-            "w",
-            encoding="utf8",
+    def _write_swig_preamble(self, f):
+        f.write(LICENSE_HEADER)
+        # for instance: define GPDOCSTRING
+        docstring_macro = f"{self._module_name.upper()}DOCSTRING"
+        f.write(f"%define {docstring_macro}\n")
+        f.write(f'"{self._module_docstring}"\n')
+        f.write("%enddef\n")
+        f.write(
+            f'%module (package="OCC.Core", docstring={docstring_macro}) {self._module_name}\n\n'
         )
-        # first write the header
-        pyi_stub_file.write("from enum import IntEnum\n")
-        pyi_stub_file.write("from typing import overload, NewType, Optional, Tuple\n\n")
+        f.write(WIN_PRAGMAS)
+        for include in self._COMMON_INCLUDES:
+            f.write(f"%include ../common/{include}.i\n")
+        f.write("\n\n")
 
-        # pyi_stub_file.write("from OCC.Core.%s import *\n" % CURRENT_MODULE)
-        for dep in PYTHON_MODULE_DEPENDENCY:
+    def _write_swig_cxx_includes(self, f):
+        """Write the %{ ... %} block: C++ includes, dependencies, namespace using."""
+        f.write("%{\n")
+        if self._module_name == "AdvApp2Var":  # windows compilation issues
+            f.write("#if defined(_WIN32)\n#include <windows.h>\n#endif\n")
+        # Issue with opencascade TopoDSToStep_Builder.hxx header
+        if self._module_name in ["TopoDSToStep", "StepToTopoDS"]:
+            f.write("#include<StepData_Factors.hxx>\n")
+        if self._module_name == "ShapeProcess":
+            f.write("#include <bitset>\nusing namespace std;\n")
+        f.write(f"#include<{self._module_name}_module.hxx>\n")
+        f.write("\n//Dependencies\n")
+        for dep in state.python_module_dependency:
+            f.write(f"#include<{dep}_module.hxx>\n")
+        for add_dep in self._additional_dependencies:
+            f.write(f"#include<{add_dep}_module.hxx>\n")
+        # occt-800: BVH inner namespace also exposes free functions
+        # (e.g. BVH::EncodeMortonCode) that get wrapped by SWIG
+        if state.current_module in ["TopoDS", "BVH"]:
+            f.write(f"using namespace {state.current_module};\n")
+        f.write("%};\n")
+
+    def _write_swig_python_imports(self, f):
+        if self._module_name in self._NUMPY_MODULES:
+            f.write(NUMPY_INIT_TEMPLATE)
+        for dep in state.python_module_dependency:
             if is_module(dep):
-                pyi_stub_file.write(f"from OCC.Core.{dep} import *\n")
-        # we create NewTypes for some typedef which are just aliases. For instance, Prs3d_Presentation
-        # type is not defined in Python, whereas it's just an alias for Graphic3d_Structure. Then we define
-        # Prs3d_Presentation = NewType("Prs3d_Presentation", Graphic3d_Structure)
-        pyi_stub_file.write(self._typedefs_pyi_str)
-        # enums, wrapped by python class
-        pyi_stub_file.write(self._enums_pyi_str)
-        # then write classes and methods
-        pyi_stub_file.write(self._classes_pyi_str)
+                f.write(f"%import {dep}.i\n")
+        f.write("\n%pythoncode {\n")
+        f.write("from enum import IntEnum\n")
+        f.write("from OCC.Core.Exception import *\n")
+        f.write("};\n\n")
 
-        if self._module_name == "TopoDS":
-            pyi_stub_file.write(TOPODS_CLASS_PYI)
-        # and we finally write the aliases for static methods
-        pyi_stub_file.close()
+    def _write_swig_module_specific_templates(self, f):
+        """Inject NCollection / math / BVH / Prs3d / Graphic3d / BRepAlgoAPI blocks."""
+        for module_name, template_var in self._MODULE_TEMPLATE_INJECTIONS:
+            if self._module_name == module_name:
+                f.write(globals()[template_var])
+
+    def _write_swig_body(self, f):
+        f.write(self._enums_str)
+        f.write(self._wrap_handle_str)
+        f.write(self._typedefs_str)
+        f.write(self._classes_str)
+        f.write(self._typedef_aliases_str)
+        f.write(self._deprecated_swig_static_functions_str)
+        f.write(self._free_functions_str)
+
+    def _write_enum_templates_file(self):
+        path = os.path.join(COMMON_OUTPUT_PATH, "EnumTemplates.i")
+        with open(path, "w", encoding="utf8") as f:
+            for enum_name in state.all_byref_enums:
+                f.write(BYREF_ENUM_TEMPLATE % enum_name)
+
+    def _write_pyi_stub_file(self):
+        path = os.path.join(SWIG_OUTPUT_PATH, f"{self._module_name}.pyi")
+        with open(path, "w", encoding="utf8") as f:
+            f.write("from enum import IntEnum\n")
+            f.write("from typing import overload, NewType, Optional, Tuple\n\n")
+            for dep in state.python_module_dependency:
+                if is_module(dep):
+                    f.write(f"from OCC.Core.{dep} import *\n")
+            # NewTypes for typedefs that are plain aliases (e.g. Prs3d_Presentation
+            # is just an alias for Graphic3d_Structure):
+            #   Prs3d_Presentation = NewType("Prs3d_Presentation", Graphic3d_Structure)
+            f.write(self._typedefs_pyi_str)
+            f.write(self._enums_pyi_str)
+            f.write(self._classes_pyi_str)
+            if self._module_name == "TopoDS":
+                f.write(TOPODS_CLASS_PYI)
 
 
 def scan_typedef_aliases():
     """occt-800: scan a curated subset of OCCT headers for
     `typedef NCollection_X<...> Y;` declarations and populate
-    HARRAY_TYPEDEF_REWRITES. The rewrite is applied to parameter and return
+    state.harray_typedef_rewrites. The rewrite is applied to parameter and return
     types so SWIG type tags stay consistent across modules - e.g.
     NCollection_IndexedDataMap<TopoDS_Shape, TopTools_ListOfShape, ...>
     is rewritten to TopTools_IndexedDataMapOfShapeListOfShape.
 
-    Also pre-populate ALL_HARRAY1 / ALL_HARRAY2 / ALL_HSEQUENCE for every
+    Also pre-populate state.all_harray1 / state.all_harray2 / state.all_hsequence for every
     `typedef NCollection_HArrayN<X> Y;` so that process_handles emits a
     %wrap_handle and process_harrayN emits the fake-class definition that
     used to be supplied by the (removed) DEFINE_HARRAYN macro.
@@ -4230,23 +2994,23 @@ def scan_typedef_aliases():
             if tpl not in seen:
                 seen[tpl] = name
                 seen[tpl.replace(",", ", ")] = name
-            # Also register HArrayN typedefs into ALL_HARRAY{1,2} / ALL_HSEQUENCE
+            # Also register HArrayN typedefs into ALL_HARRAY{1,2} / state.all_hsequence
             # so process_handles / process_harray* generate the right wrapping.
             if tpl.startswith("NCollection_HArray1<"):
                 inner = tpl[len("NCollection_HArray1<"):-1]
-                if name not in ALL_HARRAY1:
-                    ALL_HARRAY1[name] = f"NCollection_Array1<{inner}>"
+                if name not in state.all_harray1:
+                    state.all_harray1[name] = f"NCollection_Array1<{inner}>"
             elif tpl.startswith("NCollection_HArray2<"):
                 inner = tpl[len("NCollection_HArray2<"):-1]
-                if name not in ALL_HARRAY2:
-                    ALL_HARRAY2[name] = f"NCollection_Array2<{inner}>"
+                if name not in state.all_harray2:
+                    state.all_harray2[name] = f"NCollection_Array2<{inner}>"
             elif tpl.startswith("NCollection_HSequence<"):
                 inner = tpl[len("NCollection_HSequence<"):-1]
-                if name not in ALL_HSEQUENCE:
-                    ALL_HSEQUENCE[name] = f"NCollection_Sequence<{inner}>"
-    HARRAY_TYPEDEF_REWRITES.extend(sorted(seen.items(), key=lambda kv: -len(kv[0])))
+                if name not in state.all_hsequence:
+                    state.all_hsequence[name] = f"NCollection_Sequence<{inner}>"
+    state.harray_typedef_rewrites.extend(sorted(seen.items(), key=lambda kv: -len(kv[0])))
     logging.info(
-        "Built %d typedef rewrite mappings from OCCT headers", len(HARRAY_TYPEDEF_REWRITES)
+        "Built %d typedef rewrite mappings from OCCT headers", len(state.harray_typedef_rewrites)
     )
 
 
@@ -4288,22 +3052,7 @@ def process_all_toolkits():
         process_toolkit(toolkit)
 
 
-def run_unit_tests():
-    test_is_module()
-    test_filter_header_list()
-    test_get_all_module_headers()
-    test_adapt_return_type()
-    test_filter_typedefs()
-    test_adapt_function_name()
-    test_adapt_param_type_and_name()
-    test_adapt_default_value()
-    test_check_dependency()
-    test_get_type_for_ncollection_array()
-
-
 if __name__ == "__main__":
-    # do it each time, does not take too much time, prevent regressions
-    run_unit_tests()
     # occt-800: pre-pass to map canonical NCollection template forms back
     # to the typedef aliases pythonocc actually wraps. Without this, modules
     # that take a parameter typed as `NCollection_X<...>` cannot be passed a
@@ -4320,5 +3069,5 @@ if __name__ == "__main__":
     total_time = end_time - start_time
     # footer
     logging.info(get_log_footer(total_time))
-    logging.info("Number of classes: %s", NB_TOTAL_CLASSES)
-    logging.info("Number of methods: %s", NB_TOTAL_METHODS)
+    logging.info("Number of classes: %s", state.nb_total_classes)
+    logging.info("Number of methods: %s", state.nb_total_methods)
