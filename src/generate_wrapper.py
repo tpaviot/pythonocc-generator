@@ -27,7 +27,6 @@ from operator import itemgetter
 import os
 import platform
 import re
-from string import Template
 import subprocess
 import sys
 import time
@@ -53,7 +52,55 @@ from _exclusions import (
     TEMPLATES_TO_EXCLUDE,
     TYPEDEF_TO_EXCLUDE,
 )
-from _swig_templates import *  # noqa: F401,F403  (template constants used throughout)
+from _swig_templates import (
+    BREPALGOAPI_HEADER,
+    BREPTOOLS_WRITE_READ_FROM_STRING,
+    BREPTOOLS_WRITE_READ_FROM_STRING_PYI,
+    BVH_HEADER_TEMPLATE,
+    BYREF_ENUM_TEMPLATE,
+    GETSTATE_TEMPLATE,
+    GRAPHIC3D_DEFINE_HEADER,
+    HARRAY1_TEMPLATE,
+    HARRAY1_TEMPLATE_PYI,
+    HARRAY2_TEMPLATE,
+    HARRAY2_TEMPLATE_PYI,
+    HASH_TOPODS_SHAPE_TEMPLATE,
+    HSEQUENCE_TEMPLATE,
+    HSEQUENCE_TEMPLATE_PYI,
+    LICENSE_HEADER,
+    MATH_HEADER_TEMPLATE,
+    NCOLLECTION_ARRAY1_EXTEND_TEMPLATE_PYI,
+    NCOLLECTION_DATAMAP_EXTEND_TEMPLATE,
+    NCOLLECTION_HEADER_TEMPLATE,
+    NCOLLECTION_LIST_EXTEND_TEMPLATE,
+    NCOLLECTION_LIST_EXTEND_TEMPLATE_PYI,
+    NCOLLECTION_SEQUENCE_EXTEND_TEMPLATE,
+    NCOLLECTION_SEQUENCE_EXTEND_TEMPLATE_PYI,
+    NUMPY_INIT_TEMPLATE,
+    PRS3D_HEADER_TEMPLATE,
+    SETSTATE_TEMPLATE,
+    SHAPE_ANALYSIS_FREE_BOUNDS_TEMPLATE,
+    SHAPE_ANALYSIS_FREE_BOUNDS_TEMPLATE_PYI,
+    STANDARD_TRANSIENT_OPERATORS_TEMPLATE,
+    TEMPLATE_DUMPJSON,
+    TEMPLATE_DUMPJSON_PYI,
+    TEMPLATE_GETTER_PYI,
+    TEMPLATE_GETTER_SETTER,
+    TEMPLATE_INITFROMJSON,
+    TEMPLATE_INITFROMJSON_PYI,
+    TEMPLATE_SETTER_PYI,
+    TEMPLATE__EQ__,
+    TEMPLATE__IADD__,
+    TEMPLATE__IMUL__,
+    TEMPLATE__ISUB__,
+    TEMPLATE__ITRUEDIV__,
+    TEMPLATE__NE__,
+    TIMESTAMP_TEMPLATE,
+    TOPODS_CLASS,
+    TOPODS_CLASS_PYI,
+    TOPODS_SHAPE_PICKLE_TEMPLATE,
+    WIN_PRAGMAS,
+)
 
 ##############################################
 # Load configuration file and setup settings #
@@ -203,13 +250,13 @@ def get_log_header():
     )
 
 
-def get_log_footer(total_time):
+def get_log_footer(elapsed_seconds):
     return """
 #################################################
 SWIG interface file generation completed in {:.2f}s
 #################################################
 """.format(
-        total_time
+        elapsed_seconds
     )
 
 
@@ -300,7 +347,10 @@ def need_handle(class_name):
     Handle to be defined. This is useful when headers define
     handles but no header"""
     # @TODO what about DEFINE_RTTI ?
-    return class_name in state.all_standard_handles or class_name in state.all_standard_transients
+    return (
+        class_name in state.all_standard_handles
+        or class_name in state.all_standard_transients
+    )
 
 
 _DEFINE_STANDARD_HANDLE_RE = re.compile(
@@ -323,7 +373,7 @@ _DEFINE_HSEQUENCE_RE = re.compile(r"DEFINE_HSEQUENCE[\s]*\([\w\s]+,+[\w\s]+\)")
 # dangling //comment. OCCT 8.0 places these attributes mid-declaration (e.g.
 # inside `using ... = X;`) which would otherwise produce malformed C++.
 _STANDARD_DEPRECATED_RE = re.compile(
-    r'Standard_DEPRECATED(?:_STD|_WARNING)?\s*\(\s*'
+    r"Standard_DEPRECATED(?:_STD|_WARNING)?\s*\(\s*"
     r'(?:".*?(?:\\"|[^"])*?"(?:\s*".*?(?:\\"|[^"])*?")*)\s*\)'
 )
 _USING_ALIAS_RE = re.compile(r"\busing\s+([A-Za-z_]\w*)\s*=\s*([^;]+);")
@@ -404,6 +454,7 @@ def _convert_using_to_typedef(header_content):
     headers (GCE2d_MakeEllipse, ...) became `using` aliases for renamed
     classes. Skip template aliases (RHS contains '<'): they would produce SWIG
     %template instantiations against templates we don't expose."""
+
     def _replace(match):
         rhs = match.group(2).strip()
         if "<" in rhs:
@@ -451,7 +502,7 @@ def parse_header(header_filename):
         except CppHeaderParser.CppParseError as e:
             error_message = f"Error: cannot parse {header_filename}\n"
             error_message += f"Reason: {e}"
-            raise RuntimeError(error_message)
+            raise RuntimeError(error_message) from e
     return cpp_header
 
 
@@ -614,7 +665,9 @@ def process_templates_from_typedefs(list_of_typedefs):
                     wrapper_str += f"%template({template_name}) {template_type};\n"
                     # derive the matching ListIterator typedef name from the
                     # list typedef (TopTools_ListOfShape -> TopTools_ListIteratorOfListOfShape)
-                    list_iter_name = template_name.replace("ListOf", "ListIteratorOfListOf", 1)
+                    list_iter_name = template_name.replace(
+                        "ListOf", "ListIteratorOfListOf", 1
+                    )
                     wrapper_str += NCOLLECTION_LIST_EXTEND_TEMPLATE.substitute(
                         {
                             "NCollection_List_Template_Instanciation": template_type,
@@ -687,11 +740,17 @@ def process_templates_from_typedefs(list_of_typedefs):
                     # path used in OCCT 7.9 with the DEFINE_HARRAY1 macro).
                     inner = template_type.split("<", 1)[1].rsplit(">", 1)[0].strip()
                     if template_type.startswith("NCollection_HArray1<"):
-                        state.all_harray1[template_name] = f"NCollection_Array1<{inner}>"
+                        state.all_harray1[template_name] = (
+                            f"NCollection_Array1<{inner}>"
+                        )
                     elif template_type.startswith("NCollection_HArray2<"):
-                        state.all_harray2[template_name] = f"NCollection_Array2<{inner}>"
+                        state.all_harray2[template_name] = (
+                            f"NCollection_Array2<{inner}>"
+                        )
                     else:
-                        state.all_hsequence[template_name] = f"NCollection_Sequence<{inner}>"
+                        state.all_hsequence[template_name] = (
+                            f"NCollection_Sequence<{inner}>"
+                        )
                 else:
                     wrapper_str += f"%template({template_name}) {template_type};\n"
 
@@ -705,7 +764,7 @@ def process_templates_from_typedefs(list_of_typedefs):
                 else:
                     h_typ = (template_type.split("<")[2]).split(">")[0]
                     typ = f"opencascade::handle<{h_typ}>"
-            elif template_name.endswith("Iter"):
+            else:  # template_name.endswith("Iter") — guaranteed by the elif above
                 typ = template_name.split("Iter")[0]
             wrapper_str += (
                 f"%template({template_name}) NCollection_TListIterator<{typ}>;\n"
@@ -779,7 +838,9 @@ def process_typedefs(typedefs_dict):
             module = h_typ.split("_")[0]
             if module != state.current_module:
                 # need to be added to the list of dependent object
-                if (module not in state.python_module_dependency) and (is_module(module)):
+                if (module not in state.python_module_dependency) and (
+                    is_module(module)
+                ):
                     state.python_module_dependency.append(module)
 
     sorted_list_of_typedefs = sorted(filtered_typedef_dict.keys())
@@ -1656,8 +1717,12 @@ _OPERATOR_WRAPPERS = {
 }
 
 _PRIMITIVE_BY_REF_RETURNS = {
-    "Standard_Integer &", "Standard_Real &", "Standard_Boolean &",
-    "Standard_Integer&", "Standard_Real&", "Standard_Boolean&",
+    "Standard_Integer &",
+    "Standard_Real &",
+    "Standard_Boolean &",
+    "Standard_Integer&",
+    "Standard_Real&",
+    "Standard_Boolean&",
 }
 
 
@@ -1692,7 +1757,9 @@ def _build_getter_setter_pair(f, function_name, return_type):
         adapted_type = adapt_param_type(param["type"])
         getter_params_type_and_names.append(f"{adapted_type} {param['name']}")
         getter_params_only_names.append(param["name"])
-        getter_param_hints.append(f"{param['name']}: {adapt_type_for_hint(adapted_type)}")
+        getter_param_hints.append(
+            f"{param['name']}: {adapt_type_for_hint(adapted_type)}"
+        )
 
     setter_params_type_and_names = getter_params_type_and_names + [
         f"{modified_return_type} value"
@@ -1755,7 +1822,10 @@ def _build_swig_parameter_list(f):
 
         if "array_size" in param:
             # entries are [type, name] or [type, name, default_value]
-            param_type_and_name = [param_type, f"{param['name']}[{param['array_size']}]"]
+            param_type_and_name = [
+                param_type,
+                f"{param['name']}[{param['array_size']}]",
+            ]
         else:
             param_type_and_name = [param_type, param["name"]]
 
@@ -1770,8 +1840,14 @@ def _build_swig_parameter_list(f):
     return parameters_types_and_names, parameters_definition_strs, False
 
 
-def _build_typehint(f, function_name, parameters_types_and_names, return_type,
-                    parent_class_name, overload):
+def _build_typehint(
+    f,
+    function_name,
+    parameters_types_and_names,
+    return_type,
+    parent_class_name,
+    overload,
+):
     """Build the .pyi type-hint string for a function."""
     if "operator" in function_name:
         return ""
@@ -1818,7 +1894,8 @@ def _build_typehint(f, function_name, parameters_types_and_names, return_type,
         if len(par) == 3:
             hint_def_value, adapted = adapt_type_hint_default_value(par[2])
             par_typ = (
-                f"Optional[{par_typ}] = {hint_def_value}" if adapted
+                f"Optional[{par_typ}] = {hint_def_value}"
+                if adapted
                 else f"Optional[{par_typ}]"
             )
         par_nam, success = adapt_type_hint_parameter_name(par[1])
@@ -1890,7 +1967,10 @@ def process_function(f, overload=False):
     # only wrap free functions that live in the current module's namespace
     function_namespace = f["namespace"]
     function_parent_class_name = f["parent"]["name"] if f["parent"] is not None else ""
-    if function_namespace[:-2] != state.current_module and function_parent_class_name == "":
+    if (
+        function_namespace[:-2] != state.current_module
+        and function_parent_class_name == ""
+    ):
         return "", ""
 
     # Build the docstring before _compute_return_type so the order of
@@ -1919,8 +1999,12 @@ def process_function(f, overload=False):
 
     str_function += "(" + ", ".join(parameters_definition_strs) + ");\n"
     str_typehint = _build_typehint(
-        f, function_name, parameters_types_and_names, return_type,
-        parent_class_name, overload,
+        f,
+        function_name,
+        parameters_types_and_names,
+        return_type,
+        parent_class_name,
+        overload,
     )
 
     # collapse occasional duplicate "const const" produced by adapt_return_type
@@ -2332,16 +2416,17 @@ def _synthesize_primitive_ref_getter_setters(class_name, other_methods):
             continue
         out += "\t\t%extend{\n"
         out += f"\t\t\t{cpp_type} Get{mname}() {{ return self->{mname}(); }}\n"
-        out += f"\t\t\tvoid Set{mname}({cpp_type} value) {{ self->{mname}() = value; }}\n"
+        out += (
+            f"\t\t\tvoid Set{mname}({cpp_type} value) {{ self->{mname}() = value; }}\n"
+        )
         out += "\t\t};\n"
     return out
 
 
-def _class_specific_extensions(class_name, class_def_str):
+def _class_specific_extensions(class_name):
     """Return (extra_def_str, extra_pyi_str) for classes that need ad-hoc SWIG
     extensions (TDF_Label name accessor, BRepTools serialization, math_*
-    setters, TopoDS_Shape pickling, ...). Takes class_def_str so far so we
-    can detect DumpJson/InitFromJson presence."""
+    setters, TopoDS_Shape pickling, ...)."""
     extra_def, extra_pyi = "", ""
     if class_name in ("BRepTools", "BRepTools_ShapeSet"):
         extra_def += BREPTOOLS_WRITE_READ_FROM_STRING
@@ -2364,7 +2449,9 @@ def _class_specific_extensions(class_name, class_def_str):
     # through `bool& ASCIIMode()`. Add a Python-friendly setter shim.
     if class_name == "StlAPI_Writer":
         extra_def += "\t\t%extend{\n"
-        extra_def += "\t\t\tvoid SetASCIIMode(bool theMode) { self->ASCIIMode() = theMode; }\n"
+        extra_def += (
+            "\t\t\tvoid SetASCIIMode(bool theMode) { self->ASCIIMode() = theMode; }\n"
+        )
         extra_def += "\t\t};\n"
     # occt-800: math_Matrix / math_Vector still expose mutable Value() returning
     # a reference but Python cannot assign through it - add Get/SetValue shims.
@@ -2375,8 +2462,12 @@ def _class_specific_extensions(class_name, class_def_str):
         extra_def += "\t\t};\n"
     if class_name == "math_Vector":
         extra_def += "\t\t%extend{\n"
-        extra_def += "\t\t\tdouble GetValue(int idx) const { return self->Value(idx); }\n"
-        extra_def += "\t\t\tvoid SetValue(int idx, double v) { self->Value(idx) = v; }\n"
+        extra_def += (
+            "\t\t\tdouble GetValue(int idx) const { return self->Value(idx); }\n"
+        )
+        extra_def += (
+            "\t\t\tvoid SetValue(int idx, double v) { self->Value(idx) = v; }\n"
+        )
         extra_def += "\t\t};\n"
     return extra_def, extra_pyi
 
@@ -2486,9 +2577,11 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
                 continue
             if typedef_value in TYPEDEF_TO_EXCLUDE:
                 continue
-            typedef_str += (
-                f"typedef {klass._public_typedefs[typedef_value]} {typedef_value};\n"
-            )
+            # CppHeaderParser exposes the typedef name list publicly via
+            # klass["typedefs"]["public"] but only the underscore-prefixed
+            # _public_typedefs dict carries the resolved type strings.
+            typedef_type = klass._public_typedefs[typedef_value]  # noqa: SLF001
+            typedef_str += f"typedef {typedef_type} {typedef_value};\n"
         class_def_str += typedef_str
         # process class enums here
         class_enums_list = klass["enums"]["public"]
@@ -2590,7 +2683,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             "pass\n    @staticmethod", "@staticmethod"
         )
 
-        extra_def, extra_pyi = _class_specific_extensions(class_name, class_def_str)
+        extra_def, extra_pyi = _class_specific_extensions(class_name)
         class_def_str += extra_def
         class_pyi_str += extra_pyi
         # then terminate the class definition
@@ -2779,7 +2872,9 @@ class ModuleWrapper:
             free_functions
         )
         # other dependencies
-        self._additional_dependencies = additional_dependencies + state.header_dependency
+        self._additional_dependencies = (
+            additional_dependencies + state.header_dependency
+        )
 
         # deprecated static functions after move to swig-4.1.1
         self._deprecated_swig_static_functions_str = process_deprecated(
@@ -2790,14 +2885,14 @@ class ModuleWrapper:
         self.generate_SWIG_files()
 
     # Module-specific header injections (matched on module name).
-    _MODULE_TEMPLATE_INJECTIONS = (
-        ("NCollection", "NCOLLECTION_HEADER_TEMPLATE"),
-        ("math", "MATH_HEADER_TEMPLATE"),
-        ("BVH", "BVH_HEADER_TEMPLATE"),
-        ("Prs3d", "PRS3D_HEADER_TEMPLATE"),
-        ("Graphic3d", "GRAPHIC3D_DEFINE_HEADER"),
-        ("BRepAlgoAPI", "BREPALGOAPI_HEADER"),
-    )
+    _MODULE_TEMPLATE_INJECTIONS = {
+        "NCollection": NCOLLECTION_HEADER_TEMPLATE,
+        "math": MATH_HEADER_TEMPLATE,
+        "BVH": BVH_HEADER_TEMPLATE,
+        "Prs3d": PRS3D_HEADER_TEMPLATE,
+        "Graphic3d": GRAPHIC3D_DEFINE_HEADER,
+        "BRepAlgoAPI": BREPALGOAPI_HEADER,
+    }
 
     _COMMON_INCLUDES = (
         "CommonIncludes",
@@ -2901,9 +2996,9 @@ class ModuleWrapper:
 
     def _write_swig_module_specific_templates(self, f):
         """Inject NCollection / math / BVH / Prs3d / Graphic3d / BRepAlgoAPI blocks."""
-        for module_name, template_var in self._MODULE_TEMPLATE_INJECTIONS:
-            if self._module_name == module_name:
-                f.write(globals()[template_var])
+        template = self._MODULE_TEMPLATE_INJECTIONS.get(self._module_name)
+        if template is not None:
+            f.write(template)
 
     def _write_swig_body(self, f):
         f.write(self._enums_str)
@@ -2957,9 +3052,19 @@ def scan_typedef_aliases():
     unavailable in the importing module.
     """
     target_modules = (
-        "TopTools_", "TColgp_", "TColStd_", "TColGeom_", "TColGeom2d_", "TColQuantity_",
-        "TShort_", "Quantity_", "Poly_", "Storage_",
-        "Interface_", "TDF_", "TDataStd_",
+        "TopTools_",
+        "TColgp_",
+        "TColStd_",
+        "TColGeom_",
+        "TColGeom2d_",
+        "TColQuantity_",
+        "TShort_",
+        "Quantity_",
+        "Poly_",
+        "Storage_",
+        "Interface_",
+        "TDF_",
+        "TDataStd_",
     )
     nc_pattern = re.compile(
         r"\btypedef\s+(NCollection_(?:H?Array1|H?Array2|H?Sequence|"
@@ -2997,20 +3102,23 @@ def scan_typedef_aliases():
             # Also register HArrayN typedefs into ALL_HARRAY{1,2} / state.all_hsequence
             # so process_handles / process_harray* generate the right wrapping.
             if tpl.startswith("NCollection_HArray1<"):
-                inner = tpl[len("NCollection_HArray1<"):-1]
+                inner = tpl[len("NCollection_HArray1<") : -1]
                 if name not in state.all_harray1:
                     state.all_harray1[name] = f"NCollection_Array1<{inner}>"
             elif tpl.startswith("NCollection_HArray2<"):
-                inner = tpl[len("NCollection_HArray2<"):-1]
+                inner = tpl[len("NCollection_HArray2<") : -1]
                 if name not in state.all_harray2:
                     state.all_harray2[name] = f"NCollection_Array2<{inner}>"
             elif tpl.startswith("NCollection_HSequence<"):
-                inner = tpl[len("NCollection_HSequence<"):-1]
+                inner = tpl[len("NCollection_HSequence<") : -1]
                 if name not in state.all_hsequence:
                     state.all_hsequence[name] = f"NCollection_Sequence<{inner}>"
-    state.harray_typedef_rewrites.extend(sorted(seen.items(), key=lambda kv: -len(kv[0])))
+    state.harray_typedef_rewrites.extend(
+        sorted(seen.items(), key=lambda kv: -len(kv[0]))
+    )
     logging.info(
-        "Built %d typedef rewrite mappings from OCCT headers", len(state.harray_typedef_rewrites)
+        "Built %d typedef rewrite mappings from OCCT headers",
+        len(state.harray_typedef_rewrites),
     )
 
 

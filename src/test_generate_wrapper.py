@@ -9,7 +9,6 @@ import sys
 
 from _exclusions import HXX_TO_EXCLUDE_FROM_CPPPARSER
 from generate_wrapper import (
-    adapt_default_value,
     adapt_function_name,
     adapt_param_type_and_name,
     adapt_return_type,
@@ -53,7 +52,10 @@ def test_get_type_for_ncollection_array() -> None:
 
 def test_adapt_param_type_and_name():
     assert adapt_param_type_and_name("Standard_Real & Xp") == "Standard_Real &OutValue"
-    assert adapt_param_type_and_name("Standard_Integer & I") == "Standard_Integer &OutValue"
+    assert (
+        adapt_param_type_and_name("Standard_Integer & I")
+        == "Standard_Integer &OutValue"
+    )
     assert adapt_param_type_and_name("int & j") == "Standard_Integer &OutValue"
     assert adapt_param_type_and_name("double & x") == "Standard_Real &OutValue"
 
