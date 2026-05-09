@@ -361,9 +361,6 @@ TEMPLATES_TO_EXCLUDE = [
     "Extrema_Array2OfPOnSurfParams",
     "TopOpeBRepDS_Array1OfDataMapOfIntegerListOfInterference",
     "TopTrans_Array2OfOrientation",
-    # occt-800: NCollection_PackedMap is a heavily-templated class with
-    # constexpr/std::conditional that SWIG cannot parse
-    "NCollection_PackedMap",
     # occt-800: std::array template, SWIG would emit push_back/insert which
     # std::array doesn't support
     "Graphic3d_ArrayOfIndexedMapOfStructure",
@@ -492,6 +489,26 @@ public:
   const TheItemType& Value(const int theRow, const int theCol) const;
   TheItemType& ChangeValue(const int theRow, const int theCol);
   void Init(const TheItemType& theValue);
+};
+
+// occt-800: NCollection_PackedMap is a heavily-templated class with
+// constexpr/std::conditional that SWIG cannot fully parse. Declare a
+// minimal SWIG-visible shim so %template instantiations like
+// `TColStd_PackedMapOfInteger = NCollection_PackedMap<int>` link and
+// expose the small surface that pythonocc users actually need.
+template <typename IntType>
+class NCollection_PackedMap
+{
+public:
+  NCollection_PackedMap();
+  size_t Size() const;
+  size_t Extent() const;
+  size_t NbBuckets() const;
+  bool IsEmpty() const;
+  void Clear();
+  bool Add(IntType theValue);
+  bool Contains(IntType theValue) const;
+  bool Remove(IntType theValue);
 };
 
 template <typename TheItemType>
@@ -678,9 +695,21 @@ class $NCollection_Array1_Template_Instanciation:
 NCOLLECTION_LIST_EXTEND_TEMPLATE = Template(
     """
 %extend $NCollection_List_Template_Instanciation {
+    // occt-800: re-export Size/Length/IsEmpty per instantiation; the
+    // NCollection_BaseList header is wrapped but its inherited methods
+    // don't propagate cleanly to the typedef-aliased Python class.
+    size_t Size() const noexcept { return $$self->Size(); }
+    int Length() const noexcept { return $$self->Length(); }
+    bool IsEmpty() const noexcept { return $$self->IsEmpty(); }
     %pythoncode {
     def __len__(self):
         return self.Size()
+
+    def __iter__(self):
+        it = $NCollection_ListIterator_Name(self)
+        while it.More():
+            yield it.Value()
+            it.Next()
     }
 };
 """
@@ -1615,18 +1644,20 @@ def process_templates_from_typedefs(list_of_typedefs):
                     # then the NCollection_Array1 can be wrapped as a numpy array and the
                     # macro Array1NumpyTemplate is used.
                     base_type = template_type[:-1].split("NCollection_Array1<")[1]
-                    if base_type == "Standard_ShortReal":
+                    # occt-800 typedefs use plain `double`/`int`/`float` instead
+                    # of the Standard_* aliases; treat both forms identically
+                    if base_type in ("Standard_ShortReal", "float"):
                         wrapper_str += "%apply (float* IN_ARRAY1, int DIM1) { (float* numpyArray1, int nRows1) };\n"
                         wrapper_str += "%apply (float* ARGOUT_ARRAY1, int DIM1) { (float* numpyArray1Argout, int nRows1Argout) };\n"
-                        wrapper_str += f"Array1NumpyTemplate({template_name}, float, Standard_ShortReal)\n"
-                    elif base_type == "Standard_Real":
+                        wrapper_str += f"Array1NumpyTemplate({template_name}, float, {base_type})\n"
+                    elif base_type in ("Standard_Real", "double"):
                         wrapper_str += "%apply (double* IN_ARRAY1, int DIM1) { (double* numpyArray1, int nRows1) };\n"
                         wrapper_str += "%apply (double* ARGOUT_ARRAY1, int DIM1) { (double* numpyArray1Argout, int nRows1Argout) };\n"
-                        wrapper_str += f"Array1NumpyTemplate({template_name}, double, Standard_Real)\n"
-                    elif base_type == "Standard_Integer":
+                        wrapper_str += f"Array1NumpyTemplate({template_name}, double, {base_type})\n"
+                    elif base_type in ("Standard_Integer", "int"):
                         wrapper_str += "%apply (long long* IN_ARRAY1, int DIM1) { (long long* numpyArray1, int nRows1) };\n"
                         wrapper_str += "%apply (long long* ARGOUT_ARRAY1, int DIM1) { (long long* numpyArray1Argout, int nRows1Argout) };\n"
-                        wrapper_str += f"Array1NumpyTemplate({template_name}, long long, Standard_Integer)\n"
+                        wrapper_str += f"Array1NumpyTemplate({template_name}, long long, {base_type})\n"
                     elif base_type == "Poly_Triangle":
                         wrapper_str += "%apply (long long* IN_ARRAY2, int DIM1, int DIM2) { (long long* numpyArray2, int nRows2, int nDims2) };\n"
                         wrapper_str += "%apply (long long* ARGOUT_ARRAY1, int DIM1) { (long long* numpyArray2Argout, int aSizeArgout) };\n"
@@ -1660,18 +1691,19 @@ def process_templates_from_typedefs(list_of_typedefs):
                     base_type = template_type.split("NCollection_Array2<")[1].split(
                         ">"
                     )[0]
-                    if base_type == "Standard_ShortReal":
+                    # occt-800: typedefs use plain `double`/`int`/`float`
+                    if base_type in ("Standard_ShortReal", "float"):
                         wrapper_str += "%apply (float* IN_ARRAY2, int DIM1, int DIM2) { (float* numpyArray2, int nRows2, int nCols2) };\n"
                         wrapper_str += "%apply (float* ARGOUT_ARRAY1, int DIM1) { (float* numpyArray2Argout, int aSizeArgout) };\n"
-                        wrapper_str += f"Array2NumpyTemplate({template_name}, float, Standard_ShortReal)\n"
-                    elif base_type == "Standard_Real":
+                        wrapper_str += f"Array2NumpyTemplate({template_name}, float, {base_type})\n"
+                    elif base_type in ("Standard_Real", "double"):
                         wrapper_str += "%apply (double* IN_ARRAY2, int DIM1, int DIM2) { (double* numpyArray2, int nRows2, int nCols2) };\n"
                         wrapper_str += "%apply (double* ARGOUT_ARRAY1, int DIM1) { (double* numpyArray2Argout, int aSizeArgout) };\n"
-                        wrapper_str += f"Array2NumpyTemplate({template_name}, double, Standard_Real)\n"
-                    elif base_type == "Standard_Integer":
+                        wrapper_str += f"Array2NumpyTemplate({template_name}, double, {base_type})\n"
+                    elif base_type in ("Standard_Integer", "int"):
                         wrapper_str += "%apply (long long* IN_ARRAY2, int DIM1, int DIM2) { (long long* numpyArray2, int nRows2, int nCols2) };\n"
                         wrapper_str += "%apply (long long* ARGOUT_ARRAY1, int DIM1) { (long long* numpyArray2Argout, int aSizeArgout) };\n"
-                        wrapper_str += f"Array2NumpyTemplate({template_name}, long long, Standard_Integer)\n"
+                        wrapper_str += f"Array2NumpyTemplate({template_name}, long long, {base_type})\n"
                     # 2D elements
                     elif base_type in ["gp_XY", "gp_Vec2d", "gp_Pnt2d", "gp_Dir2d"]:
                         wrapper_str += "%apply (double* IN_ARRAY3, int DIM1, int DIM2, int DIM3) { (double* numpyArray3, int nRows3, int nCols3, int nDims3) };\n"
@@ -1690,8 +1722,14 @@ def process_templates_from_typedefs(list_of_typedefs):
                         wrapper_str += f"%template({template_name}) {template_type};\n"
                 elif "NCollection_List" in template_type:
                     wrapper_str += f"%template({template_name}) {template_type};\n"
+                    # derive the matching ListIterator typedef name from the
+                    # list typedef (TopTools_ListOfShape -> TopTools_ListIteratorOfListOfShape)
+                    list_iter_name = template_name.replace("ListOf", "ListIteratorOfListOf", 1)
                     wrapper_str += NCOLLECTION_LIST_EXTEND_TEMPLATE.substitute(
-                        {"NCollection_List_Template_Instanciation": template_type}
+                        {
+                            "NCollection_List_Template_Instanciation": template_type,
+                            "NCollection_ListIterator_Name": list_iter_name,
+                        }
                     )
                     pyi_str += NCOLLECTION_LIST_EXTEND_TEMPLATE_PYI.substitute(
                         {
@@ -1725,7 +1763,7 @@ def process_templates_from_typedefs(list_of_typedefs):
                     wrapper_str += f"%ignore {template_type}::Items;\n"
                     wrapper_str += f"%ignore {template_type}::KeyValues;\n"
                     wrapper_str += f"%template({template_name}) {template_type};\n"
-                    if "<Standard_Integer" in template_type:
+                    if "<Standard_Integer" in template_type or "<int" in template_type:
                         wrapper_str += NCOLLECTION_DATAMAP_EXTEND_TEMPLATE.substitute(
                             {
                                 "NCollection_DataMap_Template_Instanciation": template_type,
@@ -2042,16 +2080,17 @@ def process_enums(enums_list):
                     adapted_enum_value -= number_of_string_aliases
             enum_str += f"\t{enum_value['name']} = {adapted_enum_value},\n"
             if python_proxy:
-                enum_python_proxies += (
-                    f"\t{enum_value['name']} = {adapted_enum_value}\n"
-                )
-                enum_pyi_str += f"    {enum_value['name']}: int = ...\n"
+                # occt-800: rename enum members that collide with Python
+                # keywords (e.g. `None` in GProp_PEquation::Type)
+                py_name = enum_value["name"]
+                if py_name in keyword.kwlist:
+                    py_name = f"{py_name}_"
+                enum_python_proxies += f"\t{py_name} = {adapted_enum_value}\n"
+                enum_pyi_str += f"    {py_name}: int = ...\n"
                 # then, in both proxy and stub files, we create the alias for each named enum,
                 # for instance
                 # gp_IntrisicXYZ = gp_EulerSequence.gp_IntrinsicXYZ
-                alias_str += (
-                    f"{enum_value['name']} = {enum_name}.{enum_value['name']}\n"
-                )
+                alias_str += f"{py_name} = {enum_name}.{py_name}\n"
         enum_python_proxies += alias_str
         enum_pyi_str += "\n" + alias_str
         enum_str += "};\n\n"
@@ -2078,6 +2117,9 @@ def _apply_typedef_rewrites(text):
     must run before the IndexedDataMap that contains it can match)."""
     if not HARRAY_TYPEDEF_REWRITES:
         return text
+    # CppHeaderParser emits ">>" as "> >" - collapse the gap so the rewrite
+    # keys (which are normalized) match.
+    text = re.sub(r">\s+>", ">>", text)
     for _ in range(5):  # bounded loop, 5 nesting levels is more than enough
         prev = text
         for tpl, name in HARRAY_TYPEDEF_REWRITES:
@@ -3624,6 +3666,46 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         )
         class_def_str += other_method_definitions
         class_pyi_str += other_method_type_hints
+        # occt-800: synthesize SetXxx/GetXxx pairs for parameterless methods
+        # that return a reference to a primitive type (Standard_Real&,
+        # Standard_Integer&, Standard_Boolean&). OCCT 8.0 dropped the
+        # explicit setters, exposing only a `Type& Foo()` accessor that
+        # Python cannot assign through. Restores the API pythonocc has
+        # exposed since 2014 (commit 78c320c3).
+        for m in other_methods:
+            rtype = (m.get("rtnType") or "").strip()
+            if "&" not in rtype:
+                continue
+            if m.get("parameters"):
+                continue
+            # skip when the reference is const (read-only) - we cannot emit
+            # a setter through it
+            if rtype.startswith("const") or " const " in rtype:
+                continue
+            # only primitive scalars
+            base = rtype.replace("&", "").strip()
+            primitive_map = {
+                "Standard_Real": "double",
+                "double": "double",
+                "Standard_Integer": "int",
+                "int": "int",
+                "Standard_Boolean": "bool",
+                "bool": "bool",
+            }
+            if base not in primitive_map:
+                continue
+            cpp_type = primitive_map[base]
+            mname = m["name"]
+            if mname == class_name or mname.startswith("~"):
+                continue
+            class_def_str += "\t\t%extend{\n"
+            class_def_str += (
+                f"\t\t\t{cpp_type} Get{mname}() {{ return self->{mname}(); }}\n"
+            )
+            class_def_str += (
+                f"\t\t\tvoid Set{mname}({cpp_type} value) {{ self->{mname}() = value; }}\n"
+            )
+            class_def_str += "\t\t};\n"
 
         # after that change, we remove the "pass" if it appears to be unnecessary
         # for example
@@ -3668,6 +3750,20 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         if class_name == "StlAPI_Writer":
             class_def_str += "\t\t%extend{\n"
             class_def_str += "\t\t\tvoid SetASCIIMode(bool theMode) { self->ASCIIMode() = theMode; }\n"
+            class_def_str += "\t\t};\n"
+        # occt-800: math_Matrix / math_Vector still expose a mutable
+        # `Value()` returning a reference but Python cannot assign through
+        # a returned reference - add Get/SetValue shims (the names match
+        # the signatures pythonocc has been using since 7.x).
+        if class_name == "math_Matrix":
+            class_def_str += "\t\t%extend{\n"
+            class_def_str += "\t\t\tdouble GetValue(int row, int col) const { return self->Value(row, col); }\n"
+            class_def_str += "\t\t\tvoid SetValue(int row, int col, double v) { self->Value(row, col) = v; }\n"
+            class_def_str += "\t\t};\n"
+        if class_name == "math_Vector":
+            class_def_str += "\t\t%extend{\n"
+            class_def_str += "\t\t\tdouble GetValue(int idx) const { return self->Value(idx); }\n"
+            class_def_str += "\t\t\tvoid SetValue(int idx, double v) { self->Value(idx) = v; }\n"
             class_def_str += "\t\t};\n"
         # then terminate the class definition
         class_def_str += "};\n\n"
@@ -4099,6 +4195,7 @@ def scan_typedef_aliases():
     target_modules = (
         "TopTools_", "TColgp_", "TColStd_", "TColGeom_", "TColGeom2d_", "TColQuantity_",
         "TShort_", "Quantity_", "Poly_", "Storage_",
+        "Interface_", "TDF_", "TDataStd_",
     )
     nc_pattern = re.compile(
         r"\btypedef\s+(NCollection_(?:H?Array1|H?Array2|H?Sequence|"
@@ -4124,6 +4221,12 @@ def scan_typedef_aliases():
             if tpl.count("<") != tpl.count(">"):
                 continue
             name = match.group(2)
+            # Skip "local" typedefs that aren't a fully-qualified
+            # `Module_Something` alias (e.g. `VectorOfPoint` in
+            # BRepBuilderAPI_VertexInspector.hxx) - they aren't visible
+            # outside their declaring header.
+            if "_" not in name:
+                continue
             if tpl not in seen:
                 seen[tpl] = name
                 seen[tpl.replace(",", ", ")] = name

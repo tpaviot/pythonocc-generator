@@ -761,7 +761,7 @@ OCCT_MODULES = [
     ("MAT", [], []),
     ("MAT2d", ["Geom2d", "Message"], ["MAT2d_SketchExplorer", "MAT2d_CutCurve"]),
     ("Bisector", ["Message"], []),
-    ("BRepMAT2d", ["TopLoc", "Message", "Geom2d"], []),
+    ("BRepMAT2d", ["TopLoc", "Message", "Geom2d", "TColGeom2d"], []),
     (
         "BRepCheck",
         ["TopLoc", "Message", "Geom2d", "Geom", "Adaptor3d", "Adaptor2d"],
@@ -2693,7 +2693,14 @@ OCCT_MODULES = [
         ],
         [],
         {
-            "STEPControl_Reader": ["ReadStream::56e2192726935a4eac14c64d046ad127"]
+            # occt-800: skip the ReadStream overload that takes a
+            # DESTEP_Parameters argument; the std::istream typemap can't
+            # be applied through the SWIG dispatcher when there are
+            # several overloads that look identical at type-check time.
+            "STEPControl_Reader": [
+                "ReadStream::56e2192726935a4eac14c64d046ad127",
+                "ReadStream::375c18315782813f2bf585453ffed5c3",
+            ]
         },  # ReadStream
     ),
     (
@@ -3261,6 +3268,10 @@ OCCT_MODULES = [
             "PCDM",
             "TShort",
             "Graphic3d",
+            # occt-800: cast tables propagate Interface_/MoniTool_ types via
+            # RWMeshExport_ConfigurationNode.hxx
+            "Interface",
+            "MoniTool",
         ],
         [],
     ),
