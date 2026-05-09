@@ -33,15 +33,7 @@ import time
 
 import CppHeaderParser
 
-from Modules import (
-    TOOLKIT_Foundation,
-    TOOLKIT_Modeling,
-    TOOLKIT_Visualisation,
-    TOOLKIT_DataExchange,
-    TOOLKIT_OCAF,
-    TOOLKIT_VTK,
-    OCCT_MODULES,
-)
+from _modules import OCCT_MODULES, TOOLKITS
 from _exclusions import (
     ENUMS_TO_EXLUDE,
     HXX_TO_EXCLUDE_FROM_BEING_INCLUDED,
@@ -146,18 +138,6 @@ log.addHandler(console_handler)
 # Global variables #
 ####################
 DOC_URL = "https://dev.opencascade.org/doc/occt-7.9.0/refman/html"
-
-ALL_TOOLKITS = [
-    TOOLKIT_Foundation,
-    TOOLKIT_Modeling,
-    TOOLKIT_Visualisation,
-    TOOLKIT_DataExchange,
-    TOOLKIT_OCAF,
-    TOOLKIT_VTK,
-]
-TOOLKITS = {}
-for tk in ALL_TOOLKITS:
-    TOOLKITS |= tk
 
 # check if SWIG_OUTPUT_PATH exists, otherwise create it
 if not os.path.isdir(SWIG_OUTPUT_PATH):

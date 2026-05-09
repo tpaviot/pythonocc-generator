@@ -2,7 +2,8 @@
 import glob
 import itertools
 import os
-from Modules import *
+
+from _modules import TOOLKITS
 
 occt_src_dir = "/home/thomas/Téléchargements/occt-770/src"
 occt_toolkits = glob.glob(os.path.join(occt_src_dir, "TK*"))
@@ -19,18 +20,6 @@ for occt_tk in occt_toolkits:
 
 # build the flattened list of opencascade modules
 occt_modules = list(itertools.chain(*list(t.values())))
-
-ALL_TOOLKITS = [
-    TOOLKIT_Foundation,
-    TOOLKIT_Modeling,
-    TOOLKIT_Visualisation,
-    TOOLKIT_DataExchange,
-    TOOLKIT_OCAF,
-    TOOLKIT_VTK,
-]
-TOOLKITS = {}
-for tk in ALL_TOOLKITS:
-    TOOLKITS |= tk
 
 # compare the two dictionnaries
 for tk_name, modules in t.items():

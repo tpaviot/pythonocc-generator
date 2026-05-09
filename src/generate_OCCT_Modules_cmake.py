@@ -1,49 +1,29 @@
-from Modules import *
+from pathlib import Path
 
-occt_toolkits = [
-    TOOLKIT_Foundation,
-    TOOLKIT_Modeling,
-    TOOLKIT_Visualisation,
-    TOOLKIT_DataExchange,
-    TOOLKIT_OCAF,
-]
+import yaml
 
-occt_toolkit = occt_toolkits[0]
+
+with open(Path(__file__).with_name("modules.yaml"), "r", encoding="utf8") as f:
+    toolkits = yaml.safe_load(f)["toolkits"]
+
+
+def _emit_packages(packages):
+    for package, modules in packages.items():
+        print(f"# {package}")
+        for module in modules:
+            print(f"\t{module}")
+
+
 print("LIST(APPEND OCCT_TOOLKIT_MODEL\n")
-packages = occt_toolkit.keys()
-for package in packages:
-    print(f"# {package}")
-    for module in occt_toolkit[package]:
-        print("\t%s" % module)
-
-occt_toolkit = occt_toolkits[1]
-packages = occt_toolkit.keys()
-for package in packages:
-    print(f"# {package}")
-    for module in occt_toolkit[package]:
-        print("\t%s" % module)
+_emit_packages(toolkits["Foundation"])
+_emit_packages(toolkits["Modeling"])
 print(")\n")
 print("LIST(APPEND OCCT_TOOLKIT_VISUALIZATION\n")
-occt_toolkit = occt_toolkits[2]
-packages = occt_toolkit.keys()
-for package in packages:
-    print(f"# {package}")
-    for module in occt_toolkit[package]:
-        print("\t%s" % module)
+_emit_packages(toolkits["Visualisation"])
 print(")\n")
 print("LIST(APPEND OCCT_TOOLKIT_DATAEXCHANGE\n")
-occt_toolkit = occt_toolkits[3]
-packages = occt_toolkit.keys()
-for package in packages:
-    print(f"# {package}")
-    for module in occt_toolkit[package]:
-        print("\t%s" % module)
+_emit_packages(toolkits["DataExchange"])
 print(")\n")
 print("LIST(APPEND OCCT_TOOLKIT_OCAF\n")
-occt_toolkit = occt_toolkits[4]
-packages = occt_toolkit.keys()
-for package in packages:
-    print(f"# {package}")
-    for module in occt_toolkit[package]:
-        print("\t%s" % module)
+_emit_packages(toolkits["OCAF"])
 print(")\n")
