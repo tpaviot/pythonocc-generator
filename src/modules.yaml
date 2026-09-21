@@ -10,8 +10,8 @@ toolkits:
     TKMath: [BSplCLib, BSplSLib, BVH, Bnd, CSLib, Convert, ElCLib, ElSLib, Expr, ExprIntrp, GeomAbs, PLib, Poly, Precision, TColgp, TopLoc, gp, math]
   Modeling:
     TKBRep: [BRep, BRepAdaptor, BRepLProp, BRepTools, BinTools, TopExp, TopTools, TopoDS]
-    TKG2d: [Adaptor2d, Geom2d, Geom2dAdaptor, LProp, TColGeom2d]
-    TKG3d: [Adaptor3d, AdvApprox, GProp, Geom, GeomAdaptor, GeomLProp, TColGeom, TopAbs]
+    TKG2d: [Adaptor2d, Geom2d, Geom2dAdaptor, Geom2dEval, LProp, TColGeom2d]
+    TKG3d: [Adaptor3d, AdvApprox, GProp, Geom, GeomAdaptor, GeomEval, GeomLProp, TColGeom, TopAbs]
     TKGeomBase: [AdvApp2Var, AppCont, AppDef, AppParCurves, Approx, BndLib, CPnts, Extrema, FEmTool, GC, GCE2d, GCPnts, Geom2dConvert, GeomConvert, GeomLib, GeomProjLib, GeomTools, Hermit, IntAna, IntAna2d, ProjLib, gce]
     TKBO: [BOPAlgo, BOPDS, BOPTools, BRepAlgoAPI, IntTools]
     TKBool: [BRepAlgo, BRepFill, BRepProj, TopOpeBRep, TopOpeBRepBuild, TopOpeBRepDS, TopOpeBRepTool]
@@ -196,6 +196,10 @@ modules:
 
   - name: Geom2dAdaptor
 
+  - name: Geom2dEval
+    # classes nested in the GeomEval_Rep*Desc namespaces, not supported
+    exclude_classes: [Base, Full, DerivBounded, Mapped, Map1d, Domain1d]
+
   - name: GProp
 
   - name: Geom
@@ -205,6 +209,10 @@ modules:
 
   - name: GeomAdaptor
     additional_deps: [Geom2d, Adaptor2d, Message]
+
+  - name: GeomEval
+    # classes nested in the GeomEval_Rep*Desc namespaces, not supported
+    exclude_classes: [Base, Full, DerivBounded, Mapped, Map1d, Domain1d, Map2d, Domain2d]
 
   - name: AdvApprox
     additional_deps: [Message]
