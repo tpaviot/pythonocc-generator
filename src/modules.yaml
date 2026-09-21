@@ -548,7 +548,6 @@ modules:
 
   - name: BRepAlgoAPI
     additional_deps: [TopLoc, BRepAdaptor, IntTools, GeomAdaptor, Geom2d, Geom2dAdaptor, Extrema, Adaptor2d, IntSurf, BOPDS, IntPatch, Approx, Adaptor3d, Message, AppParCurves, Bnd, BRep, TShort, Poly, IntCurvesFace, TopTools]
-    exclude_classes: [BRepAlgoAPI_BuilderAlgo]
 
   - name: BOPCol
     exclude_classes: [BOPCol_Array1, BOPCol_MemBlock, BOPCol_NCVector, BOPCol_TBBCnt, BOPCol_TBBContextCnt, BOPCol_TBBContextFunctor, BOPCol_TBBFunctor, BOPCol_Functor, BOPCol_Cnt, BOPCol_Cnt_Perform, BOPCol_ContextFunctor, BOPCol_ContextCnt]
@@ -703,7 +702,7 @@ modules:
       BRepAlgo_DSAccess: [IsDeleted]
 
   - name: BRepFill
-    additional_deps: [FEmTool, TColGeom2d, PLib, TopLoc, Plate, AdvApp2Var, TColGeom, Message, Convert, Approx, Adaptor2d, MAT, Geom2d, Geom, Adaptor3d]
+    additional_deps: [FEmTool, TColGeom2d, PLib, TopLoc, Plate, AdvApp2Var, TColGeom, Message, Convert, Approx, Adaptor2d, MAT, Geom2d, Geom, Adaptor3d, LProp]
 
   - name: BRepProj
     additional_deps: [TopLoc, Message]
@@ -751,7 +750,7 @@ modules:
       BRepFeat_MakeLinearForm: [TransformShapeFU]
 
   - name: BRepOffsetAPI
-    additional_deps: [Bnd, AppParCurves, MAT, TColgp, BRepAlgo, FEmTool, TopOpeBRepBuild, Plate, Bisector, TColStd, PLib, BRepMAT2d, TColGeom2d, BRepAdaptor, BRepClass3d, BRep, BRepTools, Quantity, Adaptor3d, TopLoc, AdvApp2Var, TColGeom, IntSurf, Message, Convert, Intf, TShort, TopOpeBRepDS, Poly, TopOpeBRepTool, Extrema, Geom2d, IntCurveSurface, GeomAdaptor, Geom2dAdaptor, BRepBuilderAPI, GeomPlate, Adaptor2d, Geom, BRepAlgo, ChFiDS, TopTools]
+    additional_deps: [Bnd, AppParCurves, MAT, TColgp, BRepAlgo, FEmTool, TopOpeBRepBuild, Plate, Bisector, TColStd, PLib, BRepMAT2d, TColGeom2d, BRepAdaptor, BRepClass3d, BRep, BRepTools, Quantity, Adaptor3d, TopLoc, AdvApp2Var, TColGeom, IntSurf, Message, Convert, Intf, TShort, TopOpeBRepDS, Poly, TopOpeBRepTool, Extrema, Geom2d, IntCurveSurface, GeomAdaptor, Geom2dAdaptor, BRepBuilderAPI, GeomPlate, Adaptor2d, Geom, BRepAlgo, ChFiDS, TopTools, LProp]
     exclude_member_functions:
       BRepOffsetAPI_FindContigousEdges: [NbEdges]
 

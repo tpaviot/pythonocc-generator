@@ -1940,6 +1940,8 @@ def _should_skip_function(f, function_name):
     """Early-return cases where the function should not be wrapped at all."""
     if f["destructor"] or f["returns"] == "~":
         return True
+    if f.get("deleted"):  # occt-800: e.g. `X(const X&) = delete;` in public sections
+        return True
     if "TYPENAME" in f["rtnType"]:  # something in NCollection
         return True
     if function_name in ("DEFINE_STANDARD_RTTIEXT", "Handle"):
