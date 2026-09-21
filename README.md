@@ -50,6 +50,7 @@ path: /home/you/Devel/pythonocc-core
 cd src
 python generate_wrapper.py            # all toolkits
 python generate_wrapper.py gp BRepPrimAPI   # selected modules only
+python generate_wrapper.py --config other.conf   # another configuration file
 ```
 
 Output goes to:

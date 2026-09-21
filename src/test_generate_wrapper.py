@@ -5,10 +5,12 @@ relative `wrapper_generator.conf` next to generate_wrapper.py is picked up
 during import).
 """
 
+import os
 import sys
 
 from _exclusions import HXX_TO_EXCLUDE_FROM_CPPPARSER
 from generate_wrapper import (
+    OCCT_INCLUDE_DIR,
     adapt_function_name,
     adapt_param_type_and_name,
     adapt_return_type,
@@ -28,6 +30,31 @@ def test_filter_header_list():
         ) == ["something"]
 
 
+def test_filter_header_list_platform_headers():
+    headers = [
+        os.path.join(OCCT_INCLUDE_DIR, name)
+        for name in (
+            "WNT_Window.hxx",
+            "OSD_WNT.hxx",
+            "Xw_Window_X11.hxx",
+            "Image_XWD.hxx",
+            "Cocoa_Window.hxx",
+            "Storage_StreamUnknownTypeError.hxx",
+            "gp_Pnt.hxx",
+        )
+    ]
+    assert [os.path.basename(h) for h in filter_header_list(headers, [])] == [
+        "Storage_StreamUnknownTypeError.hxx",
+        "gp_Pnt.hxx",
+    ]
+
+
+def test_filter_header_list_ignores_include_dir_path():
+    # only the basename must be checked, not the directory it lives in
+    headers = ["/opt/occt-X11-build/include/gp_Pnt.hxx"]
+    assert filter_header_list(headers, []) == headers
+
+
 def test_get_all_module_headers():
     # 'Standard' should return some files (at lease 10)
     # this number depends on the OCCT version
@@ -41,6 +68,19 @@ def test_get_all_module_headers():
 def test_filter_typedefs():
     a_dict = {"1": "one", "{": "two", "NCollection_DelMapNode": "3"}
     assert filter_typedefs(a_dict) == {"1": "one"}
+
+
+def test_filter_typedefs_excluded_callback():
+    # TPCallBackFunc is both in TYPEDEF_TO_EXCLUDE and ends with "Func":
+    # it must be removed once, not raise a KeyError
+    a_dict = {
+        "TPCallBackFunc": "void (*)(int)",
+        "Foo_Function": "void",
+        "Foo_fp": "void",
+        "Foo_Ptr": "Foo_Bar *",
+        "Foo_Alias": "Foo_Bar",
+    }
+    assert filter_typedefs(a_dict) == {"Foo_Alias": "Foo_Bar"}
 
 
 def test_get_type_for_ncollection_array() -> None:

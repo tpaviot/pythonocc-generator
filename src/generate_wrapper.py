@@ -17,6 +17,7 @@
 ###########
 # imports #
 ###########
+import argparse
 import configparser
 import datetime
 import glob
@@ -97,51 +98,71 @@ from _swig_templates import (
 ##############################################
 # Load configuration file and setup settings #
 ##############################################
-config = configparser.ConfigParser()
-config.read("wrapper_generator.conf")
-# pythonocc version
-PYTHONOCC_VERSION = config.get("pythonocc-core", "version")
-# oce headers location
-OCCT_INCLUDE_DIR = config.get("OCCT", "include_dir")
-if not os.path.isdir(OCCT_INCLUDE_DIR):
-    raise AssertionError(f"OCCT include dir {OCCT_INCLUDE_DIR} not found.")
-# swig output path
-PYTHONOCC_CORE_PATH = config.get("pythonocc-core", "path")
-COMMON_OUTPUT_PATH = os.path.join(PYTHONOCC_CORE_PATH, "src", "SWIG_files", "common")
-SWIG_OUTPUT_PATH = os.path.join(PYTHONOCC_CORE_PATH, "src", "SWIG_files", "wrapper")
-HEADERS_OUTPUT_PATH = os.path.join(PYTHONOCC_CORE_PATH, "src", "SWIG_files", "headers")
+DEFAULT_CONFIG_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "wrapper_generator.conf"
+)
+
+
+def load_config(config_path):
+    """Read wrapper_generator.conf and set the module-level path settings.
+
+    Called once at import time with the default path (so the helper functions
+    are usable from the unit tests), then again from main() if --config is
+    given. No filesystem check is done here, see check_paths().
+    """
+    global PYTHONOCC_VERSION, OCCT_INCLUDE_DIR, PYTHONOCC_CORE_PATH
+    global COMMON_OUTPUT_PATH, SWIG_OUTPUT_PATH, HEADERS_OUTPUT_PATH
+    config = configparser.ConfigParser()
+    if not config.read(config_path, encoding="utf8"):
+        raise FileNotFoundError(f"Configuration file {config_path} not found.")
+    # pythonocc version
+    PYTHONOCC_VERSION = config.get("pythonocc-core", "version")
+    # oce headers location
+    OCCT_INCLUDE_DIR = config.get("OCCT", "include_dir")
+    # swig output path
+    PYTHONOCC_CORE_PATH = config.get("pythonocc-core", "path")
+    swig_files_path = os.path.join(PYTHONOCC_CORE_PATH, "src", "SWIG_files")
+    COMMON_OUTPUT_PATH = os.path.join(swig_files_path, "common")
+    SWIG_OUTPUT_PATH = os.path.join(swig_files_path, "wrapper")
+    HEADERS_OUTPUT_PATH = os.path.join(swig_files_path, "headers")
+
+
+def check_paths():
+    """Fail early if the OCCT headers are missing, and create the output
+    directories the generator writes into."""
+    if not os.path.isdir(OCCT_INCLUDE_DIR):
+        raise FileNotFoundError(f"OCCT include dir {OCCT_INCLUDE_DIR} not found.")
+    for output_path in (SWIG_OUTPUT_PATH, HEADERS_OUTPUT_PATH, COMMON_OUTPUT_PATH):
+        os.makedirs(output_path, exist_ok=True)
+
+
+load_config(DEFAULT_CONFIG_PATH)
 
 GENERATE_SWIG_FILES = (
     True  # if set to False, skip .i generator, to avoid recompile everything
 )
 
-###################################################
-# Set logger, to log both to a file and to stdout #
-# code from https://stackoverflow.com/questions/13733552/logger-configuration-to-log-to-file-and-print-to-stdout
-###################################################
-log_formatter = logging.Formatter("[%(levelname)-5.5s]  %(message)s")
-log = logging.getLogger()
-log.setLevel(logging.INFO)
-log_file_name = os.path.join(SWIG_OUTPUT_PATH, "generator.log")
-# ensure log file is emptied before running the generator
-with open(log_file_name, "w", encoding="utf8"):
-    pass
 
-file_handler = logging.FileHandler(log_file_name)
-file_handler.setFormatter(log_formatter)
-log.addHandler(file_handler)
-console_handler = logging.StreamHandler(sys.stdout)
-console_handler.setFormatter(log_formatter)
-log.addHandler(console_handler)
+def setup_logging():
+    """Log both to stdout and to ${SWIG_OUTPUT_PATH}/generator.log, which is
+    emptied at each run. Must be called after check_paths()."""
+    log_formatter = logging.Formatter("[%(levelname)-5.5s]  %(message)s")
+    log = logging.getLogger()
+    log.setLevel(logging.INFO)
+    file_handler = logging.FileHandler(
+        os.path.join(SWIG_OUTPUT_PATH, "generator.log"), mode="w", encoding="utf8"
+    )
+    file_handler.setFormatter(log_formatter)
+    log.addHandler(file_handler)
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(log_formatter)
+    log.addHandler(console_handler)
+
 
 ####################
 # Global variables #
 ####################
 DOC_URL = "https://dev.opencascade.org/doc/occt-7.9.0/refman/html"
-
-# check if SWIG_OUTPUT_PATH exists, otherwise create it
-if not os.path.isdir(SWIG_OUTPUT_PATH):
-    os.mkdir(SWIG_OUTPUT_PATH)
 
 
 class GeneratorState:
@@ -204,11 +225,19 @@ def get_log_header():
     Useful for development
     """
     os_name = f"{platform.system()} {platform.architecture()[0]} {platform.release()}"
-    generator_git_revision = (
-        subprocess.check_output(["git", "rev-parse", "--short", "HEAD"])
-        .strip()
-        .decode("utf8")
-    )
+    # the generator may be run from a tarball, without git available
+    try:
+        generator_git_revision = (
+            subprocess.check_output(
+                ["git", "rev-parse", "--short", "HEAD"],
+                cwd=os.path.dirname(os.path.abspath(__file__)),
+                stderr=subprocess.DEVNULL,
+            )
+            .strip()
+            .decode("utf8")
+        )
+    except (OSError, subprocess.CalledProcessError):
+        generator_git_revision = "unknown"
     # find the OCC VERSION targeted by the wrapper
     # the OCCT version is available from the Standard_Version.hxx header
     # e.g. define OCC_VERSION_COMPLETE     "7.4.0"
@@ -271,15 +300,17 @@ def filter_header_list(header_list, exclusion_list):
         if os.path.join(OCCT_INCLUDE_DIR, header_to_remove) in header_list:
             header_list.remove(os.path.join(OCCT_INCLUDE_DIR, header_to_remove))
     # remove platform dependent files
-    # this is done to have the same SWIG files on every platform
-    # wnt specific
-    header_list = [x for x in header_list if "WNT" not in x.lower()]
-    header_list = [x for x in header_list if "wnt" not in x.lower()]
-    # linux
-    header_list = [x for x in header_list if "X11" not in x]
-    header_list = [x for x in header_list if "XWD" not in x]
-    # and osx
-    header_list = [x for x in header_list if "Cocoa" not in x]
+    # this is done to have the same SWIG files on every platform:
+    # wnt specific (WNT_*, OSD_WNT), linux (X11, XWD) and osx (Cocoa).
+    # Match on the basename only, and case-sensitively, so that neither the
+    # include dir path nor names such as Storage_StreamUnknownTypeError
+    # ("unknowntype" contains "wnt") are caught by accident.
+    platform_markers = ("WNT", "X11", "XWD", "Cocoa")
+    header_list = [
+        x
+        for x in header_list
+        if not any(marker in os.path.basename(x) for marker in platform_markers)
+    ]
     return header_list
 
 
@@ -497,21 +528,25 @@ def filter_typedefs(typedef_dict):
     for key in list(typedef_dict):
         if key in TYPEDEF_TO_EXCLUDE:
             del typedef_dict[key]
+            continue
         # remove typedefs that ends with function callbacks
         if key.endswith("Function"):
             logging.info("Skip typedef %s because ends with 'Function'", key)
             del typedef_dict[key]
+            continue
         # remove typedefs tha ends with _fp (means function pointer?)
         if key.endswith("_fp"):
             logging.info("Skip typedef %s because ends with '_fp'", key)
             del typedef_dict[key]
-        # remove typedefs tha ends with _fp (means function pointer?)
+            continue
+        # remove typedefs tha ends with Func (function pointer)
         if key.endswith("Func"):
             logging.info("Skip typedef %s because ends with 'Func'", key)
             del typedef_dict[key]
+            continue
         # occt-800: skip pointer typedefs (e.g. typedef NCollection_List<X>* Plos)
         # SWIG cannot generate %template(...) Foo<X>*; with a pointer
-        if key in typedef_dict and typedef_dict[key].rstrip().endswith("*"):
+        if typedef_dict[key].rstrip().endswith("*"):
             logging.info("Skip typedef %s because target is a pointer type", key)
             del typedef_dict[key]
     for key in list(typedef_dict):
@@ -3140,7 +3175,25 @@ def process_all_toolkits():
         process_toolkit(toolkit)
 
 
-if __name__ == "__main__":
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Generate pythonocc-core SWIG interface files and stubs."
+    )
+    parser.add_argument(
+        "modules",
+        nargs="*",
+        help="OCCT modules to process (default: all toolkits)",
+    )
+    parser.add_argument(
+        "--config",
+        default=DEFAULT_CONFIG_PATH,
+        help="path to the configuration file (default: %(default)s)",
+    )
+    args = parser.parse_args(argv)
+    if args.config != DEFAULT_CONFIG_PATH:
+        load_config(args.config)
+    check_paths()
+    setup_logging()
     # occt-800: pre-pass to map canonical NCollection template forms back
     # to the typedef aliases pythonocc actually wraps. Without this, modules
     # that take a parameter typed as `NCollection_X<...>` cannot be passed a
@@ -3148,8 +3201,8 @@ if __name__ == "__main__":
     scan_typedef_aliases()
     logging.info(get_log_header())
     start_time = time.perf_counter()
-    if len(sys.argv) > 1:
-        for module_to_process in sys.argv[1:]:
+    if args.modules:
+        for module_to_process in args.modules:
             process_module(module_to_process)
     else:
         process_all_toolkits()
@@ -3159,3 +3212,7 @@ if __name__ == "__main__":
     logging.info(get_log_footer(total_time))
     logging.info("Number of classes: %s", state.nb_total_classes)
     logging.info("Number of methods: %s", state.nb_total_methods)
+
+
+if __name__ == "__main__":
+    main()
