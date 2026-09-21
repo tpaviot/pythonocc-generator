@@ -1,51 +1,70 @@
 parameters:
   name: 'Conda build job'
-  vmImage: 'Ubuntu-18.04'
+  vmImage: 'ubuntu-24.04'
   py_maj: '3'
-  py_min: '6'
+  py_min: '12'
+  # must match src/golden/OCCT_VERSION, otherwise the golden test fails
+  occt_version: '8.0.1'
 
 jobs:
 - job: ${{ parameters.name }}
-  timeoutInMinutes: 360
-  
+  timeoutInMinutes: 60
+
   pool:
     vmImage: ${{ parameters.vmImage }}
-    
-  steps: 
-  - ${{ if or(contains(parameters.vmImage, 'macOS'),contains(parameters.vmImage, 'Ubuntu')) }}:
+
+  steps:
+  - ${{ if or(contains(parameters.vmImage, 'macOS'),contains(parameters.vmImage, 'ubuntu')) }}:
     - bash: echo "##vso[task.prependpath]$CONDA/bin"
       displayName: 'Add conda to PATH'
   - ${{ if contains(parameters.vmImage, 'win') }}:
     - powershell: Write-Host "##vso[task.prependpath]$env:CONDA\Scripts"
       displayName: 'Add conda to PATH'
 
+  # conda-forge only: the defaults channel requires accepting Anaconda's
+  # terms of service, which fails in an unattended CI run
   - bash: |
-        conda config --set always_yes yes --set changeps1 no && \
-        conda create --yes --name pythonoccgen python=${{ parameters.py_maj }}.${{ parameters.py_min }} && \
-        conda info -a && \
-        source activate pythonoccgen && \
-        conda install -c conda-forge occt=7.9.0 pip && \
-        pip install -r requirements.txt && \
-        conda list
+        set -ex
+        conda create --yes --quiet --name pythonoccgen -c conda-forge --override-channels \
+          python=${{ parameters.py_maj }}.${{ parameters.py_min }} pip
+        conda run -n pythonoccgen python -m pip install -r requirements.txt pytest
+        conda list -n pythonoccgen
     displayName: 'Install dependencies from conda-forge'
 
+  # the generator only reads the OCCT headers: install the occt package alone,
+  # without its dependencies, in a separate prefix
   - bash: |
-        mkdir -p pythonocc-core/src/SWIG_files/wrapper && \
-        mkdir -p pythonocc-core/src/SWIG_files/headers && \
-        mkdir -p pythonocc-core/src/SWIG_files/common
-    displayName: 'Create the pythonocc-core file structure'
+        set -ex
+        OCCT_PREFIX=$(Agent.TempDirectory)/occt
+        conda create --yes --quiet --no-deps -p $OCCT_PREFIX -c conda-forge --override-channels \
+          "occt=${{ parameters.occt_version }}=novtk*"
+        CONFIG=$(Agent.TempDirectory)/wrapper_generator.conf
+        printf '[OCCT]\ninclude_dir: %s\n[pythonocc-core]\nversion: %s\npath: %s\n' \
+          $OCCT_PREFIX/include/opencascade ${{ parameters.occt_version }} \
+          $(Build.SourcesDirectory)/pythonocc-core > $CONFIG
+        cat $CONFIG
+        # read by generate_wrapper.py in the next steps
+        echo "##vso[task.setvariable variable=PYTHONOCC_GENERATOR_CONFIG]$CONFIG"
+    displayName: 'Install OCCT ${{ parameters.occt_version }} headers'
 
   - bash: |
-        pwd && \
-        cd src && \
-        source activate pythonoccgen && \
-        python generate_wrapper.py
-    displayName: 'Run pythonocc-generator'
+        set -ex
+        cd src
+        GOLDEN_REQUIRED=1 conda run -n pythonoccgen --no-capture-output python -m pytest -rs
+    displayName: 'Run unit and golden tests'
 
   - bash: |
-        wget https://github.com/Open-Cascade-SAS/OCCT/archive/refs/tags/V7_9_0.tar.gz && \
-        tar -zxvf V7_9_0.tar.gz && \
-        cd src && \
-        source activate pythonoccgen && \
-        ./export_occt_structure_to_json.py --output occt_toolkits.json ../OCCT-7_9_0
+        set -ex
+        cd src
+        conda run -n pythonoccgen --no-capture-output python generate_wrapper.py
+    displayName: 'Run pythonocc-generator on all modules'
+
+  # export_occt_structure_to_json.py expects the src/TK*/PACKAGES layout of
+  # OCCT 7.x sources, OCCT 8 moved toolkits under src/<Module>/
+  - bash: |
+        set -ex
+        wget -q https://github.com/Open-Cascade-SAS/OCCT/archive/refs/tags/V7_9_0.tar.gz
+        tar -zxf V7_9_0.tar.gz
+        cd src
+        conda run -n pythonoccgen --no-capture-output python export_occt_structure_to_json.py --output occt_toolkits.json ../OCCT-7_9_0
     displayName: 'Run occt structure exporter'

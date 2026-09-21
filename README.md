@@ -100,15 +100,32 @@ cd src
 pytest test_generate_wrapper.py
 ```
 
-The unit tests cover the string-adapting helpers. The strongest regression
-guard, however, is to keep a snapshot of the generated `SWIG_files/` directory
-before a change and `diff -r` against the new run; the generator output is
-reproducible byte-for-byte (only `generator.log` carries a timestamp).
+`test_generate_wrapper.py` covers the string-adapting helpers.
+`test_golden.py` generates a few representative modules (`gp`, `TopoDS`,
+`Geom`, `TColStd`, `XCAFDoc`, ...) and compares them byte-for-byte with the
+snapshot stored in `src/golden/`. The snapshot depends on the OCCT headers it
+was generated from (version in `src/golden/OCCT_VERSION`); with other headers
+the test is skipped, unless `GOLDEN_REQUIRED=1` is set.
+
+After an intended change of the output, refresh the snapshot and review the
+diff before committing it:
+
+```sh
+UPDATE_GOLDEN=1 pytest test_golden.py
+git diff --stat golden/
+```
+
+To test against another configuration file than `wrapper_generator.conf`
+(e.g. other OCCT headers), set `PYTHONOCC_GENERATOR_CONFIG=/path/to/file.conf`.
 
 ## CI
 
-Azure Pipelines (`azure-pipelines.yml`) builds the wrappers nightly on
-Ubuntu 22.04 across Python 3.9 / 3.10 / 3.11.
+Azure Pipelines (`azure-pipelines.yml`, jobs defined in `conda-build.yml`)
+runs nightly and on `master` / `review/*` pushes, on Ubuntu 22.04 / 24.04
+across Python 3.9 to 3.12. Each job installs the OCCT headers from conda-forge
+(version set by `occt_version` in `conda-build.yml`, must match
+`src/golden/OCCT_VERSION`), runs the unit and golden tests, then generates all
+the modules.
 
 ## Further reading
 

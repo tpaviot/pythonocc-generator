@@ -98,7 +98,9 @@ from _swig_templates import (
 ##############################################
 # Load configuration file and setup settings #
 ##############################################
-DEFAULT_CONFIG_PATH = os.path.join(
+# the PYTHONOCC_GENERATOR_CONFIG environment variable, if set, overrides the
+# wrapper_generator.conf next to this script (used by the CI)
+DEFAULT_CONFIG_PATH = os.environ.get("PYTHONOCC_GENERATOR_CONFIG") or os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "wrapper_generator.conf"
 )
 
