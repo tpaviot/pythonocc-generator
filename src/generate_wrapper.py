@@ -3078,7 +3078,9 @@ def scan_typedef_aliases():
         r"<[^;]+?>)\s+([A-Za-z_]\w*)\s*;"
     )
     seen = {}
-    for header_path in glob.glob(os.path.join(OCCT_INCLUDE_DIR, "*.hxx")):
+    # sorted: glob order depends on the filesystem, and both the registries
+    # order and which alias wins for a given template depend on it
+    for header_path in sorted(glob.glob(os.path.join(OCCT_INCLUDE_DIR, "*.hxx"))):
         basename = os.path.basename(header_path)
         if not any(basename.startswith(prefix) for prefix in target_modules):
             continue
