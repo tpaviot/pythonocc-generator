@@ -3113,7 +3113,6 @@ def scan_typedef_aliases():
         "TColStd_",
         "TColGeom_",
         "TColGeom2d_",
-        "TColQuantity_",
         "TShort_",
         "Quantity_",
         "Poly_",
