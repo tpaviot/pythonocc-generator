@@ -3089,6 +3089,14 @@ class ModuleWrapper:
                 f.write(TOPODS_CLASS_PYI)
 
 
+# Nested typedefs of classes that are not wrapped, rewritten to an equivalent
+# wrapped type. XSAlgo is not wrapped: it would import Transfer and XSControl,
+# which themselves use XSAlgo_ShapeProcessor::ParameterMap.
+_NESTED_TYPEDEF_REWRITES = [
+    ("XSAlgo_ShapeProcessor::ParameterMap", "Resource_DataMapOfAsciiStringAsciiString"),
+]
+
+
 def scan_typedef_aliases():
     """occt-800: scan a curated subset of OCCT headers for
     `typedef NCollection_X<...> Y;` declarations and populate
@@ -3173,6 +3181,7 @@ def scan_typedef_aliases():
     state.harray_typedef_rewrites.extend(
         sorted(seen.items(), key=lambda kv: -len(kv[0]))
     )
+    state.harray_typedef_rewrites.extend(_NESTED_TYPEDEF_REWRITES)
     logging.info(
         "Built %d typedef rewrite mappings from OCCT headers",
         len(state.harray_typedef_rewrites),

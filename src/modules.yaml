@@ -186,6 +186,11 @@ modules:
     exclude_classes: ["*"]
 
   - name: Geom2d
+    # GeomEval_Rep*Desc types are not wrapped (and would make Geom2d import Geom2dEval)
+    exclude_member_functions:
+      Geom2d_BezierCurve: [EvalRepresentation, SetEvalRepresentation]
+      Geom2d_BSplineCurve: [EvalRepresentation, SetEvalRepresentation]
+      Geom2d_OffsetCurve: [EvalRepresentation, SetEvalRepresentation]
 
   - name: LProp
 
@@ -203,6 +208,16 @@ modules:
   - name: GProp
 
   - name: Geom
+    # GeomEval_Rep*Desc types are not wrapped (and would make Geom import GeomEval)
+    exclude_member_functions:
+      Geom_BezierCurve: [EvalRepresentation, SetEvalRepresentation]
+      Geom_BezierSurface: [EvalRepresentation, SetEvalRepresentation]
+      Geom_BSplineCurve: [EvalRepresentation, SetEvalRepresentation]
+      Geom_BSplineSurface: [EvalRepresentation, SetEvalRepresentation]
+      Geom_OffsetCurve: [EvalRepresentation, SetEvalRepresentation]
+      Geom_OffsetSurface: [EvalRepresentation, SetEvalRepresentation]
+      Geom_SurfaceOfLinearExtrusion: [EvalRepresentation, SetEvalRepresentation]
+      Geom_SurfaceOfRevolution: [EvalRepresentation, SetEvalRepresentation]
 
   - name: TColGeom
     additional_deps: [Standard]
@@ -754,6 +769,8 @@ modules:
     exclude_member_functions:
       Aspect_DisplayConnection: [Aspect_DisplayConnection, GetAtom, GetDisplay, GetDisplayName, Init, IsOwnDisplay, GetAtomX, GetDefaultVisualInfoX, SetDefaultVisualInfo]
       Aspect_Window: [NativeHandle, NativeParentHandle]
+      # returns a Graphic3d type, would make Aspect import Graphic3d
+      Aspect_XRSession: [LoadRenderModel]
 
   - name: Media
     additional_deps: [Geom, Bnd, Quantity, Aspect]
@@ -949,10 +966,17 @@ modules:
 
   - name: XSControl
     additional_deps: [Message, TopLoc, Transfer, MoniTool, TDF, IFSelect, TDocStd, XSControl, PCDM, CDF]
+    exclude_member_functions:
+      # DE_ShapeFixParameters is not wrapped, would make XSControl import DE
+      XSControl_Reader: [SetShapeFixParameters::e895be254466ec0dab7446ab439d8103]
 
   - name: Transfer
     additional_deps: [MoniTool, TopoDS, TDF, IFSelect, TDocStd, XSControl, PCDM, CDF, Geom, gp, Geom2d, TopTools]
     exclude_classes: [Transfer_ProcessForFinder]
+    exclude_member_functions:
+      # DE_ShapeFixParameters is not wrapped, would make Transfer import DE
+      Transfer_ActorOfFinderProcess: [SetShapeFixParameters::e895be254466ec0dab7446ab439d8103]
+      Transfer_ActorOfTransientProcess: [SetShapeFixParameters::e895be254466ec0dab7446ab439d8103]
 
   - name: TransferBRep
     additional_deps: [TopLoc, MoniTool, TDF, IFSelect, TDocStd, XSControl, PCDM, CDF, Geom, gp, Geom2d, DE]
