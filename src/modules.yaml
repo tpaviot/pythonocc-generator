@@ -115,7 +115,12 @@ modules:
 
   - name: TCollection
     exclude_member_functions:
-      TCollection_ExtendedString: [ToWideString, Move]
+      # the u16string_view overloads are inline and call the private, non-exported
+      # allocate()/reallocate(): unresolved externals when linking with MSVC
+      TCollection_ExtendedString: [ToWideString, Move, u16string_view,
+        TCollection_ExtendedString::e72e19fb497ab7c85bcc889d7fff8360,
+        AssignCat::3ae91af5f946507f47e4d780b4740003,
+        operator+=::4a2c41388814b7ffd1d0c471db11b04f]
       TCollection_AsciiString: [Move, string_view, IsEqual::46e0e0c57cef5058a5cea402084ff9ed]
 
   - name: TShort
