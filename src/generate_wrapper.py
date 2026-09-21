@@ -2896,9 +2896,6 @@ class ModuleWrapper:
             state.deprecated_static_functions
         )
 
-        # generate swig file
-        self.generate_SWIG_files()
-
     # Module-specific header injections (matched on module name).
     _MODULE_TEMPLATE_INJECTIONS = {
         "NCollection": NCOLLECTION_HEADER_TEMPLATE,
@@ -2926,7 +2923,6 @@ class ModuleWrapper:
         if GENERATE_SWIG_FILES:
             self._write_module_header_file()
             self._write_swig_interface_file()
-            self._write_enum_templates_file()
         self._write_pyi_stub_file()
 
     def _write_module_header_file(self):
@@ -3023,12 +3019,6 @@ class ModuleWrapper:
         f.write(self._typedef_aliases_str)
         f.write(self._deprecated_swig_static_functions_str)
         f.write(self._free_functions_str)
-
-    def _write_enum_templates_file(self):
-        path = os.path.join(COMMON_OUTPUT_PATH, "EnumTemplates.i")
-        with open(path, "w", encoding="utf8") as f:
-            for enum_name in state.all_byref_enums:
-                f.write(BYREF_ENUM_TEMPLATE % enum_name)
 
     def _write_pyi_stub_file(self):
         path = os.path.join(SWIG_OUTPUT_PATH, f"{self._module_name}.pyi")
@@ -3137,42 +3127,67 @@ def scan_typedef_aliases():
     )
 
 
-def process_module(module_name):
-    all_modules = OCCT_MODULES
-    module_exist = False
-    for module in all_modules:
+def write_enum_templates_file():
+    """Generate common/EnumTemplates.i, shared by all modules. Must be called
+    once every module has been processed, since state.all_byref_enums is
+    filled in along the way."""
+    path = os.path.join(COMMON_OUTPUT_PATH, "EnumTemplates.i")
+    with open(path, "w", encoding="utf8") as f:
+        for enum_name in state.all_byref_enums:
+            f.write(BYREF_ENUM_TEMPLATE % enum_name)
+
+
+def process_module(module_name, write_files=True):
+    """Process a module, then write its files if write_files is True.
+
+    Processing a module always updates the shared state (enums, handles,
+    transients, ...) that the modules processed after it rely on."""
+    for module in OCCT_MODULES:
         if module[0] == module_name:
-            module_exist = True
             module_additionnal_dependencies = module[1]
             module_exclude_classes = module[2]
             if len(module) == 4:
                 modules_exclude_member_functions = module[3]
             else:
                 modules_exclude_member_functions = {}
-            ModuleWrapper(
+            wrapper = ModuleWrapper(
                 module_name,
                 module_additionnal_dependencies,
                 module_exclude_classes,
                 modules_exclude_member_functions,
             )
-    if not module_exist:
-        raise NameError(f"Module {module_name} not defined")
+            if write_files:
+                wrapper.generate_SWIG_files()
+            return
+    raise NameError(f"Module {module_name} not defined")
 
 
-def process_toolkit(toolkit_name):
+def process_toolkit(toolkit_name, modules_to_write=None):
     """Generate wrappers for modules depending on a toolkit
     For instance : TKernel, TKMath etc.
+    If modules_to_write is given, only these modules' files are written.
     """
     modules_list = TOOLKITS[toolkit_name]
     logging.info("Processing toolkit %s ===", toolkit_name)
     for module in sorted(modules_list):
-        process_module(module)
+        process_module(
+            module, modules_to_write is None or module in modules_to_write
+        )
 
 
-def process_all_toolkits():
+def process_all_toolkits(modules_to_write=None):
+    """Process every toolkit, in modules.yaml order. If modules_to_write is
+    given, all modules are still processed, so that the shared state is the
+    same as in a full run, but only these modules' files are written."""
     # don't sort the toolkits, otherwise dependencies maybe skipped
     for toolkit in TOOLKITS:
-        process_toolkit(toolkit)
+        process_toolkit(toolkit, modules_to_write)
+    # modules declared in modules.yaml but not part of any toolkit are only
+    # generated when explicitly requested
+    toolkit_modules = {m for modules in TOOLKITS.values() for m in modules}
+    for module in modules_to_write or ():
+        if module not in toolkit_modules:
+            process_module(module)
 
 
 def main(argv=None):
@@ -3182,7 +3197,8 @@ def main(argv=None):
     parser.add_argument(
         "modules",
         nargs="*",
-        help="OCCT modules to process (default: all toolkits)",
+        help="OCCT modules to write (default: all toolkits). All modules are "
+        "processed anyway, so that the output is the same as in a full run.",
     )
     parser.add_argument(
         "--config",
@@ -3190,6 +3206,9 @@ def main(argv=None):
         help="path to the configuration file (default: %(default)s)",
     )
     args = parser.parse_args(argv)
+    unknown_modules = [m for m in args.modules if not is_module(m)]
+    if unknown_modules:
+        parser.error(f"unknown module(s): {', '.join(unknown_modules)}")
     if args.config != DEFAULT_CONFIG_PATH:
         load_config(args.config)
     check_paths()
@@ -3201,11 +3220,9 @@ def main(argv=None):
     scan_typedef_aliases()
     logging.info(get_log_header())
     start_time = time.perf_counter()
-    if args.modules:
-        for module_to_process in args.modules:
-            process_module(module_to_process)
-    else:
-        process_all_toolkits()
+    process_all_toolkits(set(args.modules) if args.modules else None)
+    if GENERATE_SWIG_FILES:
+        write_enum_templates_file()
     end_time = time.perf_counter()
     total_time = end_time - start_time
     # footer

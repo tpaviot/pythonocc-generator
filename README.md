@@ -49,7 +49,7 @@ path: /home/you/Devel/pythonocc-core
 ```sh
 cd src
 python generate_wrapper.py            # all toolkits
-python generate_wrapper.py gp BRepPrimAPI   # selected modules only
+python generate_wrapper.py gp BRepPrimAPI   # write selected modules only (all are still processed)
 python generate_wrapper.py --config other.conf   # another configuration file
 ```
 
