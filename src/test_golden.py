@@ -36,8 +36,8 @@ GOLDEN_VERSION_FILE = GOLDEN_DIR / "OCCT_VERSION"
 # TColStd, TColgp, TopTools, Storage), operators (gp), class-specific
 # templates and pickling (TopoDS), numpy extensions (Geom), by-ref enums from
 # another module (Geom2dGcc), primitive-ref getters/setters (math), handles
-# inherited through several levels (XCAFDoc) and typical APIs (BRepPrimAPI,
-# BRepAlgoAPI).
+# inherited through several levels (XCAFDoc), typical APIs (BRepPrimAPI,
+# BRepAlgoAPI) and constructor arguments kept alive (GeomBndLib).
 GOLDEN_MODULES = [
     "Standard",
     "NCollection",
@@ -53,6 +53,7 @@ GOLDEN_MODULES = [
     "XCAFDoc",
     "BRepPrimAPI",
     "BRepAlgoAPI",
+    "GeomBndLib",
 ]
 
 

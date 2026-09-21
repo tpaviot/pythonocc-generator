@@ -35,7 +35,7 @@ import time
 
 import CppHeaderParser
 
-from _modules import OCCT_MODULES, TOOLKITS
+from _modules import KEEP_CONSTRUCTOR_ARGS, OCCT_MODULES, TOOLKITS
 from _exclusions import (
     ENUMS_TO_EXLUDE,
     HXX_TO_EXCLUDE_FROM_BEING_INCLUDED,
@@ -2613,6 +2613,13 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         if must_ignore_default_destructor(klass):
             # check if the destructor is protected or private
             class_def_str += f"%ignore {class_name}::~{class_name}();\n"
+        if class_name in KEEP_CONSTRUCTOR_ARGS:
+            # the C++ object stores a non-owning pointer to an argument (e.g.
+            # an adaptor), which must not be garbage collected before it
+            class_def_str += (
+                f"%pythonappend {class_name}::{class_name} %{{\n"
+                "    self._constructor_args = args\n%}\n"
+            )
         # then defines the wrapper
         class_def_str += f"class {class_name}"
         class_pyi_str += f"\nclass {class_name_for_pyi}"  # type hints

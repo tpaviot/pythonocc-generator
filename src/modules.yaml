@@ -12,7 +12,7 @@ toolkits:
     TKBRep: [BRep, BRepAdaptor, BRepLProp, BRepTools, BinTools, TopExp, TopTools, TopoDS]
     TKG2d: [Adaptor2d, Geom2d, Geom2dAdaptor, Geom2dEval, LProp, TColGeom2d]
     TKG3d: [Adaptor3d, AdvApprox, GProp, Geom, GeomAdaptor, GeomEval, GeomLProp, TColGeom, TopAbs]
-    TKGeomBase: [AdvApp2Var, AppCont, AppDef, AppParCurves, Approx, BndLib, CPnts, Extrema, FEmTool, GC, GCE2d, GCPnts, Geom2dConvert, GeomConvert, GeomLib, GeomProjLib, GeomTools, Hermit, IntAna, IntAna2d, ProjLib, gce]
+    TKGeomBase: [AdvApp2Var, AppCont, AppDef, AppParCurves, Approx, BndLib, CPnts, GeomBndLib, Extrema, FEmTool, GC, GCE2d, GCPnts, Geom2dConvert, GeomConvert, GeomLib, GeomProjLib, GeomTools, Hermit, IntAna, IntAna2d, ProjLib, gce]
     TKBO: [BOPAlgo, BOPDS, BOPTools, BRepAlgoAPI, IntTools]
     TKBool: [BRepAlgo, BRepFill, BRepProj, TopOpeBRep, TopOpeBRepBuild, TopOpeBRepDS, TopOpeBRepTool]
     TKFeat: [BRepFeat, LocOpe]
@@ -300,6 +300,11 @@ modules:
 
   - name: BndLib
     additional_deps: [Geom, Message]
+
+  - name: GeomBndLib
+    additional_deps: [Message]
+    # constructed from an adaptor, they only store a pointer to it
+    keep_constructor_args: [GeomBndLib_Curve, GeomBndLib_Curve2d, GeomBndLib_Surface, GeomBndLib_OtherCurve, GeomBndLib_OtherCurve2d, GeomBndLib_OtherSurface]
 
   - name: AppDef
     additional_deps: [Adaptor2d, Adaptor3d, Geom, Geom2d, PLib, Message]

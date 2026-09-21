@@ -9,6 +9,9 @@ Exposes:
                      (name, additional_deps, exclude_classes,
                       exclude_member_functions) tuples. Same shape as the
                      legacy Modules.py constant; same order.
+    KEEP_CONSTRUCTOR_ARGS — set of class names whose python proxy keeps a
+                     reference to the constructor arguments, for classes
+                     that store a non-owning pointer to one of them.
 """
 
 from pathlib import Path
@@ -28,16 +31,18 @@ def _load():
         toolkits.update(toolkit)
 
     modules = []
+    keep_constructor_args = set()
     for entry in data["modules"]:
         name = entry["name"]
         deps = entry.get("additional_deps", []) or []
         exclude_classes = entry.get("exclude_classes", []) or []
         exclude_member = entry.get("exclude_member_functions")
+        keep_constructor_args.update(entry.get("keep_constructor_args", []) or [])
         if exclude_member:
             modules.append((name, deps, exclude_classes, exclude_member))
         else:
             modules.append((name, deps, exclude_classes))
-    return toolkits, modules
+    return toolkits, modules, keep_constructor_args
 
 
-TOOLKITS, OCCT_MODULES = _load()
+TOOLKITS, OCCT_MODULES, KEEP_CONSTRUCTOR_ARGS = _load()
