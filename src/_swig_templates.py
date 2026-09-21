@@ -76,11 +76,6 @@ NCOLLECTION_HEADER_TEMPLATE = """
 %include "NCollection_Array2.hxx";
 %include "NCollection_BaseList.hxx";
 %include "NCollection_BaseMap.hxx";
-// occt-800rc5: NCollection_BasePointerVector methods are declared
-// Standard_EXPORT but not exported from libTKernel.so. Skip the header
-// entirely so SWIG does not emit linker references.
-//%include "NCollection_BasePointerVector.hxx";
-%ignore NCollection_BasePointerVector;
 %include "NCollection_Map.hxx";
 %include "NCollection_List.hxx";
 %include "NCollection_Sequence.hxx";
@@ -178,11 +173,9 @@ public:
 %include "NCollection_UBTreeFiller.hxx";
 %include "NCollection_Lerp.hxx";
 %include "NCollection_Vector.hxx";
-// occt-800: NCollection_DynamicArray is a new container deriving from
-// NCollection_BasePointerVector. Forward-declare an empty wrapper so
+// occt-800: NCollection_DynamicArray is a header-only template (built on
+// NCollection_LinearVector since 8.0.0). Forward-declare a minimal wrapper so
 // %template instantiations like NCollection_DynamicArray<X> link.
-// (BasePointerVector methods are declared Standard_EXPORT but not actually
-//  exported from libTKernel.so in 8.0rc5, so we cannot wrap them directly.)
 template <class TheItemType>
 class NCollection_DynamicArray
 {
