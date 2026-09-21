@@ -18,6 +18,7 @@
 # imports #
 ###########
 import argparse
+import ast
 import configparser
 import datetime
 import glob
@@ -193,6 +194,10 @@ class GeneratorState:
         # typedef alias is what carries the SWIG type tag, so we have to
         # rewrite back.
         self.harray_typedef_rewrites = []
+        # Canonical template form -> typedef name, filled by
+        # process_templates_from_typedefs() for every module processed so far.
+        # Used to emit valid python names in the HArray/HSequence stubs.
+        self.template_typedef_names = {}
 
         # All enums seen so far; populated by process_enums().
         self.all_enums = []
@@ -573,6 +578,7 @@ def process_templates_from_typedefs(list_of_typedefs):
         template_type = t[0]
         if "unsigned" not in template_type and "const" not in template_type:
             template_type = template_type.replace(" ", "")
+        state.template_typedef_names.setdefault(template_type, template_name)
         # we must include
         if not (
             template_type.endswith("::Iterator") or template_type.endswith("::Type")
@@ -912,9 +918,15 @@ def process_typedefs(typedefs_dict):
             and ")" not in typedef_value
         ):
             type_to_define = adapt_type_for_hint_typedef(type_to_define)
-            typedef_pyi_str += (
-                f'\n{typedef_value} = NewType("{typedef_value}", {type_to_define})'
-            )
+            if is_module(type_to_define.split("_")[0]):
+                # alias of an OCC class (e.g. GCE2d_MakeSegment is
+                # GC_MakeSegment2d): a NewType would only accept an instance
+                # of the aliased class as constructor argument
+                typedef_pyi_str += f"\n{typedef_value} = {type_to_define}"
+            else:
+                typedef_pyi_str += (
+                    f'\n{typedef_value} = NewType("{typedef_value}", {type_to_define})'
+                )
         elif (
             ")" not in typedef_value
             and "(" not in typedef_value
@@ -1642,6 +1654,16 @@ def adapt_type_hint_parameter_name(param_name_str):
     return new_param_name, success
 
 
+def _is_python_expression(expr_str):
+    """True if expr_str is a valid python expression where a type hint or a
+    default value is expected. A bare tuple such as "OSD_SIGBUS," is not."""
+    try:
+        ast.parse(f"def _() -> {expr_str}: ...")
+    except SyntaxError:
+        return False
+    return True
+
+
 def adapt_type_hint_default_value(default_value_str):
     """default values such as Standard_True etc. must be
     converted to correct python values
@@ -1678,6 +1700,10 @@ def adapt_type_hint_default_value(default_value_str):
         new_default_value_str = "0"
     else:
         new_default_value_str = default_value_str
+    # C++ expressions such as TCollection_AsciiString::EmptyString() or
+    # NCollection_DataMap<...>() are not valid python: use the stub ellipsis
+    if not _is_python_expression(new_default_value_str):
+        new_default_value_str = "..."
     success = True
     return new_default_value_str, success
 
@@ -1932,6 +1958,9 @@ def _build_typehint(
         returned_type_hint = f"Tuple[{', '.join(types_returned)}]"
     else:
         raise AssertionError("Method should at least have one returned type.")
+    if not _is_python_expression(returned_type_hint):
+        # e.g. a std::variant return type mangled by CppHeaderParser
+        returned_type_hint = "Any"
     str_typehint += f") -> {returned_type_hint}: ...\n"
     return str_typehint
 
@@ -2299,6 +2328,24 @@ def fix_type(type_str):
     return type_str
 
 
+def _container_pyi_mapping(h_class_name, type_key, cpp_type):
+    """Substitution mapping for the HArray1/HArray2/HSequence stub templates.
+    The C++ container type (e.g. NCollection_Array1<gp_Pnt>) is not valid
+    python: replace it with its typedef name (TColgp_Array1OfPnt). If there is
+    none, fall back to Any and inherit only from Standard_Transient.
+    """
+    normalized = re.sub(r"\s+", "", cpp_type)
+    py_type = state.template_typedef_names.get(
+        normalized, _apply_typedef_rewrites(normalized)
+    )
+    if py_type.isidentifier():
+        bases = f"{py_type}, Standard_Transient"
+    else:
+        py_type = "Any"
+        bases = "Standard_Transient"
+    return {"HClassName": h_class_name, type_key: py_type, "Bases": bases}
+
+
 def process_harray1():
     """special wrapper for NCollection_HArray1
     Returns both the definition and the hint
@@ -2313,7 +2360,7 @@ def process_harray1():
             )
             # type hint
             pyi_str += HARRAY1_TEMPLATE_PYI.substitute(
-                {"HClassName": f"{HClassName}", "Array1Type": f"{array1_type}"}
+                _container_pyi_mapping(HClassName, "Array1Type", array1_type)
             )
     return wrapper_str, pyi_str
 
@@ -2329,7 +2376,7 @@ def process_harray2():
             )
             # type hint
             pyi_str += HARRAY2_TEMPLATE_PYI.substitute(
-                {"HClassName": f"{HClassName}", "Array2Type": f"{array2_type}"}
+                _container_pyi_mapping(HClassName, "Array2Type", array2_type)
             )
     wrapper_str += "\n"
     return wrapper_str, pyi_str
@@ -2346,7 +2393,7 @@ def process_hsequence():
             )
             # type hint
             pyi_str += HSEQUENCE_TEMPLATE_PYI.substitute(
-                {"HClassName": f"{HClassName}", "SequenceType": f"{sequence_type}"}
+                _container_pyi_mapping(HClassName, "SequenceType", sequence_type)
             )
     wrapper_str += "\n"
     pyi_str += "\n"
@@ -3028,7 +3075,7 @@ class ModuleWrapper:
         path = os.path.join(SWIG_OUTPUT_PATH, f"{self._module_name}.pyi")
         with open(path, "w", encoding="utf8") as f:
             f.write("from enum import IntEnum\n")
-            f.write("from typing import overload, NewType, Optional, Tuple\n\n")
+            f.write("from typing import Any, overload, NewType, Optional, Tuple\n\n")
             for dep in state.python_module_dependency:
                 if is_module(dep):
                     f.write(f"from OCC.Core.{dep} import *\n")

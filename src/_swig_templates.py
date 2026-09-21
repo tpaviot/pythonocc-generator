@@ -234,7 +234,7 @@ class $HClassName : public $Array1Type, public Standard_Transient {
 
 HARRAY1_TEMPLATE_PYI = Template(
     """
-class $HClassName($Array1Type, Standard_Transient):
+class $HClassName($Bases):
     def __init__(self, theLower: int, theUpper: int) -> None: ...
     def Array1(self) -> $Array1Type: ...
 
@@ -260,7 +260,7 @@ class $HClassName : public $Array2Type, public Standard_Transient {
 
 HARRAY2_TEMPLATE_PYI = Template(
     """
-class $HClassName($Array2Type, Standard_Transient):
+class $HClassName($Bases):
     @overload
     def __init__(self, theRowLow: int, theRowUpp: int, theColLow: int, theColUpp: int) -> None: ...
     @overload
@@ -288,7 +288,7 @@ class $HClassName : public $SequenceType, public Standard_Transient {
 
 HSEQUENCE_TEMPLATE_PYI = Template(
     """
-class $HClassName($SequenceType, Standard_Transient):
+class $HClassName($Bases):
     @overload
     def __init__(self) -> None: ...
     @overload
