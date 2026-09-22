@@ -2127,6 +2127,14 @@ def _build_typehint(
     if not _is_python_expression(returned_type_hint):
         # e.g. a std::variant return type mangled by CppHeaderParser
         returned_type_hint = "Any"
+    if (
+        function_name == "FindAttribute"
+        and f["parent"] is not None
+        and f["parent"]["name"] in ("TDF_Label", "TDF_Attribute")
+    ):
+        # the OccHandle.i typemap returns the attribute (with its dynamic
+        # type), or None if not found, in place of the bool result
+        returned_type_hint = "Optional[TDF_Attribute]"
     str_typehint += f") -> {returned_type_hint}: ...\n"
     return str_typehint
 
@@ -2709,6 +2717,22 @@ def _class_specific_extensions(class_name):
     if class_name in ("BRepTools", "BRepTools_ShapeSet"):
         extra_def += BREPTOOLS_WRITE_READ_FROM_STRING
         extra_pyi += BREPTOOLS_WRITE_READ_FROM_STRING_PYI
+    if class_name == "TCollection_ExtendedString":
+        # str() returns the text, decoded from UTF-8
+        extra_def += "\t\t%extend{\n"
+        extra_def += "\t\t\tstd::string __str__() {\n"
+        extra_def += "\t\t\tstd::string txt(self->LengthOfCString(), '\\0');\n"
+        extra_def += "\t\t\tchar* str = &txt[0];\n"
+        extra_def += "\t\t\tself->ToUTF8CString(str);\n"
+        extra_def += "\t\t\treturn txt;}\n"
+        extra_def += "\t\t};\n"
+        extra_pyi += "    def __str__(self) -> str: ...\n"
+    if class_name == "TCollection_AsciiString":
+        extra_def += "\t\t%extend{\n"
+        extra_def += "\t\t\tstd::string __str__() {\n"
+        extra_def += "\t\t\treturn std::string(self->ToCString(), self->Length());}\n"
+        extra_def += "\t\t};\n"
+        extra_pyi += "    def __str__(self) -> str: ...\n"
     if class_name == "TDF_Label":
         extra_def += '%feature("autodoc", "Returns the label name") GetLabelName;\n'
         extra_def += "\t\t%extend{\n"
