@@ -339,9 +339,12 @@ modules:
     # defined out of line, the ids are aliases of nested class templates
     flatten_nested_classes: true
     additional_deps: [TopoDS, TopLoc, TopAbs, Geom, Geom2d, Poly, gp, TCollection, TopTools, BRepTools, BRep, Adaptor2d, Adaptor3d, Geom2dAdaptor, GeomAdaptor, TShort, Bnd, Message]
-    # pointers to arrays of nested structs, not wrapped
     # pointers to arrays of nested structs, internal storage: not wrapped
     exclude_classes: [BRepGraph_LayerDeferred, BRepGraph_CacheMesh, BRepGraph_LayerTopoSupplement, BRepGraph_Data]
+    exclude_member_functions:
+      # declared without Standard_EXPORT: unresolved externals when linking with MSVC
+      BRepGraph_CopyRemap: [BRepGraph_CopyRemap]
+      BRepGraph_UsagePath: [IsEqual, HashCode]
 
   - name: BRepLProp
     additional_deps: [GeomAdaptor, Geom, Geom2d, TopLoc, Adaptor3d, TopoDS, Adaptor2d, Geom2dAdaptor, Message]

@@ -3148,7 +3148,10 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             class_def_str += f"%rename({class_name.lower()}) {class_name};\n"
             class_name_for_pyi = class_name_for_pyi.lower()
         # then process the class itself
-        if not class_can_have_default_constructor(klass):
+        # all constructors explicitly excluded: SWIG must not generate a default one
+        if not class_can_have_default_constructor(klass) or (
+            class_name in exclude_member_functions.get(class_name, [])
+        ):
             class_def_str += f"%nodefaultctor {class_name};\n"
         if must_ignore_default_destructor(klass):
             # check if the destructor is protected or private
