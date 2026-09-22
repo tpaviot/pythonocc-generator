@@ -63,6 +63,7 @@ from _swig_templates import (
     HSEQUENCE_TEMPLATE,
     HSEQUENCE_TEMPLATE_PYI,
     LICENSE_HEADER,
+    TEMPLATE_CLASS_EXTENSIONS,
     NCOLLECTION_ARRAY1_EXTEND_TEMPLATE_PYI,
     NCOLLECTION_DATAMAP_EXTEND_TEMPLATE,
     NCOLLECTION_HEADER_TEMPLATE,
@@ -712,11 +713,11 @@ def process_templates_from_typedefs(list_of_typedefs):
                     # its header directly, as done for the NCollection
                     # templates. Checked first: the NCollection_* tests below
                     # also match an NCollection argument of the template.
-                    template_header = find_template_header(
-                        template_type.split("<", 1)[0]
-                    )
+                    template_class = template_type.split("<", 1)[0]
+                    template_header = find_template_header(template_class)
                     if template_header not in included_template_headers:
                         included_template_headers.add(template_header)
+                        wrapper_str += TEMPLATE_CLASS_EXTENSIONS.get(template_class, "")
                         wrapper_str += f'%include "{template_header}";\n'
                     wrapper_str += f"%template({template_name}) {template_type};\n"
                 elif "NCollection_Array1" in template_type:
@@ -2788,21 +2789,13 @@ def _class_specific_extensions(class_name):
             "\t\t\tvoid SetASCIIMode(bool theMode) { self->ASCIIMode() = theMode; }\n"
         )
         extra_def += "\t\t};\n"
-    # occt-800: math_Matrix / math_Vector still expose mutable Value() returning
-    # a reference but Python cannot assign through it - add Get/SetValue shims.
+    # occt-800: math_Matrix still exposes mutable Value() returning a reference
+    # but Python cannot assign through it - add Get/SetValue shims (math_Vector:
+    # see MATH_VECTORBASE_EXTEND).
     if class_name == "math_Matrix":
         extra_def += "\t\t%extend{\n"
         extra_def += "\t\t\tdouble GetValue(int row, int col) const { return self->Value(row, col); }\n"
         extra_def += "\t\t\tvoid SetValue(int row, int col, double v) { self->Value(row, col) = v; }\n"
-        extra_def += "\t\t};\n"
-    if class_name == "math_Vector":
-        extra_def += "\t\t%extend{\n"
-        extra_def += (
-            "\t\t\tdouble GetValue(int idx) const { return self->Value(idx); }\n"
-        )
-        extra_def += (
-            "\t\t\tvoid SetValue(int idx, double v) { self->Value(idx) = v; }\n"
-        )
         extra_def += "\t\t};\n"
     return extra_def, extra_pyi
 

@@ -869,3 +869,42 @@ BREPTOOLS_WRITE_READ_FROM_STRING_PYI = """
 # Template for byref enum #
 ###########################
 BYREF_ENUM_TEMPLATE = "ENUM_OUTPUT_TYPEMAPS(%s);\n"
+
+
+# occt-800: math_Vector and math_IntegerVector are aliases of the
+# math_VectorBase class template. Value() returns a reference, python cannot
+# assign through it: element accessors, and the python sequence protocol with
+# 0-based indices as for the NCollection arrays. The non const Value() is
+# ignored: the const one returns a python number, not a raw pointer. Applies
+# to all the instantiations of the template.
+MATH_VECTORBASE_EXTEND = """
+%ignore math_VectorBase::Value(const int);
+%extend math_VectorBase {
+    TheItemType GetValue(const int theIndex) const { return self->Value(theIndex); }
+    void SetValue(const int theIndex, const TheItemType theValue) { self->Value(theIndex) = theValue; }
+    %pythoncode {
+    def __getitem__(self, index):
+        if index < 0 or index >= self.Length():
+            raise IndexError("index out of range")
+        return self.GetValue(index + self.Lower())
+
+    def __setitem__(self, index, value):
+        if index < 0 or index >= self.Length():
+            raise IndexError("index out of range")
+        self.SetValue(index + self.Lower(), value)
+
+    def __len__(self):
+        return self.Length()
+
+    def __iter__(self):
+        value = self.GetValue
+        for i in range(self.Lower(), self.Upper() + 1):
+            yield value(i)
+    }
+};
+"""
+
+# %ignore and %extend of the class templates wrapped through
+# `using Alias = Tpl<Args>;` aliases, written once before the template header
+# is %included
+TEMPLATE_CLASS_EXTENSIONS = {"math_VectorBase": MATH_VECTORBASE_EXTEND}
