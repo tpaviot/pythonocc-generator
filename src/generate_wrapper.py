@@ -62,7 +62,6 @@ from _swig_templates import (
     HSEQUENCE_TEMPLATE,
     HSEQUENCE_TEMPLATE_PYI,
     LICENSE_HEADER,
-    MATH_HEADER_TEMPLATE,
     NCOLLECTION_ARRAY1_EXTEND_TEMPLATE_PYI,
     NCOLLECTION_DATAMAP_EXTEND_TEMPLATE,
     NCOLLECTION_HEADER_TEMPLATE,
@@ -198,6 +197,11 @@ class GeneratorState:
         # process_templates_from_typedefs() for every module processed so far.
         # Used to emit valid python names in the HArray/HSequence stubs.
         self.template_typedef_names = {}
+        # occt-800: names of the `using Alias = Tpl<Args>;` template aliases
+        # of the current module that are wrapped as %template(Alias)
+        # instantiations (BRepLProp_SLProps, Extrema_ExtPC, Bnd_B2d, ...).
+        # Filled by _convert_using_to_typedef(), reset at every module.
+        self.template_alias_names = set()
 
         # All enums seen so far; populated by process_enums().
         self.all_enums = []
@@ -466,18 +470,83 @@ def _rewrite_handle_parens(header_content):
     return header_content
 
 
+_template_header_cache = {}
+
+
+def find_template_header(template_name):
+    """Return the basename of the OCCT header that declares the class template
+    template_name, None if there is none. OCCT 8.0 templates are usually
+    declared in a header of their own name (Extrema_GGExtPC.hxx, Bnd_B2.hxx)
+    but not always: GeomLProp_SLPropsBase lives in GeomLProp_SLProps.hxx."""
+    if template_name in _template_header_cache:
+        return _template_header_cache[template_name]
+    header = None
+    candidate = f"{template_name}.hxx"
+    if os.path.isfile(os.path.join(OCCT_INCLUDE_DIR, candidate)):
+        header = candidate
+    else:
+        # a class definition, not a forward declaration
+        class_re = re.compile(
+            rf"\bclass\s+{re.escape(template_name)}\b\s*(?::[^;{{]*)?\{{"
+        )
+        prefix = template_name.split("_")[0]
+        for path in sorted(
+            glob.glob(os.path.join(OCCT_INCLUDE_DIR, f"{prefix}_*.hxx"))
+        ):
+            with open(path, "r", encoding="utf8", errors="replace") as f:
+                content = f.read()
+            if "template" in content and class_re.search(content):
+                header = os.path.basename(path)
+                break
+    _template_header_cache[template_name] = header
+    return header
+
+
+def is_wrappable_template_alias(alias, rhs):
+    """occt-800: tell whether the template alias `using alias = rhs;` (rhs
+    being an instantiation such as GeomLProp_SLPropsBase<BRepAdaptor_Surface>)
+    can be wrapped as a %template of the same name.
+
+    OCCT 8.0 turned many classes into aliases of class templates
+    (BRepLProp_SLProps, Extrema_ExtPC, Bnd_B2d, math_IntegerVector, ...).
+    They are wrapped by %including the template header and instantiating the
+    template under the alias name, see process_templates_from_typedefs().
+    Only aliases named after the module being processed are considered (this
+    skips class-scope aliases and the copies of math_Vector found in other
+    packages), the template must be an OCCT class with its own header, and
+    NCollection aliases keep going through the NCollection typedef pipeline.
+    Aliases listed in TEMPLATES_TO_EXCLUDE are skipped, e.g. LProp_CLProps3d
+    would make LProp import GeomLProp, which itself imports LProp."""
+    if alias in TEMPLATES_TO_EXCLUDE:
+        return False
+    if "_" not in alias or alias.split("_")[0] != state.current_module:
+        return False
+    template_name = rhs.split("<", 1)[0].strip()
+    # nested or namespaced templates (Foo::Bar<...>, opencascade::handle<...>)
+    if not re.fullmatch(r"[A-Za-z_]\w*", template_name):
+        return False
+    if template_name.startswith("NCollection_"):
+        return False
+    return find_template_header(template_name) is not None
+
+
 def _convert_using_to_typedef(header_content):
-    """occt-800: rewrite simple C++11 `using X = Y;` aliases into classic
+    """occt-800: rewrite C++11 `using X = Y;` aliases into classic
     `typedef Y X;` so the typedef pipeline picks them up. Many OCCT 8.0
     headers (GCE2d_MakeEllipse, ...) became `using` aliases for renamed
-    classes. Skip template aliases (RHS contains '<'): they would produce SWIG
-    %template instantiations against templates we don't expose."""
+    classes, others (BRepLProp_SLProps, Extrema_ExtPC, ...) aliases of class
+    template instantiations. The latter are converted only when
+    is_wrappable_template_alias() accepts them, and recorded in
+    state.template_alias_names."""
 
     def _replace(match):
-        rhs = match.group(2).strip()
+        alias = match.group(1)
+        rhs = " ".join(match.group(2).split())
         if "<" in rhs:
-            return match.group(0)
-        return f"typedef {rhs} {match.group(1)};"
+            if not is_wrappable_template_alias(alias, rhs):
+                return match.group(0)
+            state.template_alias_names.add(alias)
+        return f"typedef {rhs} {alias};"
 
     return _USING_ALIAS_RE.sub(_replace, header_content)
 
@@ -490,7 +559,8 @@ def adapt_header_file(header_content):
       / DEFINE_HSEQUENCE declarations into the corresponding global registries.
     - Strips or //comments out macros that the parser cannot handle.
     - Normalizes `occ::handle` and `Handle(X)` to `opencascade::handle<X>`.
-    - Rewrites simple `using X = Y;` aliases to `typedef Y X;`.
+    - Rewrites `using X = Y;` aliases to `typedef Y X;` (template aliases
+      only when they can be wrapped as a %template instantiation).
     """
     if ("Deprecated alias to moved class" in header_content) or (
         "Alias to moved class" in header_content
@@ -573,6 +643,8 @@ def process_templates_from_typedefs(list_of_typedefs):
     """ """
     wrapper_str = "/* templates */\n"
     pyi_str = ""
+    # template headers already %included in this module, see below
+    included_template_headers = set()
     for t in list_of_typedefs:
         template_name = t[1].replace(" ", "")
         template_type = t[0]
@@ -602,7 +674,20 @@ def process_templates_from_typedefs(list_of_typedefs):
                 basetype_hint = adapt_type_for_hint(
                     get_type_for_ncollection_array(template_type)
                 )
-                if "NCollection_Array1" in template_type:
+                if template_name in state.template_alias_names:
+                    # occt-800: `using Alias = Tpl<Args>;`. The template class
+                    # itself is not wrapped (see process_classes), SWIG parses
+                    # its header directly, as done for the NCollection
+                    # templates. Checked first: the NCollection_* tests below
+                    # also match an NCollection argument of the template.
+                    template_header = find_template_header(
+                        template_type.split("<", 1)[0]
+                    )
+                    if template_header not in included_template_headers:
+                        included_template_headers.add(template_header)
+                        wrapper_str += f'%include "{template_header}";\n'
+                    wrapper_str += f"%template({template_name}) {template_type};\n"
+                elif "NCollection_Array1" in template_type:
                     # in this cas, we use the Array1ExtendIter(T) macro by default
                     # if the NCollection_Array1 involves Standard_Integer or Standard_Real
                     # then the NCollection_Array1 can be wrapped as a numpy array and the
@@ -831,6 +916,30 @@ def str_in(list_of_patterns, a_string):
     return any(patt in a_string for patt in list_of_patterns)
 
 
+def sort_templates_by_dependency(templates):
+    """Order the [template_type, template_name] pairs so that an
+    instantiation comes after the typedefs its arguments refer to, e.g.
+    Extrema_EPCOfExtPC (Extrema_GGenExtPC<..., Extrema_PCFOfEPCOfExtPC>) after
+    Extrema_PCFOfEPCOfExtPC. The input order is kept otherwise."""
+    names = {template_name for _, template_name in templates}
+    remaining = list(templates)
+    ordered = []
+    emitted = set()
+    while remaining:
+        ready = [
+            item
+            for item in remaining
+            if (names & set(re.findall(r"\w+", item[0]))) - {item[1]} <= emitted
+        ]
+        if not ready:  # circular typedefs, keep them as they are
+            ordered.extend(remaining)
+            break
+        ordered.extend(ready)
+        emitted.update(item[1] for item in ready)
+        remaining = [item for item in remaining if item not in ready]
+    return ordered
+
+
 def process_typedefs(typedefs_dict):
     """Take a typedef dictionary and returns a SWIG definition string"""
     templates_str = ""
@@ -865,6 +974,18 @@ def process_typedefs(typedefs_dict):
                     is_module(module)
                 ):
                     state.python_module_dependency.append(module)
+
+    # occt-800: a `using Alias = Tpl<Args>;` template alias instantiates a
+    # template that may live in another module, with argument types from yet
+    # other modules (BRepLProp_SLProps is a GeomLProp_SLPropsBase of a
+    # BRepAdaptor_Surface). They all have to be imported, otherwise SWIG
+    # wraps the arguments as opaque pointers.
+    for alias in state.template_alias_names:
+        if alias in filtered_typedef_dict:
+            for identifier in re.findall(
+                r"\b[A-Za-z]\w*_\w+\b", filtered_typedef_dict[alias]
+            ):
+                check_dependency(identifier)
 
     sorted_list_of_typedefs = sorted(filtered_typedef_dict.keys())
     for typedef_value in sorted_list_of_typedefs:
@@ -912,7 +1033,15 @@ def process_typedefs(typedefs_dict):
             "NCollection_DataMap",
             "NCollection_Sequence",
         ]
-        if (
+        if typedef_value in state.template_alias_names:
+            # occt-800: class instantiated by %template in the .i file. Its
+            # methods are those of the template header, not known here.
+            typedef_pyi_str += (
+                f"\nclass {typedef_value}:"
+                "\n    def __init__(self, *args: Any, **kwargs: Any) -> None: ..."
+                "\n    def __getattr__(self, name: str) -> Any: ...\n"
+            )
+        elif (
             all(match not in type_to_define for match in match_1)
             and type_to_define is not None
             and ")" not in typedef_value
@@ -943,7 +1072,9 @@ def process_typedefs(typedefs_dict):
     typedef_str += "/* end typedefs declaration */\n\n"
     # then we process templates
     # at this stage, we get a list as follows
-    templates_def, templates_pyi = process_templates_from_typedefs(templates)
+    templates_def, templates_pyi = process_templates_from_typedefs(
+        sort_templates_by_dependency(templates)
+    )
     templates_str += templates_def
     templates_str += "\n"
     # close aliases
@@ -2900,6 +3031,7 @@ class ModuleWrapper:
         # Reinit global variables
         state.current_module = module_name
         state.deprecated_static_functions = []
+        state.template_alias_names = set()
         # CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES = ""
         # all modules depend, by default, upon Standard, NCollection and others
         if module_name not in ["Standard", "NCollection"]:
@@ -2957,7 +3089,6 @@ class ModuleWrapper:
     # Module-specific header injections (matched on module name).
     _MODULE_TEMPLATE_INJECTIONS = {
         "NCollection": NCOLLECTION_HEADER_TEMPLATE,
-        "math": MATH_HEADER_TEMPLATE,
         "BVH": BVH_HEADER_TEMPLATE,
         "Prs3d": PRS3D_HEADER_TEMPLATE,
         "Graphic3d": GRAPHIC3D_DEFINE_HEADER,
@@ -3064,7 +3195,7 @@ class ModuleWrapper:
         f.write("};\n\n")
 
     def _write_swig_module_specific_templates(self, f):
-        """Inject NCollection / math / BVH / Prs3d / Graphic3d / BRepAlgoAPI blocks."""
+        """Inject NCollection / BVH / Prs3d / Graphic3d / BRepAlgoAPI blocks."""
         template = self._MODULE_TEMPLATE_INJECTIONS.get(self._module_name)
         if template is not None:
             f.write(template)

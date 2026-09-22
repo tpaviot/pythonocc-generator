@@ -211,12 +211,6 @@ public:
 %ignore NCollection_Array2::operator();
 """
 
-MATH_HEADER_TEMPLATE = """
-%include "math_VectorBase.hxx";
-%template(math_Vector) math_VectorBase<double>;
-typedef math_VectorBase<double> math_Vector;
-"""
-
 HARRAY1_TEMPLATE = Template(
     """
 class $HClassName : public $Array1Type, public Standard_Transient {
