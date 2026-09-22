@@ -57,8 +57,6 @@ toolkits:
     TKXml: [XmlDrivers, XmlMDataXtd, XmlMNaming]
     TKXmlL: [XmlLDrivers, XmlMDF, XmlMDataStd, XmlMDocStd, XmlMFunction, XmlObjMgt]
     TKXmlTObj: [XmlTObjDrivers]
-  VTK:
-    TKIVtk: [IVtk, IVtkOCC, IVtkVTK, IVtkTools]
 
 # Per-module wrapping configuration. Order is dependency order — do NOT
 # sort, or modules importing each other will be processed before their deps.
@@ -1188,11 +1186,3 @@ modules:
 
   - name: IGESCAFControl
     additional_deps: [Geom2d, IFSelect, Interface, IGESData, Geom, Transfer, PCDM, TopTools, CDF, Message, CDM, TopoDS, Resource, TopLoc, XSControl, ShapeExtend, TColGeom, MoniTool, IGESToBRep, BRep, TShort, Poly, Bnd, BRep, BRepTools, DE]
-
-  - name: IVtk
-
-  - name: IVtkOCC
-
-  - name: IVtkVTK
-
-  - name: IVtkTools
