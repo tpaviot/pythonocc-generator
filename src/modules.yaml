@@ -347,7 +347,8 @@ modules:
     exclude_member_functions:
       # declared without Standard_EXPORT: unresolved externals when linking with MSVC
       BRepGraph_CopyRemap: [BRepGraph_CopyRemap]
-      BRepGraph_UsagePath: [IsEqual, HashCode]
+      # operator== is inline but calls IsEqual
+      BRepGraph_UsagePath: [IsEqual, HashCode, "operator=="]
 
   - name: BRepLProp
     additional_deps: [GeomAdaptor, Geom, Geom2d, TopLoc, Adaptor3d, TopoDS, Adaptor2d, Geom2dAdaptor, Message]

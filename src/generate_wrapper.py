@@ -3411,6 +3411,8 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
                 excluded_method_name != "Handle"
                 and "::" not in excluded_method_name
                 and "Connect" not in excluded_method_name
+                # no python stub for an operator, e.g. operator==
+                and excluded_method_name.isidentifier()
             ):
                 class_def_str += "\n\t@methodnotwrapped\n"
                 class_def_str += f"\tdef {excluded_method_name}(self):\n\t\tpass\n"
