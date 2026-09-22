@@ -61,11 +61,12 @@ toolkits:
 # Per-module wrapping configuration. Order is dependency order — do NOT
 # sort, or modules importing each other will be processed before their deps.
 #
-# Each entry supports four keys:
+# Each entry supports the keys:
 #   name                     (required) the OCCT module name
 #   additional_deps          extra modules to %include in the .i file
 #   exclude_classes          class names to skip; ['*'] skips all
 #   exclude_member_functions {class_name: [method, ...]} per-class blacklist
+#   include_classes          with exclude_classes: ['*'], the only classes wrapped
 modules:
   - name: FSD
     exclude_classes: ["*"]
@@ -81,7 +82,9 @@ modules:
     exclude_classes: ["*"]
 
   - name: OSD
+    # system services, only the thread pool used by the parallel algorithms
     exclude_classes: ["*"]
+    include_classes: [OSD_ThreadPool, OSD_Parallel]
 
   - name: Plugin
     exclude_classes: ["*"]

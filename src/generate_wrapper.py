@@ -206,6 +206,9 @@ class GeneratorState:
         # occt-800: modules whose nested classes are wrapped as top level
         # classes (see flatten_nested_classes()), from modules.yaml.
         self.flatten_nested_classes = False
+        # classes of the current module wrapped even though the module
+        # excludes all its classes (exclude_classes: ["*"]), from modules.yaml.
+        self.include_classes = []
         # (qualified C++ name, flat SWIG name) of the flattened classes of the
         # current module, e.g. ("BRepGraph::ShapesView", "BRepGraph_ShapesView");
         # a typedef is written for each in the C++ section of the .i file.
@@ -297,7 +300,9 @@ SWIG interface file generation completed in {:.2f}s
 
 
 def reset_header_depency():
-    state.header_dependency = ["TColgp", "TColStd", "TCollection", "Storage"]
+    # OSD: the wrapped OSD classes (OSD_ThreadPool) reach every module that
+    # imports Message.i, their declaration is required by the SWIG casts
+    state.header_dependency = ["TColgp", "TColStd", "TCollection", "Storage", "OSD"]
 
 
 def check_is_persistent(class_name):
@@ -2381,6 +2386,20 @@ def must_ignore_default_destructor(klass):
     return False
 
 
+def has_public_default_constructor(klass):
+    """True if the class declares a public constructor callable without
+    arguments, e.g. `X();` or `X(int theArg = 0);`."""
+    for method in klass["methods"]["public"]:
+        if (
+            method["constructor"]
+            and method["name"] == klass["name"]
+            and not method.get("deleted")
+            and all("defaultValue" in p for p in method["parameters"])
+        ):
+            return True
+    return False
+
+
 def class_can_have_default_constructor(klass):
     """Check if the class can have a defaultctor wrap
     or, if not, return False if the %nodefaultctor is required
@@ -2620,6 +2639,19 @@ def process_hsequence():
     return wrapper_str, pyi_str
 
 
+def resolve_exclude_classes(classes_dict, exclude_classes):
+    """exclude_classes: ["*"] excludes all the classes of the module, but the
+    ones of the include_classes option of the module."""
+    if exclude_classes != ["*"]:
+        return exclude_classes
+    all_classes = []
+    for klass in classes_dict:
+        class_name = klass.split("::")[0].split("<")[0]
+        if class_name not in all_classes:
+            all_classes.append(class_name)
+    return [c for c in all_classes if c not in state.include_classes]
+
+
 def process_handles(classes_dict, exclude_classes):
     """Check whether a class has to be wrapped as a handle
     using the wrap_handle swig macro.
@@ -2627,8 +2659,9 @@ def process_handles(classes_dict, exclude_classes):
     appeared to be placed before typedef and templates definition
     """
     wrap_handle_str = "/* handles */\n"
-    if exclude_classes == ["*"]:  # don't wrap any class
-        return ""
+    if exclude_classes == ["*"] and not state.include_classes:
+        return ""  # don't wrap any class
+    exclude_classes = resolve_exclude_classes(classes_dict, exclude_classes)
     inheritance_tree_list = build_inheritance_tree(classes_dict)
     # occt-800: propagate "needs handle" through the inheritance chain. Many
     # 8.0 classes (e.g. XCAFDoc_ShapeTool) have no DEFINE_STANDARD_RTTI* of
@@ -3092,15 +3125,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
     exclude_member_functions is a dict with classes names as keys and member
     function names as values
     """
-    if exclude_classes == ["*"]:  # don't wrap any class
-        # that is to say we add all classes to the list of exclude_member_functions
-        new_exclude_classes = []
-        for klass in classes_dict:
-            class_name_to_exclude = klass.split("::")[0]
-            class_name_to_exclude = class_name_to_exclude.split("<")[0]
-            if class_name_to_exclude not in new_exclude_classes:
-                new_exclude_classes.append(class_name_to_exclude)
-        exclude_classes = new_exclude_classes.copy()
+    exclude_classes = resolve_exclude_classes(classes_dict, exclude_classes)
 
     class_def_str = ""  # the string for class definition
     class_pyi_str = ""  # the string for class type hints
@@ -3172,9 +3197,11 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             class_def_str += f"%rename({class_name.lower()}) {class_name};\n"
             class_name_for_pyi = class_name_for_pyi.lower()
         # then process the class itself
-        # all constructors explicitly excluded: SWIG must not generate a default one
+        # all constructors explicitly excluded: SWIG generates a default one,
+        # which must not be done if the class has no public default constructor
         if not class_can_have_default_constructor(klass) or (
             class_name in exclude_member_functions.get(class_name, [])
+            and not has_public_default_constructor(klass)
         ):
             class_def_str += f"%nodefaultctor {class_name};\n"
         if must_ignore_default_destructor(klass):
@@ -3483,6 +3510,9 @@ class ModuleWrapper:
         state.template_alias_names = set()
         state.flatten_nested_classes = MODULE_OPTIONS.get(module_name, {}).get(
             "flatten_nested_classes", False
+        )
+        state.include_classes = MODULE_OPTIONS.get(module_name, {}).get(
+            "include_classes", []
         )
         state.flattened_classes = []
         state.nested_template_aliases = {}
