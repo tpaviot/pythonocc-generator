@@ -64,6 +64,7 @@ from _swig_templates import (
     HSEQUENCE_TEMPLATE_PYI,
     LICENSE_HEADER,
     TEMPLATE_CLASS_EXTENSIONS,
+    TEMPLATE_CLASS_EXTENSIONS_PYI,
     NCOLLECTION_ARRAY1_EXTEND_TEMPLATE_PYI,
     NCOLLECTION_DATAMAP_EXTEND_TEMPLATE,
     NCOLLECTION_HEADER_TEMPLATE,
@@ -704,8 +705,9 @@ def process_templates_from_typedefs(list_of_typedefs):
                 # if a NCollection_Array1, extend this template to benefit from pythonic methods
                 # All "Array1" classes are considered as python arrays
                 # TODO : it should be a good thing to use decorators here, to avoid code duplication
-                basetype_hint = adapt_type_for_hint(
-                    get_type_for_ncollection_array(template_type)
+                basetype_hint = (
+                    adapt_type_for_hint(get_type_for_ncollection_array(template_type))
+                    or "Any"
                 )
                 if template_name in state.template_alias_names:
                     # occt-800: `using Alias = Tpl<Args>;`. The template class
@@ -1074,6 +1076,13 @@ def process_typedefs(typedefs_dict):
                 "\n    def __init__(self, *args: Any, **kwargs: Any) -> None: ..."
                 "\n    def __getattr__(self, name: str) -> Any: ...\n"
             )
+            # but for the members added by TEMPLATE_CLASS_EXTENSIONS
+            template_class = typedef_type.split("<", 1)[0].strip()
+            if template_class in TEMPLATE_CLASS_EXTENSIONS_PYI:
+                item_type = typedef_type.split("<", 1)[1].rsplit(">", 1)[0].strip()
+                typedef_pyi_str += TEMPLATE_CLASS_EXTENSIONS_PYI[template_class].substitute(
+                    Type_T={"double": "float", "int": "int"}.get(item_type, "Any")
+                )
         elif (
             all(match not in type_to_define for match in match_1)
             and type_to_define is not None
@@ -1230,11 +1239,19 @@ def process_enums(enums_list):
                 if py_name in keyword.kwlist:
                     py_name = f"{py_name}_"
                 enum_python_proxies += f"\t{py_name} = {adapted_enum_value}\n"
-                enum_pyi_str += f"    {py_name}: int = ...\n"
+                # mypy: enum members must be left unannotated
+                pyi_value = (
+                    adapted_enum_value if isinstance(adapted_enum_value, int) else "..."
+                )
+                enum_pyi_str += f"    {py_name} = {pyi_value}\n"
                 # then, in both proxy and stub files, we create the alias for each named enum,
                 # for instance
                 # gp_IntrisicXYZ = gp_EulerSequence.gp_IntrinsicXYZ
                 alias_str += f"{py_name} = {enum_name}.{py_name}\n"
+            else:
+                # anonymous enum (e.g. the MeshVS_DMF_* flags): SWIG exposes
+                # its values as module constants
+                enum_pyi_str += f"{enum_value['name']}: int\n"
         enum_python_proxies += alias_str
         enum_pyi_str += "\n" + alias_str
         enum_str += "};\n\n"
@@ -1702,6 +1719,66 @@ def filter_member_functions(
     return constructors, other_methods
 
 
+_TYPE_HINT_QUALIFIERS = ("const", "static", "virtual", "inline", "constexpr")
+_FIXED_WIDTH_INT_HINT_RE = re.compile(r"u?int(8|16|32|64)_t")
+
+
+def _builtin_type_hint(type_str):
+    """The type hint of a C++ builtin type, whatever its qualifiers (static
+    double, const int &, unsigned long...), or of a class named after its
+    module (const BRepGraph &). None if type_str is none of those."""
+    if "*" in type_str or "<" in type_str or ":" in type_str:
+        return None
+    words = [
+        w for w in type_str.replace("&", " ").split() if w not in _TYPE_HINT_QUALIFIERS
+    ]
+    if not words:
+        return None
+    if "&" in type_str and "const" not in type_str:
+        # a non const reference: an output parameter (see
+        # adapt_param_type_and_name) or, returned, an opaque SWIG pointer
+        return None
+    if all(w in ("unsigned", "signed", "long", "short", "int") for w in words):
+        return "int"
+    if len(words) != 1:
+        return None
+    word = words[0]
+    if word in ("double", "float"):
+        return "float"
+    if word == "bool":
+        return "bool"
+    if word == "size_t":
+        return "int"
+    if _FIXED_WIDTH_INT_HINT_RE.fullmatch(word):
+        # opaque to SWIG unless the module includes stdint.i, see
+        # _write_swig_module_specific_templates
+        return "int" if state.flatten_nested_classes else None
+    if "_" not in word and is_module(word):
+        # %rename(brepgraph) BRepGraph, see process_classes
+        return word.lower()
+    return None
+
+
+_NESTED_NAME_RE = re.compile(r"([A-Za-z0-9]+_\w+)::(\w+)")
+_class_enums_cache = {}
+
+
+def _is_class_enum(class_name, enum_name):
+    """True if the header of class_name declares the enum enum_name"""
+    key = (class_name, enum_name)
+    if key not in _class_enums_cache:
+        header = os.path.join(OCCT_INCLUDE_DIR, f"{class_name}.hxx")
+        try:
+            with open(header, "r", encoding="utf8", errors="replace") as f:
+                content = f.read()
+        except OSError:
+            content = ""
+        _class_enums_cache[key] = (
+            re.search(rf"\benum\s+(class\s+)?{enum_name}\b", content) is not None
+        )
+    return _class_enums_cache[key]
+
+
 def adapt_type_for_hint(type_str):
     """convert c++ types to python types, for type hints
     Returns False if there's no possible type
@@ -1711,13 +1788,18 @@ def adapt_type_for_hint(type_str):
         return False
     if "void" in type_str or type_str in [""]:
         return "None"
-    if " int" in type_str:  # const int, unsigned int etc.
+    # the substring tests below don't apply to a template argument, e.g.
+    # const NCollection_Vec3<float> & is not a float
+    is_template = "<" in type_str and not re.match(
+        r"(const\s+)?opencascade::handle<", type_str
+    )
+    if " int" in type_str and not is_template:  # const int, unsigned int etc.
         return "int"
-    if "char *" in type_str or "CString" in type_str:
+    if ("char *" in type_str or "CString" in type_str) and not is_template:
         return "str"
-    if "bool" in type_str:
+    if "bool" in type_str and not is_template:
         return "bool"
-    if "float" in type_str:
+    if "float" in type_str and not is_template:
         return "float"
     if "integer *" in type_str:
         return "int"
@@ -1739,6 +1821,9 @@ def adapt_type_for_hint(type_str):
         return "str"
     if "std::ostream &" in type_str:
         return "str"
+    builtin_hint = _builtin_type_hint(type_str)
+    if builtin_hint is not None:
+        return builtin_hint
     if "_" not in type_str:  # TODO these are special cases, e.g. nested classes
         logging.warning("    [TypeHint] Skipping type %s, should contain _", type_str)
         return False  # returns a boolean to prevent type hint creation, the type will not be found
@@ -1761,6 +1846,14 @@ def adapt_type_for_hint(type_str):
     # transform opencascade::handle<Message_Alert> to return Message_Alert
     if type_str.startswith("opencascade::handle<"):
         type_str = type_str[20:].split(">")[0].strip()
+    nested_enum = _NESTED_NAME_RE.fullmatch(type_str)
+    if (
+        nested_enum
+        and nested_enum.group(1) not in state.unwrapped_classes
+        and _is_class_enum(*nested_enum.groups())
+    ):
+        # e.g. gp_Dir::D, whose stub is written in the class body
+        return f"{nested_enum.group(1)}.{nested_enum.group(2)}"
     if ":" in type_str:
         logging.warning("    [TypeHint] Skip type %s, because of trailing :", type_str)
         return False
@@ -1808,7 +1901,7 @@ def adapt_type_hint_parameter_name(param_name_str):
         #            doublereal * ,
         #            integer *   );
         logging.warning(
-            "    [TypeHint] param name missing or '&', skip method type hint"
+            "    [TypeHint] param name missing or '&', generic name used"
         )
         new_param_name = ""
         success = False
@@ -1840,13 +1933,14 @@ def adapt_type_hint_default_value(default_value_str):
     """default values such as Standard_True etc. must be
     converted to correct python values
     """
-    if default_value_str == "Standard_True":
+    if default_value_str in ("Standard_True", "true"):
         new_default_value_str = "True"
-    elif default_value_str == "Standard_False":
+    elif default_value_str in ("Standard_False", "false"):
         new_default_value_str = "False"
     elif "Precision::" in default_value_str:
-        new_default_value_str = default_value_str.replace("Precision::", "Precision.")
-    elif default_value_str == "NULL":
+        # the class is renamed precision, and not imported by the other stubs
+        new_default_value_str = "..."
+    elif default_value_str in ("NULL", "nullptr"):
         new_default_value_str = "None"
     elif "opencascade::handle" in default_value_str:
         # case opencascade::handle<Message_ProgressIndicator>()
@@ -2068,9 +2162,9 @@ def _build_typehint(
         return ""
 
     str_typehint = ""
-    # f"" wrap preserves a string even when adapt_type_for_hint returns False;
-    # downstream str.join would otherwise blow up.
-    types_returned = [f"{adapt_type_for_hint(return_type)}"]
+    # adapt_type_for_hint returns False for a type it can't translate: Any
+    # (not the "False" string, which is not a valid type hint)
+    types_returned = [adapt_type_for_hint(return_type) or "Any"]
     all_parameters_type_hint = ["self"]
 
     if overload:
@@ -2091,20 +2185,17 @@ def _build_typehint(
                 )
         str_typehint += f"    def {function_name}("
 
-    canceled = False
-    for par in parameters_types_and_names:
-        par_typ = adapt_type_for_hint(par[0])
-        if not par_typ:
-            canceled = True
-            break
+    for i, par in enumerate(parameters_types_and_names):
         ov = adapt_param_type_and_name(" ".join(par))
         if "OutValue" in ov:
-            type_to_add = f"{adapt_type_for_hint(ov)}"
+            type_to_add = adapt_type_for_hint(ov) or "Any"
             if types_returned[0] == "None":
                 types_returned[0] = type_to_add
             else:
                 types_returned.append(type_to_add)
             continue
+        # a type that can't be translated is written Any, the method is kept
+        par_typ = adapt_type_for_hint(par[0]) or "Any"
         # if there's a default value, the type becomes Optional[type] = value
         if len(par) == 3:
             hint_def_value, adapted = adapt_type_hint_default_value(par[2])
@@ -2115,14 +2206,24 @@ def _build_typehint(
             )
         par_nam, success = adapt_type_hint_parameter_name(par[1])
         if not success:
-            canceled = True
+            par_nam = f"arg{i}"
         if par_nam.endswith("_list"):
-            par_typ = f"List[{par_typ}]"
+            par_typ = f"list[{par_typ}]"
         all_parameters_type_hint.append(f"{par_nam}: {par_typ}")
 
-    if canceled:
-        return ""
-
+    is_find_attribute = (
+        function_name == "FindAttribute"
+        and f["parent"] is not None
+        and f["parent"]["name"] in ("TDF_Label", "TDF_Attribute")
+    )
+    if is_find_attribute:
+        # the attribute found has the type of the one passed, see below
+        all_parameters_type_hint = [
+            p.replace(": TDF_Attribute", ": _TDF_AttributeT")
+            if p.endswith(": TDF_Attribute")
+            else p
+            for p in all_parameters_type_hint
+        ]
     str_typehint += ", ".join(all_parameters_type_hint)
     if len(types_returned) == 1:
         returned_type_hint = types_returned[0]
@@ -2133,14 +2234,10 @@ def _build_typehint(
     if not _is_python_expression(returned_type_hint):
         # e.g. a std::variant return type mangled by CppHeaderParser
         returned_type_hint = "Any"
-    if (
-        function_name == "FindAttribute"
-        and f["parent"] is not None
-        and f["parent"]["name"] in ("TDF_Label", "TDF_Attribute")
-    ):
+    if is_find_attribute:
         # the OccHandle.i typemap returns the attribute (with its dynamic
         # type), or None if not found, in place of the bool result
-        returned_type_hint = "Optional[TDF_Attribute]"
+        returned_type_hint = "Optional[_TDF_AttributeT]"
     str_typehint += f") -> {returned_type_hint}: ...\n"
     return str_typehint
 
@@ -2781,6 +2878,7 @@ def _class_specific_extensions(class_name):
         extra_def += "\t\t\tdelete[] str;}\n"
         extra_def += "\t\t\treturn txt;}\n"
         extra_def += "\t\t};\n"
+        extra_pyi += "    def GetLabelName(self) -> str: ...\n"
     # occt-800: StlAPI_Writer dropped SetASCIIMode and exposes the flag
     # through `bool& ASCIIMode()`. Add a Python-friendly setter shim.
     if class_name == "StlAPI_Writer":
@@ -2789,6 +2887,7 @@ def _class_specific_extensions(class_name):
             "\t\t\tvoid SetASCIIMode(bool theMode) { self->ASCIIMode() = theMode; }\n"
         )
         extra_def += "\t\t};\n"
+        extra_pyi += "    def SetASCIIMode(self, theMode: bool) -> None: ...\n"
     # occt-800: math_Matrix still exposes mutable Value() returning a reference
     # but Python cannot assign through it - add Get/SetValue shims (math_Vector:
     # see MATH_VECTORBASE_EXTEND).
@@ -2797,6 +2896,8 @@ def _class_specific_extensions(class_name):
         extra_def += "\t\t\tdouble GetValue(int row, int col) const { return self->Value(row, col); }\n"
         extra_def += "\t\t\tvoid SetValue(int row, int col, double v) { self->Value(row, col) = v; }\n"
         extra_def += "\t\t};\n"
+        extra_pyi += "    def GetValue(self, row: int, col: int) -> float: ...\n"
+        extra_pyi += "    def SetValue(self, row: int, col: int, v: float) -> None: ...\n"
     return extra_def, extra_pyi
 
 
@@ -3209,6 +3310,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             )
         # then defines the wrapper
         class_def_str += f"class {class_name}"
+        class_pyi_start = len(class_pyi_str)
         class_pyi_str += f"\nclass {class_name_for_pyi}"  # type hints
         # inheritance process
         inherits_from = klass["inherits"]
@@ -3257,10 +3359,18 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             class_def_str += "\t\tclass " + nested_class_name + " {};\n"
         ####### class enums
         if class_enums_list:
-            class_enum_def, _ = process_enums(class_enums_list)
+            class_enum_def, class_enum_pyi = process_enums(class_enums_list)
             class_def_str += class_enum_def
+            # the python proxies of the class enums are written in the class
+            # body (e.g. GeomEval_HyperboloidSurface.SheetMode)
+            if class_pyi_str.endswith("    pass\n"):
+                class_pyi_str = class_pyi_str[: -len("    pass\n")] + "".join(
+                    f"    {line}\n" if line else "\n"
+                    for line in class_enum_pyi.strip("\n").split("\n")
+                )
         # process class properties here
         properties_str = ""
+        properties_pyi_str = ""
         if state.current_module == "Graphic3d" or state.flatten_nested_classes:
             for property_value in list(klass["properties"]["public"]):
                 # TODO : cppheaderparser fails at finding private class properties
@@ -3300,8 +3410,21 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
                 else:
                     temp = f"\t\t{fix_type(property_value['type'])} {property_value['name']};\n"
                 properties_str += temp
+                if not keyword.iskeyword(property_value["name"]):
+                    # a C array is an opaque SWIG pointer
+                    property_hint = (
+                        "Any"
+                        if "array_size" in property_value
+                        else adapt_type_for_hint(fix_type(property_value["type"]))
+                        or "Any"
+                    )
+                    properties_pyi_str += f"    {property_value['name']}: {property_hint}\n"
         # @TODO : wrap class typedefs (for instance BRepGProp_MeshProps)
         class_def_str += properties_str
+        if properties_pyi_str:
+            if class_pyi_str.endswith("    pass\n"):
+                class_pyi_str = class_pyi_str[: -len("    pass\n")]
+            class_pyi_str += properties_pyi_str
         # process methods here
         class_public_methods = klass["methods"]["public"]
         # remove, from this list, all functions that
@@ -3354,6 +3477,18 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             "pass\n    @staticmethod", "@staticmethod"
         )
 
+        # an alias of a class enum value (e.g. X = D.X in gp_Dir) is hidden,
+        # at runtime, by the method of the same name (gp_Dir.X)
+        class_methods = set(
+            re.findall(r"^    def (\w+)\(", class_pyi_str[class_pyi_start:], re.M)
+        )
+        if class_methods:
+            class_pyi_str = class_pyi_str[:class_pyi_start] + re.sub(
+                r"^    (\w+) = \w+\.\1\n",
+                lambda m: "" if m.group(1) in class_methods else m.group(0),
+                class_pyi_str[class_pyi_start:],
+                flags=re.M,
+            )
         extra_def, extra_pyi = _class_specific_extensions(class_name)
         class_def_str += extra_def
         class_pyi_str += extra_pyi
@@ -3704,18 +3839,85 @@ class ModuleWrapper:
         path = os.path.join(SWIG_OUTPUT_PATH, f"{self._module_name}.pyi")
         with open(path, "w", encoding="utf8") as f:
             f.write("from enum import IntEnum\n")
+            # typing.Iterator is qualified: the star import of NCollection
+            # below brings a placeholder class named Iterator
+            f.write("import typing\n")
             f.write("from typing import Any, overload, NewType, Optional, Tuple\n\n")
-            for dep in state.python_module_dependency:
-                if is_module(dep):
-                    f.write(f"from OCC.Core.{dep} import *\n")
+            stub_body = (
+                self._typedefs_pyi_str + self._enums_pyi_str + self._classes_pyi_str
+            )
+            for dep in _stub_module_dependencies(
+                self._module_name, state.python_module_dependency, stub_body
+            ):
+                f.write(f"from OCC.Core.{dep} import *\n")
+            if self._module_name == "TDF":
+                # the type of the attribute FindAttribute takes and returns
+                f.write(
+                    '\n_TDF_AttributeT = typing.TypeVar("_TDF_AttributeT", bound="TDF_Attribute")\n'
+                )
             # NewTypes for typedefs that are plain aliases (e.g. Prs3d_Presentation
             # is just an alias for Graphic3d_Structure):
             #   Prs3d_Presentation = NewType("Prs3d_Presentation", Graphic3d_Structure)
-            f.write(self._typedefs_pyi_str)
+            f.write(
+                fix_template_stubs(
+                    self._typedefs_pyi_str,
+                    self._enums_pyi_str + self._classes_pyi_str,
+                    self._typedefs_str,
+                )
+            )
             f.write(self._enums_pyi_str)
             f.write(self._classes_pyi_str)
             if self._module_name == "TopoDS":
                 f.write(TOPODS_CLASS_PYI)
+
+
+_PYI_CLASS_RE = re.compile(r"^class (\w+)\b", re.MULTILINE)
+_PYI_ANNOTATION_NAME_RE = re.compile(r"(?:: |-> |\[|, )([A-Za-z0-9]+)_\w+")
+
+
+def _stub_module_dependencies(module_name, module_dependencies, stub_body):
+    """The modules the stub imports: those of the SWIG module, plus those
+    of the types its annotations refer to, which SWIG may not need (e.g.
+    TColgp does not %import gp.i)"""
+    deps = [dep for dep in module_dependencies if is_module(dep)]
+    for prefix in sorted(set(_PYI_ANNOTATION_NAME_RE.findall(stub_body))):
+        if prefix != module_name and prefix not in deps and is_module(prefix):
+            deps.append(prefix)
+    return deps
+
+_PYI_NEWTYPE_RE = re.compile(r"^(\w+) = NewType\(", re.MULTILINE)
+_SWIG_TEMPLATE_RE = re.compile(r"^%template\((\w+)\)", re.MULTILINE)
+
+
+def fix_template_stubs(typedefs_pyi, other_pyi, swig_typedefs):
+    """The typedefs of the instantiated templates (e.g. TColgp_HArray1OfPnt,
+    TColStd_IndexedDataMapOfStringString) are written as NewTypes, which
+    hide the class written later for some of them (mypy keeps the first
+    definition), and others have no class at all. Remove the NewTypes of the
+    names that have a class, and write a generic class for the names
+    instantiated by %template that have none."""
+    class_names = set(_PYI_CLASS_RE.findall(typedefs_pyi + other_pyi))
+    templates = _SWIG_TEMPLATE_RE.findall(swig_typedefs)
+    to_remove = class_names | set(templates)
+    lines = typedefs_pyi.split("\n")
+    kept = []
+    for i, line in enumerate(lines):
+        match = _PYI_NEWTYPE_RE.match(line)
+        if match and match.group(1) in to_remove:
+            if kept and kept[-1].startswith("# the following typedef cannot be wrapped"):
+                kept.pop()
+            continue
+        kept.append(line)
+    typedefs_pyi = "\n".join(kept)
+    for name in templates:
+        if name not in class_names:
+            class_names.add(name)
+            typedefs_pyi += (
+                f"\nclass {name}:"
+                "\n    def __init__(self, *args: Any, **kwargs: Any) -> None: ..."
+                "\n    def __getattr__(self, name: str) -> Any: ...\n"
+            )
+    return typedefs_pyi
 
 
 # Nested typedefs of classes that are not wrapped, rewritten to an equivalent
