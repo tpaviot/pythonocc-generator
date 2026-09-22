@@ -20,6 +20,7 @@
 import argparse
 import ast
 import configparser
+import copy
 import datetime
 import glob
 import hashlib  # to compute md5 function signatures
@@ -35,7 +36,7 @@ import time
 
 import CppHeaderParser
 
-from _modules import KEEP_CONSTRUCTOR_ARGS, OCCT_MODULES, TOOLKITS
+from _modules import KEEP_CONSTRUCTOR_ARGS, MODULE_OPTIONS, OCCT_MODULES, TOOLKITS
 from _exclusions import (
     ENUMS_TO_EXLUDE,
     HXX_TO_EXCLUDE_FROM_BEING_INCLUDED,
@@ -202,6 +203,21 @@ class GeneratorState:
         # instantiations (BRepLProp_SLProps, Extrema_ExtPC, Bnd_B2d, ...).
         # Filled by _convert_using_to_typedef(), reset at every module.
         self.template_alias_names = set()
+        # occt-800: modules whose nested classes are wrapped as top level
+        # classes (see flatten_nested_classes()), from modules.yaml.
+        self.flatten_nested_classes = False
+        # (qualified C++ name, flat SWIG name) of the flattened classes of the
+        # current module, e.g. ("BRepGraph::ShapesView", "BRepGraph_ShapesView");
+        # a typedef is written for each in the C++ section of the .i file.
+        self.flattened_classes = []
+        # `using Alias = Outer::Tpl<Args>;` aliases of nested class templates,
+        # alias -> (Outer, Tpl, Args); instantiated by flatten_nested_classes().
+        self.nested_template_aliases = {}
+        # names of the classes of the current module that are not wrapped
+        # (templates, excluded classes...) or that cannot be copied (deleted
+        # copy constructor): a method returning one of them by value cannot
+        # be wrapped. Filled by process_classes().
+        self.unwrapped_classes = set()
 
         # All enums seen so far; populated by process_enums().
         self.all_enums = []
@@ -399,6 +415,8 @@ _STANDARD_DEPRECATED_RE = re.compile(
     r'(?:".*?(?:\\"|[^"])*?"(?:\s*".*?(?:\\"|[^"])*?")*)\s*\)'
 )
 _USING_ALIAS_RE = re.compile(r"\busing\s+([A-Za-z_]\w*)\s*=\s*([^;]+);")
+# `Outer::Tpl<Args>`, an instantiation of a class template nested in Outer
+_NESTED_TEMPLATE_ALIAS_RE = re.compile(r"(\w+)::(\w+)<(.+)>")
 _HANDLE_PARENS_RE = re.compile(r"Handle[\s]*\([\w\s]*\)")
 
 
@@ -448,11 +466,15 @@ def _comment_out_macros(header_content):
     return header_content
 
 
+_CXX_ATTRIBUTE_RE = re.compile(r"\[\[[^\]]*\]\]")
+
+
 def _strip_macros(header_content):
     """Drop attribute macros that prevent CppHeaderParser from working."""
     for token in ("DEFINE_STANDARD_ALLOC", "Standard_EXPORT", "Standard_NODISCARD"):
         header_content = header_content.replace(token, "")
-    return header_content
+    # C++11 attributes such as [[nodiscard]] (occt-800: BRepGraph)
+    return _CXX_ATTRIBUTE_RE.sub("", header_content)
 
 
 def _rewrite_handle_parens(header_content):
@@ -543,6 +565,11 @@ def _convert_using_to_typedef(header_content):
         alias = match.group(1)
         rhs = " ".join(match.group(2).split())
         if "<" in rhs:
+            nested = _NESTED_TEMPLATE_ALIAS_RE.fullmatch(rhs)
+            if nested is not None and state.flatten_nested_classes:
+                # instantiated by flatten_nested_classes(), left as is here
+                state.nested_template_aliases[alias] = nested.groups()
+                return match.group(0)
             if not is_wrappable_template_alias(alias, rhs):
                 return match.group(0)
             state.template_alias_names.add(alias)
@@ -1613,10 +1640,18 @@ def adapt_default_value(def_value):
     return def_value
 
 
-def adapt_default_value_parmlist(param):
+def adapt_default_value_parmlist(param, parent_class=None):
     """adapts default value to be used in swig parameter list"""
-    def_value = param["defaultValue"]
-    return def_value.replace(" ", "")
+    def_value = param["defaultValue"].replace(" ", "")
+    # a constant or an enum value of the class: SWIG (compactdefaultargs)
+    # evaluates the default value out of the class scope, qualify it
+    if parent_class is not None and re.fullmatch(r"[A-Za-z_]\w*", def_value):
+        class_names = {p["name"] for p in parent_class["properties"]["public"]}
+        for enum in parent_class["enums"]["public"]:
+            class_names.update(v["name"] for v in enum.get("values", []))
+        if def_value in class_names:
+            return f"{parent_class['name']}::{def_value}"
+    return def_value
 
 
 def filter_member_functions(
@@ -2005,7 +2040,7 @@ def _build_swig_parameter_list(f):
 
         param_string = adapt_param_type_and_name(" ".join(param_type_and_name))
         if "defaultValue" in param:
-            def_value = adapt_default_value_parmlist(param)
+            def_value = adapt_default_value_parmlist(param, f.get("parent"))
             param_string += f" = {def_value}"
             param_type_and_name.append(def_value)
 
@@ -2107,6 +2142,47 @@ def _should_skip_function(f, function_name):
     if function_name in ("DEFINE_STANDARD_RTTIEXT", "Handle"):
         # Handle (something) func can not be handled by swig
         return True
+    if re.fullmatch(r"operator[A-Za-z_]\w*", function_name):
+        # conversion operator, e.g. operator BRepGraph_NodeId()
+        return True
+    if state.flatten_nested_classes:
+        return _should_skip_unwrappable_function(f)
+    return False
+
+
+def _should_skip_unwrappable_function(f):
+    """occt-800: the move-only and non copyable classes of BRepGraph. SWIG
+    binds an rvalue reference as an lvalue one and copies the values it
+    returns, which the compiler rejects for these classes. The other
+    modules keep their wrappers: an rvalue reference constructor is wrapped
+    as the copy constructor there."""
+    for param in f["parameters"]:
+        # an rvalue reference, e.g. a move constructor X(X&&): CppHeaderParser
+        # reports the type 'X & &' when the parameter is named, 'X &' and the
+        # name '&' otherwise
+        param_type = param.get("type", "").rstrip()
+        if "& &" in param_type or "&&" in param_type:
+            return True
+        if param.get("name") == "&" and param_type.endswith("&"):
+            return True
+    if "&&" in f.get("debug", ""):
+        # the raw declaration has an rvalue reference CppHeaderParser lost
+        return True
+    if (
+        f["constructor"]
+        and f["parent"] is not None
+        and len(f["parameters"]) == 1
+        and f["parameters"][0]["type"].replace("const", "").strip() == f["parent"]["name"]
+        and "&" not in f["parameters"][0]["type"]
+    ):
+        # X(X theOther): a move constructor X(X&&) whose reference was lost,
+        # a copy constructor by value does not exist in C++
+        return True
+    # returned by value, SWIG would copy a class that is not wrapped
+    rtn_type = f["rtnType"].replace("const", "").strip()
+    if "&" not in rtn_type and "*" not in rtn_type:
+        if rtn_type.split("<")[0].strip() in state.unwrapped_classes:
+            return True
     return False
 
 
@@ -2312,7 +2388,12 @@ def class_can_have_default_constructor(klass):
     class_public_methods = klass["methods"]["public"]
     for public_method in class_public_methods:
         if public_method["constructor"] and public_method["name"] == klass["name"]:
-            has_one_public_constructor = True
+            if public_method.get("deleted") and not public_method["parameters"]:
+                # occt-800: `X() = delete;`
+                logging.info("    Class %s has a deleted default constructor.", klass["name"])
+                return False
+            if not public_method.get("deleted"):
+                has_one_public_constructor = True
     # we have to ensure that no private or protected constructor is defined
     # we look for protected () constructor
     has_one_protected_constructor = False
@@ -2686,6 +2767,299 @@ def _render_excluded_classes_proxies(exclude_classes):
     return def_str, pyi_str
 
 
+def _split_template_args(args_str):
+    """Splits 'A, B<C, D>, E' on the top level commas."""
+    args, depth, current = [], 0, ""
+    for char in args_str:
+        if char == "," and depth == 0:
+            args.append(current.strip())
+            current = ""
+            continue
+        depth += char == "<"
+        depth -= char == ">"
+        current += char
+    args.append(current.strip())
+    return args
+
+
+def _rewrite_nested_names(type_str, scope, classes_dict, nested_map):
+    """Rewrites the nested class and enum names of type_str, as seen from
+    the class named scope (qualified C++ name), to their flat names.
+
+    'BRepGraph::ShapesView::Result' -> 'BRepGraph_ShapesView_Result',
+    'Result' (from BRepGraph::ShapesView) -> 'BRepGraph_ShapesView_Result',
+    'Kind' (from BRepGraph_NodeId::Typed) -> 'BRepGraph_NodeId::Kind'."""
+    for qualified, flat in sorted(nested_map.items(), key=lambda item: -len(item[0])):
+        type_str = re.sub(rf"(?<![\w:]){re.escape(qualified)}\b", flat, type_str)
+    scopes = [scope]
+    while "::" in scopes[-1]:
+        scopes.append(scopes[-1].rsplit("::", 1)[0])
+    for current_scope in scopes:
+        for qualified, flat in nested_map.items():
+            if qualified.rsplit("::", 1)[0] == current_scope:
+                short = qualified.rsplit("::", 1)[1]
+                type_str = re.sub(rf"(?<![\w:]){short}\b", flat, type_str)
+        if current_scope != scope and current_scope in classes_dict:
+            # enums and typedefs of an enclosing class are qualified
+            owner = nested_map.get(current_scope, current_scope)
+            names = [
+                enum["name"]
+                for enum in classes_dict[current_scope]["enums"]["public"]
+                if enum.get("name")
+            ]
+            names.extend(classes_dict[current_scope]["typedefs"]["public"])
+            for name in names:
+                type_str = re.sub(rf"(?<![\w:]){name}\b", f"{owner}::{name}", type_str)
+    return type_str
+
+
+def _rewrite_class_types(klass, scope, classes_dict, nested_map):
+    """Applies _rewrite_nested_names to every type of a class dict."""
+    for prop in klass["properties"]["public"]:
+        prop["type"] = _rewrite_nested_names(prop["type"], scope, classes_dict, nested_map)
+    for inherit in klass["inherits"]:
+        inherit["class"] = _rewrite_nested_names(
+            inherit["class"], scope, classes_dict, nested_map
+        )
+    for access in ("public", "protected", "private"):
+        for method in klass["methods"][access]:
+            rtn_type = method["rtnType"]
+            # CppHeaderParser drops the const, & and * of a return type when
+            # it qualifies a nested type name, they are reported as flags
+            if method.get("returns_reference") and "&" not in rtn_type:
+                rtn_type += " &"
+            if method.get("returns_pointer") and "*" not in rtn_type:
+                rtn_type += " *"
+            if method.get("returns_const") and not rtn_type.startswith("const"):
+                rtn_type = f"const {rtn_type}"
+            method["rtnType"] = _rewrite_nested_names(
+                rtn_type, scope, classes_dict, nested_map
+            )
+            for param in method["parameters"]:
+                for key in ("type", "raw_type"):
+                    if param.get(key):
+                        param[key] = _rewrite_nested_names(
+                            param[key], scope, classes_dict, nested_map
+                        )
+
+
+def _instantiate_nested_template(alias, outer, template_name, args_str, classes_dict):
+    """Returns the class dict of the instantiation `alias` of the class
+    template Outer::Tpl<Args>, None when it cannot be instantiated.
+
+    The template parameters must be non-type parameters (e.g. an enum
+    value): the parameter names are replaced by the arguments in every
+    method, as the compiler would do; the template name by the alias."""
+    template = classes_dict.get(f"{outer}::{template_name}")
+    if template is None:
+        return None
+    params = re.fullmatch(r"template\s*<(.*)>", template.get("template", "").strip())
+    if params is None:
+        return None
+    param_names = []
+    for param in _split_template_args(params.group(1)):
+        words = param.replace("=", " ").split()
+        if not words or words[0] in ("typename", "class"):
+            return None  # a type parameter, its uses cannot be rewritten
+        param_names.append(words[1] if len(words) > 1 else words[0])
+    args = _split_template_args(args_str)
+    if len(args) != len(param_names):
+        return None
+
+    def substitute(text):
+        for name, arg in zip(param_names, args):
+            text = re.sub(rf"\b{name}\b", arg, text)
+        text = re.sub(rf"\b{outer}::{template_name}\b", alias, text)
+        return re.sub(rf"(?<![\w:]){template_name}\b", alias, text)
+
+    # a shallow copy of the CppHeaderParser class keeps its attributes, the
+    # methods and parameters are copied before being rewritten
+    klass = copy.copy(template)
+    klass["name"] = alias
+    klass["template"] = ""
+    klass["parent"] = None
+    klass["nested_classes"] = []
+    klass["methods"] = {
+        access: [dict(method) for method in template["methods"][access]]
+        for access in ("public", "protected", "private")
+    }
+    for access in ("public", "protected", "private"):
+        methods = []
+        for method in klass["methods"][access]:
+            if method.get("template"):
+                continue  # method templates cannot be instantiated here
+            method["parameters"] = [dict(param) for param in method["parameters"]]
+            method["name"] = substitute(method["name"])
+            method["rtnType"] = substitute(method["rtnType"])
+            for param in method["parameters"]:
+                for key in ("type", "raw_type"):
+                    if param.get(key):
+                        param[key] = substitute(param[key])
+            method["parent"] = klass
+            methods.append(method)
+        klass["methods"][access] = methods
+    return klass
+
+
+_ACCESS_RE = re.compile(r"^\s*(public|protected|private)\s*:")
+
+
+def _nested_class_access(klass, parent):
+    """Returns the access ('public', 'protected' or 'private') of a nested
+    class, from the last access specifier written between the declaration
+    of the parent class and the nested class in the header. CppHeaderParser
+    does not record it."""
+    header = klass.get("_header")
+    if header is None or "line_number" not in klass or "line_number" not in parent:
+        return "public"
+    if header != parent.get("_header"):
+        # defined out of line, in its own header: forward declared in the
+        # public section of its parent
+        return "public"
+    with open(header, "r", encoding="utf8", errors="replace") as f:
+        lines = f.readlines()
+    access = "public" if parent.get("declaration_method") == "struct" else "private"
+    depth = 0
+    for line in lines[parent["line_number"] - 1 : klass["line_number"] - 1]:
+        # only the access specifiers of the parent body itself, not those
+        # of the nested classes declared before
+        if depth == 1:
+            match = _ACCESS_RE.match(line)
+            if match:
+                access = match.group(1)
+        depth += line.count("{") - line.count("}")
+    return access
+
+
+def flatten_nested_classes(classes_dict):
+    """occt-800: wraps the nested classes of a module as top level classes.
+
+    SWIG does not support nested classes defined out of line
+    (`class BRepGraph::ShapesView { ... };`). Each nested class Outer::Inner
+    is wrapped as a top level class Outer_Inner, a `typedef Outer::Inner
+    Outer_Inner;` written in the C++ section of the .i file makes the
+    generated code compile. The nested names are rewritten in every
+    signature. Aliases of nested class templates (`using BRepGraph_FaceId =
+    BRepGraph_NodeId::Typed<...>;`) are instantiated as classes too."""
+    # the instantiations of the nested class templates
+    for alias, (outer, template_name, args_str) in state.nested_template_aliases.items():
+        klass = _instantiate_nested_template(
+            alias, outer, template_name, args_str, classes_dict
+        )
+        if klass is None:
+            logging.info("    nested template alias %s not instantiated", alias)
+            continue
+        klass["_scope"] = f"{outer}::{template_name}"
+        classes_dict[alias] = klass
+        logging.info("    nested template alias %s instantiated", alias)
+    # the flat names, of the public nested classes
+    nested_map = {}
+    for name, klass in classes_dict.items():
+        if "::" in name and not name.startswith("std::"):
+            parent = classes_dict.get(name.rsplit("::", 1)[0])
+            if parent is not None and _nested_class_access(klass, parent) != "public":
+                klass["_skip"] = True
+                logging.info("    nested class %s is not public, skipped", name)
+                continue
+            nested_map[name] = name.replace("::", "_")
+    for name, klass in classes_dict.items():
+        scope = klass.get("_scope", name)
+        _rewrite_class_types(klass, scope, classes_dict, nested_map)
+        if name in nested_map:
+            klass["name"] = nested_map[name]
+            klass["_qualified"] = name
+            if not klass.get("template"):
+                state.flattened_classes.append((name, nested_map[name]))
+        short_name = name.rsplit("::", 1)[-1]
+        for access in ("public", "protected", "private"):
+            for method in klass["methods"][access]:
+                # constructors and destructors carry the short name, and an
+                # explicit constructor is not flagged as such by CppHeaderParser
+                if method["name"] == short_name:
+                    method["name"] = klass["name"]
+                    method["constructor"] = True
+                elif method["name"] == f"~{short_name}":
+                    method["name"] = f"~{klass['name']}"
+                    method["destructor"] = True
+    # the classes are looked up by name
+    for qualified, flat in nested_map.items():
+        classes_dict[flat] = classes_dict.pop(qualified)
+
+
+_PRIMITIVE_PROPERTY_TYPES = {
+    "bool", "int", "double", "float", "size_t", "uint32_t", "int32_t", "uint64_t",
+    "int64_t", "uint8_t", "unsigned int", "long", "unsigned long", "char",
+    "Standard_Integer", "Standard_Real", "Standard_Boolean", "Standard_ShortReal",
+}
+
+
+def _is_wrappable_property_type(type_str, klass):
+    """A public field is wrapped when its type is a primitive, an enum or a
+    typedef of the class itself or qualified by a wrapped class of the
+    module, or a class of a wrapped module. Pointers, templates and
+    unresolved names are not."""
+    type_str = type_str.replace("const", "").strip()
+    if type_str in _PRIMITIVE_PROPERTY_TYPES:
+        return True
+    own_names = {enum.get("name") for enum in klass["enums"]["public"]}
+    own_names.update(klass["typedefs"]["public"])
+    if type_str in own_names:
+        return True
+    if any(token in type_str for token in ("<", "*", "&", "std::", " ")):
+        return False
+    if "::" in type_str:
+        return type_str.split("::")[0].split("_")[0] == state.current_module
+    return "_" in type_str and is_module(type_str.split("_")[0])
+
+
+def _is_nested_base_of_module(base_class):
+    """True for a base class nested in a class of the current module, e.g.
+    BRepGraph_ReverseIterator::EdgeParentsOf<...>, which is not wrapped."""
+    return (
+        "::" in base_class
+        and base_class.split("::")[0].split("_")[0] == state.current_module
+    )
+
+
+def _propagate_abstract_classes(classes_dict):
+    """Flags as abstract the classes that inherit pure virtual methods of a
+    base class of the module without overriding them. CppHeaderParser only
+    flags a class declaring pure virtual methods itself."""
+    by_name = {klass["name"]: klass for klass in classes_dict.values()}
+    memo = {}
+
+    def unimplemented(klass):
+        """The pure virtual methods klass does not implement."""
+        if klass["name"] in memo:
+            return memo[klass["name"]]
+        memo[klass["name"]] = set()  # guards against inheritance cycles
+        pure, implemented = set(), set()
+        for access in ("public", "protected", "private"):
+            for method in klass["methods"][access]:
+                if method.get("pure_virtual"):
+                    pure.add(method["name"])
+                else:
+                    implemented.add(method["name"])
+        for inherit in klass["inherits"]:
+            base = by_name.get(inherit["class"])
+            if base is not None:
+                pure |= unimplemented(base)
+        memo[klass["name"]] = pure - implemented
+        return memo[klass["name"]]
+
+    for klass in classes_dict.values():
+        if klass.get("abstract") or not klass["inherits"]:
+            continue
+        missing = unimplemented(klass)
+        if missing:
+            logging.info(
+                "    %s is abstract, it does not override %s",
+                klass["name"],
+                sorted(missing),
+            )
+            klass["abstract"] = True
+
+
 def process_classes(classes_dict, exclude_classes, exclude_member_functions):
     """Generate the SWIG string for the class wrapper.
     Works from a dictionary of all classes, generated with CppHeaderParser.
@@ -2707,6 +3081,34 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
     class_def_str = ""  # the string for class definition
     class_pyi_str = ""  # the string for class type hints
 
+    if state.flatten_nested_classes:
+        flatten_nested_classes(classes_dict)
+    _propagate_abstract_classes(classes_dict)
+    for klass in classes_dict.values():
+        # the nested classes of an excluded class are excluded too
+        outer_names = klass.get("_qualified", "").split("::")
+        if any(
+            "_".join(outer_names[:i]) in exclude_classes
+            for i in range(1, len(outer_names))
+        ):
+            klass["_skip"] = True
+        if (
+            klass.get("template")
+            or klass.get("_skip")
+            or klass["name"] in exclude_classes
+            or any(_is_nested_base_of_module(inherit["class"]) for inherit in klass["inherits"])
+        ):
+            state.unwrapped_classes.add(klass["name"].split("<")[0])
+        for method in klass["methods"]["public"] + klass["methods"]["private"]:
+            # a deleted copy constructor X(const X&) = delete
+            if (
+                method["constructor"]
+                and method.get("deleted")
+                and len(method["parameters"]) == 1
+                and method["parameters"][0]["type"].replace("const", "").strip()
+                == klass["name"]
+            ):
+                state.unwrapped_classes.add(klass["name"])
     inheritance_tree_list = build_inheritance_tree(classes_dict)
     for klass in inheritance_tree_list:
         # class name
@@ -2727,6 +3129,13 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # ensure the class returned by CppHeader is defined in this module
         # otherwise we go on with the next class
         if not class_name.startswith(state.current_module):
+            continue
+        if any(_is_nested_base_of_module(inherit["class"]) for inherit in klass["inherits"]):
+            # occt-800: e.g. BRepGraph_FacesOfEdge derives from an
+            # instantiation of a nested class template, which is not wrapped
+            logging.info("    %s skipped, its base class is not wrapped", class_name)
+            continue
+        if klass.get("_skip"):
             continue
         # we rename the class if the module is the same name
         # for instance TopoDS is both a module and a class
@@ -2790,7 +3199,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # process class enums here
         class_enums_list = klass["enums"]["public"]
         ###### Nested classes
-        nested_classes = klass["nested_classes"]
+        nested_classes = [] if state.flatten_nested_classes else klass["nested_classes"]
         for n in nested_classes:
             nested_class_name = n["name"]
             # skip anon structs, for instance in AdvApp2Var_SysBase
@@ -2805,7 +3214,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             class_def_str += class_enum_def
         # process class properties here
         properties_str = ""
-        if state.current_module == "Graphic3d":
+        if state.current_module == "Graphic3d" or state.flatten_nested_classes:
             for property_value in list(klass["properties"]["public"]):
                 # TODO : cppheaderparser fails at finding private class properties
                 if (
@@ -2821,6 +3230,17 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
                     continue
                 if "std::map<" in property_value["type"]:
                     logging.warning("Wrong type in class property std::map")
+                    continue
+                if "static" in property_value["type"] or "constexpr" in property_value["type"]:
+                    continue  # occt-800: static constexpr constants
+                if state.flatten_nested_classes and not _is_wrappable_property_type(
+                    property_value["type"], klass
+                ):
+                    logging.info(
+                        "    property %s of type %s skipped",
+                        property_value["name"],
+                        property_value["type"],
+                    )
                     continue
                 if (
                     property_value["constant"]
@@ -3003,12 +3423,14 @@ def parse_module(module_name):
 
     # filter those headers
     module_headers = filter_header_list(module_headers, HXX_TO_EXCLUDE_FROM_CPPPARSER)
-    cpp_headers = map(parse_header, module_headers)
     module_typedefs = {}
     module_enums = []
     module_classes = {}
     module_free_functions = []
-    for header in cpp_headers:
+    for header_filename in module_headers:
+        header = parse_header(header_filename)
+        for klass in header.classes.values():
+            klass["_header"] = header_filename
         # build the typedef dictionary
         module_typedefs.update(header.typedefs)
         # build the enum list
@@ -3032,6 +3454,12 @@ class ModuleWrapper:
         state.current_module = module_name
         state.deprecated_static_functions = []
         state.template_alias_names = set()
+        state.flatten_nested_classes = MODULE_OPTIONS.get(module_name, {}).get(
+            "flatten_nested_classes", False
+        )
+        state.flattened_classes = []
+        state.nested_template_aliases = {}
+        state.unwrapped_classes = set()
         # CURRENT_MODULE_PYI_STATIC_METHODS_ALIASES = ""
         # all modules depend, by default, upon Standard, NCollection and others
         if module_name not in ["Standard", "NCollection"]:
@@ -3181,6 +3609,10 @@ class ModuleWrapper:
         # (e.g. BVH::EncodeMortonCode) that get wrapped by SWIG
         if state.current_module in ["TopoDS", "BVH"]:
             f.write(f"using namespace {state.current_module};\n")
+        if state.flattened_classes:
+            f.write("// nested classes wrapped as top level classes\n")
+            for qualified, flat in state.flattened_classes:
+                f.write(f"typedef {qualified} {flat};\n")
         f.write("%};\n")
 
     def _write_swig_python_imports(self, f):
@@ -3194,11 +3626,18 @@ class ModuleWrapper:
         f.write("from OCC.Core.Exception import *\n")
         f.write("};\n\n")
 
+    _FIXED_WIDTH_INT_RE = re.compile(r"\bu?int(8|16|32|64)_t\b")
+
     def _write_swig_module_specific_templates(self, f):
         """Inject NCollection / BVH / Prs3d / Graphic3d / BRepAlgoAPI blocks."""
         template = self._MODULE_TEMPLATE_INJECTIONS.get(self._module_name)
         if template is not None:
             f.write(template)
+        # occt-800: BRepGraph counts and indices are uint32_t
+        if state.flatten_nested_classes and self._FIXED_WIDTH_INT_RE.search(
+            self._classes_str + self._typedefs_str + self._free_functions_str
+        ):
+            f.write("%include <stdint.i>\n")
 
     def _write_swig_body(self, f):
         f.write(self._enums_str)
