@@ -162,6 +162,10 @@ NODEFAULTCTOR = [
     "BRepMeshData_Curve",
     "Graphic3d_BvhCStructureSet",
     "PrsDim_Dimension",
+    # abstract: pure virtual methods inherited from TDF_Attribute, not seen
+    # by the generator
+    "TDataStd_GenericEmpty",
+    "TDataStd_GenericExtString",
 ]
 
 

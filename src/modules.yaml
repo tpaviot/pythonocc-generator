@@ -1048,7 +1048,6 @@ modules:
     exclude_classes: [TDF_LabelNode, TDF_DerivedAttribute]
 
   - name: TDataStd
-    exclude_classes: [TDataStd_GenericEmpty, TDataStd_GenericExtString]
 
   - name: TFunction
 
