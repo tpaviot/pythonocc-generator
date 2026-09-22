@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-##Copyright 2009-2020 Thomas Paviot (tpaviot@gmail.com)
+##Copyright 2009-2026 Thomas Paviot (tpaviot@gmail.com)
 ##
 ##This file is part of pythonOCC.
 ##
