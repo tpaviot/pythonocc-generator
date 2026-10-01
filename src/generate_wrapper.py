@@ -2149,6 +2149,9 @@ def _build_swig_parameter_list(f):
     return parameters_types_and_names, parameters_definition_strs, False
 
 
+_NON_CONST_HANDLE_REF_RE = re.compile(r"opencascade::handle<[^&]*>\s*&")
+
+
 def _build_typehint(
     f,
     function_name,
@@ -2196,9 +2199,23 @@ def _build_typehint(
             continue
         # a type that can't be translated is written Any, the method is kept
         par_typ = adapt_type_for_hint(par[0]) or "Any"
+        # a non-const handle reference is an output: None can be passed, and
+        # the handle is also appended to the returned values by the
+        # OccHandle.i argout typemap (None if the handle is null)
+        is_handle_output = not f["constructor"] and _NON_CONST_HANDLE_REF_RE.fullmatch(
+            par[0].strip()
+        )
+        if is_handle_output:
+            par_typ = f"Optional[{par_typ}]"
+            if types_returned[0] == "None":
+                types_returned[0] = par_typ
+            else:
+                types_returned.append(par_typ)
         # if there's a default value, the type becomes Optional[type] = value
         if len(par) == 3:
             hint_def_value, adapted = adapt_type_hint_default_value(par[2])
+            if is_handle_output:
+                par_typ = par_typ[len("Optional[") : -1]
             par_typ = (
                 f"Optional[{par_typ}] = {hint_def_value}"
                 if adapted
