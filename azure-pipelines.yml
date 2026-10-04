@@ -43,3 +43,18 @@ jobs:
     vmImage: 'ubuntu-24.04'
     py_maj: 3
     py_min: 14
+
+# ruff pinned: a new release may add rules or change the formatting
+- job: Ruff
+  pool:
+    vmImage: 'ubuntu-24.04'
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.x'
+  - bash: |
+      set -ex
+      python -m pip install ruff==0.16.8
+      ruff check --output-format=azure .
+      ruff format --check .
+    displayName: 'ruff check and ruff format --check'
