@@ -1027,7 +1027,7 @@ def process_typedefs(typedefs_dict):
     # other modules (BRepLProp_SLProps is a GeomLProp_SLPropsBase of a
     # BRepAdaptor_Surface). They all have to be imported, otherwise SWIG
     # wraps the arguments as opaque pointers.
-    for alias in state.template_alias_names:
+    for alias in sorted(state.template_alias_names):
         if alias in filtered_typedef_dict:
             for identifier in re.findall(
                 r"\b[A-Za-z]\w*_\w+\b", filtered_typedef_dict[alias]
