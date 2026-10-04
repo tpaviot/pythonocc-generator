@@ -15,11 +15,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import argparse
+import glob
 import json
 import os
-import glob
-import argparse
-import sys
 
 
 def process_toolkits(occt_directory):
@@ -45,8 +44,8 @@ def process_toolkits(occt_directory):
             print(f"Warning: PACKAGES file not found in {toolkit}")
             continue
 
-        with open(packages_file, "r") as f:
-            packages = [l.strip() for l in f.readlines()]
+        with open(packages_file, "r", encoding="utf8") as f:
+            packages = [l.strip() for l in f]
 
         # alphabetical sort
         packages.sort()

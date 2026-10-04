@@ -26,17 +26,17 @@ import glob
 import hashlib  # to compute md5 function signatures
 import keyword  # to prevent using python language keywords
 import logging
-from operator import itemgetter
 import os
 import platform
 import re
 import subprocess
 import sys
 import time
+from operator import itemgetter
+from typing import Optional
 
 import CppHeaderParser
 
-from _modules import KEEP_CONSTRUCTOR_ARGS, MODULE_OPTIONS, OCCT_MODULES, TOOLKITS
 from _exclusions import (
     ENUMS_TO_EXLUDE,
     HXX_TO_EXCLUDE_FROM_BEING_INCLUDED,
@@ -47,6 +47,7 @@ from _exclusions import (
     TEMPLATES_TO_EXCLUDE,
     TYPEDEF_TO_EXCLUDE,
 )
+from _modules import KEEP_CONSTRUCTOR_ARGS, MODULE_OPTIONS, OCCT_MODULES, TOOLKITS
 from _swig_templates import (
     BREPALGOAPI_HEADER,
     BREPTOOLS_WRITE_READ_FROM_STRING,
@@ -63,8 +64,6 @@ from _swig_templates import (
     HSEQUENCE_TEMPLATE,
     HSEQUENCE_TEMPLATE_PYI,
     LICENSE_HEADER,
-    TEMPLATE_CLASS_EXTENSIONS,
-    TEMPLATE_CLASS_EXTENSIONS_PYI,
     NCOLLECTION_ARRAY1_EXTEND_TEMPLATE_PYI,
     NCOLLECTION_DATAMAP_EXTEND_TEMPLATE,
     NCOLLECTION_HEADER_TEMPLATE,
@@ -78,6 +77,14 @@ from _swig_templates import (
     SHAPE_ANALYSIS_FREE_BOUNDS_TEMPLATE,
     SHAPE_ANALYSIS_FREE_BOUNDS_TEMPLATE_PYI,
     STANDARD_TRANSIENT_OPERATORS_TEMPLATE,
+    TEMPLATE__EQ__,
+    TEMPLATE__IADD__,
+    TEMPLATE__IMUL__,
+    TEMPLATE__ISUB__,
+    TEMPLATE__ITRUEDIV__,
+    TEMPLATE__NE__,
+    TEMPLATE_CLASS_EXTENSIONS,
+    TEMPLATE_CLASS_EXTENSIONS_PYI,
     TEMPLATE_DUMPJSON,
     TEMPLATE_DUMPJSON_PYI,
     TEMPLATE_GETTER_PYI,
@@ -85,12 +92,6 @@ from _swig_templates import (
     TEMPLATE_INITFROMJSON,
     TEMPLATE_INITFROMJSON_PYI,
     TEMPLATE_SETTER_PYI,
-    TEMPLATE__EQ__,
-    TEMPLATE__IADD__,
-    TEMPLATE__IMUL__,
-    TEMPLATE__ISUB__,
-    TEMPLATE__ITRUEDIV__,
-    TEMPLATE__NE__,
     TIMESTAMP_TEMPLATE,
     TOPODS_CLASS,
     TOPODS_CLASS_PYI,
@@ -106,6 +107,14 @@ from _swig_templates import (
 DEFAULT_CONFIG_PATH = os.environ.get("PYTHONOCC_GENERATOR_CONFIG") or os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "wrapper_generator.conf"
 )
+
+# path settings, set by load_config()
+PYTHONOCC_VERSION = ""
+OCCT_INCLUDE_DIR = ""
+PYTHONOCC_CORE_PATH = ""
+COMMON_OUTPUT_PATH = ""
+SWIG_OUTPUT_PATH = ""
+HEADERS_OUTPUT_PATH = ""
 
 
 def load_config(config_path):
@@ -292,13 +301,11 @@ def get_log_header():
 
 
 def get_log_footer(elapsed_seconds):
-    return """
+    return f"""
 #################################################
-SWIG interface file generation completed in {:.2f}s
+SWIG interface file generation completed in {elapsed_seconds:.2f}s
 #################################################
-""".format(
-        elapsed_seconds
-    )
+"""
 
 
 def reset_header_depency():
@@ -499,7 +506,7 @@ def _rewrite_handle_parens(header_content):
     return header_content
 
 
-_template_header_cache = {}
+_template_header_cache: dict[str, Optional[str]] = {}
 
 
 def find_template_header(template_name):
@@ -674,7 +681,8 @@ def get_type_for_ncollection_array(ncollection_array: str) -> str:
 
 
 def process_templates_from_typedefs(list_of_typedefs):
-    """ """
+    """Generate the SWIG %template directives and the .pyi hints of the
+    template instantiations in list_of_typedefs."""
     wrapper_str = "/* templates */\n"
     pyi_str = ""
     # template headers already %included in this module, see below
@@ -686,9 +694,7 @@ def process_templates_from_typedefs(list_of_typedefs):
             template_type = template_type.replace(" ", "")
         state.template_typedef_names.setdefault(template_type, template_name)
         # we must include
-        if not (
-            template_type.endswith("::Iterator") or template_type.endswith("::Type")
-        ):  # it's not an iterator
+        if not template_type.endswith(("::Iterator", "::Type")):  # it's not an iterator
             wrap_template = all(
                 forbidden_template not in template_type
                 for forbidden_template in TEMPLATES_TO_EXCLUDE
@@ -870,10 +876,12 @@ def process_templates_from_typedefs(list_of_typedefs):
                     # IndexedDataMapNode::Key field (should be Key1)
                     wrapper_str += f"%ignore {template_type}::Contained;\n"
                     wrapper_str += f"%template({template_name}) {template_type};\n"
-                elif (
-                    template_type.startswith("NCollection_HArray1<")
-                    or template_type.startswith("NCollection_HArray2<")
-                    or template_type.startswith("NCollection_HSequence<")
+                elif template_type.startswith(
+                    (
+                        "NCollection_HArray1<",
+                        "NCollection_HArray2<",
+                        "NCollection_HSequence<",
+                    )
                 ):
                     # occt-800: NCollection_HArray1/HArray2/HSequence are now
                     # plain template classes deriving from Standard_Transient.
@@ -1003,12 +1011,13 @@ def process_typedefs(typedefs_dict):
                 )
                 continue
             module = h_typ.split("_")[0]
-            if module != state.current_module:
-                # need to be added to the list of dependent object
-                if (module not in state.python_module_dependency) and (
-                    is_module(module)
-                ):
-                    state.python_module_dependency.append(module)
+            # need to be added to the list of dependent object
+            if (
+                module != state.current_module
+                and module not in state.python_module_dependency
+                and is_module(module)
+            ):
+                state.python_module_dependency.append(module)
 
     # occt-800: a `using Alias = Tpl<Args>;` template alias instantiates a
     # template that may live in another module, with argument types from yet
@@ -1080,7 +1089,9 @@ def process_typedefs(typedefs_dict):
             template_class = typedef_type.split("<", 1)[0].strip()
             if template_class in TEMPLATE_CLASS_EXTENSIONS_PYI:
                 item_type = typedef_type.split("<", 1)[1].rsplit(">", 1)[0].strip()
-                typedef_pyi_str += TEMPLATE_CLASS_EXTENSIONS_PYI[template_class].substitute(
+                typedef_pyi_str += TEMPLATE_CLASS_EXTENSIONS_PYI[
+                    template_class
+                ].substitute(
                     Type_T={"double": "float", "int": "int"}.get(item_type, "Any")
                 )
         elif (
@@ -1450,10 +1461,13 @@ def check_dependency(item):
     # TODO : is the following line really necessary ?
     if module == "Font":  # forget about Font dependencies, issues with FreeType
         return True
-    if module != state.current_module:
-        # need to be added to the list of dependent object
-        if (module not in state.python_module_dependency) and (is_module(module)):
-            state.python_module_dependency.append(module)
+    # need to be added to the list of dependent object
+    if (
+        module != state.current_module
+        and module not in state.python_module_dependency
+        and is_module(module)
+    ):
+        state.python_module_dependency.append(module)
     return module
 
 
@@ -1565,10 +1579,10 @@ def process_function_docstring(f):
             if "OutValue" in adapt_param_type_and_name(the_type_and_name):
                 # this parameter has to be added to the
                 # returns, not the parameters of the python method
-                ret.append(f'{param["name"]}: {param_type}')
+                ret.append(f"{param['name']}: {param_type}")
                 continue
             # add the parameter to the list
-            parameters_string += f'{param["name"]}: {param_type}'
+            parameters_string += f"{param['name']}: {param_type}"
             if "defaultValue" in param:
                 def_value = adapt_default_value(param["defaultValue"])
                 parameters_string += f" (optional, default to {def_value})"
@@ -1696,8 +1710,7 @@ def filter_member_functions(
         method_name = public_method["name"]
         public_method_signature = get_function_md5_signature(public_method)
         if (method_name in member_functions_to_exclude) or (
-            "".join([method_name, "::", public_method_signature])
-            in member_functions_to_exclude
+            f"{method_name}::{public_method_signature}" in member_functions_to_exclude
         ):
             logging.info(
                 "    explicitly excluded method %s::%s",
@@ -1760,7 +1773,7 @@ def _builtin_type_hint(type_str):
 
 
 _NESTED_NAME_RE = re.compile(r"([A-Za-z0-9]+_\w+)::(\w+)")
-_class_enums_cache = {}
+_class_enums_cache: dict[tuple[str, str], bool] = {}
 
 
 def _is_class_enum(class_name, enum_name):
@@ -1900,9 +1913,7 @@ def adapt_type_hint_parameter_name(param_name_str):
         # Standard_EXPORT static int mma1her_(const integer *  ,
         #            doublereal * ,
         #            integer *   );
-        logging.warning(
-            "    [TypeHint] param name missing or '&', generic name used"
-        )
+        logging.warning("    [TypeHint] param name missing or '&', generic name used")
         new_param_name = ""
         success = False
     else:  # default
@@ -2300,7 +2311,8 @@ def _should_skip_unwrappable_function(f):
         f["constructor"]
         and f["parent"] is not None
         and len(f["parameters"]) == 1
-        and f["parameters"][0]["type"].replace("const", "").strip() == f["parent"]["name"]
+        and f["parameters"][0]["type"].replace("const", "").strip()
+        == f["parent"]["name"]
         and "&" not in f["parameters"][0]["type"]
     ):
         # X(X theOther): a move constructor X(X&&) whose reference was lost,
@@ -2308,10 +2320,11 @@ def _should_skip_unwrappable_function(f):
         return True
     # returned by value, SWIG would copy a class that is not wrapped
     rtn_type = f["rtnType"].replace("const", "").strip()
-    if "&" not in rtn_type and "*" not in rtn_type:
-        if rtn_type.split("<")[0].strip() in state.unwrapped_classes:
-            return True
-    return False
+    return (
+        "&" not in rtn_type
+        and "*" not in rtn_type
+        and rtn_type.split("<")[0].strip() in state.unwrapped_classes
+    )
 
 
 def process_function(f, overload=False):
@@ -2532,7 +2545,9 @@ def class_can_have_default_constructor(klass):
         if public_method["constructor"] and public_method["name"] == klass["name"]:
             if public_method.get("deleted") and not public_method["parameters"]:
                 # occt-800: `X() = delete;`
-                logging.info("    Class %s has a deleted default constructor.", klass["name"])
+                logging.info(
+                    "    Class %s has a deleted default constructor.", klass["name"]
+                )
                 return False
             if not public_method.get("deleted"):
                 has_one_public_constructor = True
@@ -2552,12 +2567,11 @@ def class_can_have_default_constructor(klass):
     for private_method in class_private_methods:
         if private_method["constructor"] and private_method["name"] == klass["name"]:
             has_one_private_constructor = True
-    if (has_one_private_constructor and not has_one_public_constructor) or (
-        has_one_protected_constructor and not has_one_public_constructor
-    ):
-        return False
-    # finally returns True, no need to use the %nodefaultctor
-    return True
+    # no default constructor if all the constructors are private or protected,
+    # otherwise no need to use the %nodefaultctor
+    return has_one_public_constructor or not (
+        has_one_private_constructor or has_one_protected_constructor
+    )
 
 
 def build_inheritance_tree(classes_dict):
@@ -2658,13 +2672,14 @@ def build_inheritance_tree(classes_dict):
     for klass in class_list:
         upper_class = klass["inherits"]
         class_name = klass["name"]
-        if upper_class:
-            upper_class_name = klass["inherits"][0]["class"]
-            if upper_class_name in state.all_standard_transients:
-                # this class inherits from a Standard_Transient base class
-                # so we add it to the state.all_standard_transients list:
-                if klass not in state.all_standard_transients:
-                    state.all_standard_transients.append(class_name)
+        # a class that inherits from a Standard_Transient base class is added
+        # to the state.all_standard_transients list
+        if (
+            upper_class
+            and upper_class[0]["class"] in state.all_standard_transients
+            and class_name not in state.all_standard_transients
+        ):
+            state.all_standard_transients.append(class_name)
     return class_list
 
 
@@ -2706,9 +2721,8 @@ def process_harray1():
     """
     wrapper_str = "/* harray1 classes */\n"
     pyi_str = "\n# harray1 classes\n"
-    for HClassName in state.all_harray1:
+    for HClassName, array1_type in state.all_harray1.items():
         if HClassName.startswith(state.current_module + "_"):
-            array1_type = state.all_harray1[HClassName]
             wrapper_str += HARRAY1_TEMPLATE.substitute(
                 {"HClassName": f"{HClassName}", "Array1Type": f"{array1_type}"}
             )
@@ -2722,9 +2736,8 @@ def process_harray1():
 def process_harray2():
     wrapper_str = "/* harray2 classes */"
     pyi_str = "# harray2 classes\n"
-    for HClassName in state.all_harray2:
+    for HClassName, array2_type in state.all_harray2.items():
         if HClassName.startswith(state.current_module + "_"):
-            array2_type = state.all_harray2[HClassName]
             wrapper_str += HARRAY2_TEMPLATE.substitute(
                 {"HClassName": f"{HClassName}", "Array2Type": f"{array2_type}"}
             )
@@ -2739,9 +2752,8 @@ def process_harray2():
 def process_hsequence():
     wrapper_str = "/* hsequence classes */"
     pyi_str = "# hsequence classes\n"
-    for HClassName in state.all_hsequence:
+    for HClassName, sequence_type in state.all_hsequence.items():
         if HClassName.startswith(state.current_module + "_"):
-            sequence_type = state.all_hsequence[HClassName]
             wrapper_str += HSEQUENCE_TEMPLATE.substitute(
                 {"HClassName": f"{HClassName}", "SequenceType": f"{sequence_type}"}
             )
@@ -2914,7 +2926,9 @@ def _class_specific_extensions(class_name):
         extra_def += "\t\t\tvoid SetValue(int row, int col, double v) { self->Value(row, col) = v; }\n"
         extra_def += "\t\t};\n"
         extra_pyi += "    def GetValue(self, row: int, col: int) -> float: ...\n"
-        extra_pyi += "    def SetValue(self, row: int, col: int, v: float) -> None: ...\n"
+        extra_pyi += (
+            "    def SetValue(self, row: int, col: int, v: float) -> None: ...\n"
+        )
     return extra_def, extra_pyi
 
 
@@ -2984,7 +2998,9 @@ def _rewrite_nested_names(type_str, scope, classes_dict, nested_map):
 def _rewrite_class_types(klass, scope, classes_dict, nested_map):
     """Applies _rewrite_nested_names to every type of a class dict."""
     for prop in klass["properties"]["public"]:
-        prop["type"] = _rewrite_nested_names(prop["type"], scope, classes_dict, nested_map)
+        prop["type"] = _rewrite_nested_names(
+            prop["type"], scope, classes_dict, nested_map
+        )
     for inherit in klass["inherits"]:
         inherit["class"] = _rewrite_nested_names(
             inherit["class"], scope, classes_dict, nested_map
@@ -3110,7 +3126,11 @@ def flatten_nested_classes(classes_dict):
     signature. Aliases of nested class templates (`using BRepGraph_FaceId =
     BRepGraph_NodeId::Typed<...>;`) are instantiated as classes too."""
     # the instantiations of the nested class templates
-    for alias, (outer, template_name, args_str) in state.nested_template_aliases.items():
+    for alias, (
+        outer,
+        template_name,
+        args_str,
+    ) in state.nested_template_aliases.items():
         klass = _instantiate_nested_template(
             alias, outer, template_name, args_str, classes_dict
         )
@@ -3155,9 +3175,24 @@ def flatten_nested_classes(classes_dict):
 
 
 _PRIMITIVE_PROPERTY_TYPES = {
-    "bool", "int", "double", "float", "size_t", "uint32_t", "int32_t", "uint64_t",
-    "int64_t", "uint8_t", "unsigned int", "long", "unsigned long", "char",
-    "Standard_Integer", "Standard_Real", "Standard_Boolean", "Standard_ShortReal",
+    "bool",
+    "int",
+    "double",
+    "float",
+    "size_t",
+    "uint32_t",
+    "int32_t",
+    "uint64_t",
+    "int64_t",
+    "uint8_t",
+    "unsigned int",
+    "long",
+    "unsigned long",
+    "char",
+    "Standard_Integer",
+    "Standard_Real",
+    "Standard_Boolean",
+    "Standard_ShortReal",
 }
 
 
@@ -3256,7 +3291,10 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             klass.get("template")
             or klass.get("_skip")
             or klass["name"] in exclude_classes
-            or any(_is_nested_base_of_module(inherit["class"]) for inherit in klass["inherits"])
+            or any(
+                _is_nested_base_of_module(inherit["class"])
+                for inherit in klass["inherits"]
+            )
         ):
             state.unwrapped_classes.add(klass["name"].split("<")[0])
         for method in klass["methods"]["public"] + klass["methods"]["private"]:
@@ -3276,7 +3314,6 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # header
         stars = "".join(["*" for i in range(len(class_name) + 9)])
         class_def_str += f"/{stars}\n* class {class_name} *\n{stars}/\n"
-        #
         if class_name in exclude_classes:
             # if the class has to be excluded,
             # we go on with the next one to be processed
@@ -3290,7 +3327,9 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # otherwise we go on with the next class
         if not class_name.startswith(state.current_module):
             continue
-        if any(_is_nested_base_of_module(inherit["class"]) for inherit in klass["inherits"]):
+        if any(
+            _is_nested_base_of_module(inherit["class"]) for inherit in klass["inherits"]
+        ):
             # occt-800: e.g. BRepGraph_FacesOfEdge derives from an
             # instantiation of a nested class template, which is not wrapped
             logging.info("    %s skipped, its base class is not wrapped", class_name)
@@ -3359,7 +3398,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             # CppHeaderParser exposes the typedef name list publicly via
             # klass["typedefs"]["public"] but only the underscore-prefixed
             # _public_typedefs dict carries the resolved type strings.
-            typedef_type = klass._public_typedefs[typedef_value]  # noqa: SLF001
+            typedef_type = klass._public_typedefs[typedef_value]  # pylint: disable=protected-access
             typedef_str += f"typedef {typedef_type} {typedef_value};\n"
         class_def_str += typedef_str
         # process class enums here
@@ -3405,7 +3444,10 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
                 if "std::map<" in property_value["type"]:
                     logging.warning("Wrong type in class property std::map")
                     continue
-                if "static" in property_value["type"] or "constexpr" in property_value["type"]:
+                if (
+                    "static" in property_value["type"]
+                    or "constexpr" in property_value["type"]
+                ):
                     continue  # occt-800: static constexpr constants
                 if state.flatten_nested_classes and not _is_wrappable_property_type(
                     property_value["type"], klass
@@ -3435,12 +3477,13 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
                         else adapt_type_for_hint(fix_type(property_value["type"]))
                         or "Any"
                     )
-                    properties_pyi_str += f"    {property_value['name']}: {property_hint}\n"
+                    properties_pyi_str += (
+                        f"    {property_value['name']}: {property_hint}\n"
+                    )
         # @TODO : wrap class typedefs (for instance BRepGProp_MeshProps)
         class_def_str += properties_str
         if properties_pyi_str:
-            if class_pyi_str.endswith("    pass\n"):
-                class_pyi_str = class_pyi_str[: -len("    pass\n")]
+            class_pyi_str = class_pyi_str.removesuffix("    pass\n")
             class_pyi_str += properties_pyi_str
         # process methods here
         class_public_methods = klass["methods"]["public"]
@@ -3497,14 +3540,18 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # an alias of a class enum value (e.g. X = D.X in gp_Dir) is hidden,
         # at runtime, by the method of the same name (gp_Dir.X)
         class_methods = set(
-            re.findall(r"^    def (\w+)\(", class_pyi_str[class_pyi_start:], re.M)
+            re.findall(
+                r"^    def (\w+)\(", class_pyi_str[class_pyi_start:], re.MULTILINE
+            )
         )
         if class_methods:
             class_pyi_str = class_pyi_str[:class_pyi_start] + re.sub(
                 r"^    (\w+) = \w+\.\1\n",
-                lambda m: "" if m.group(1) in class_methods else m.group(0),
+                lambda m, methods=class_methods: (
+                    "" if m.group(1) in methods else m.group(0)
+                ),
                 class_pyi_str[class_pyi_start:],
-                flags=re.M,
+                flags=re.MULTILINE,
             )
         extra_def, extra_pyi = _class_specific_extensions(class_name)
         class_def_str += extra_def
@@ -3863,10 +3910,12 @@ class ModuleWrapper:
             stub_body = (
                 self._typedefs_pyi_str + self._enums_pyi_str + self._classes_pyi_str
             )
-            for dep in _stub_module_dependencies(
-                self._module_name, state.python_module_dependency, stub_body
-            ):
-                f.write(f"from OCC.Core.{dep} import *\n")
+            f.writelines(
+                f"from OCC.Core.{dep} import *\n"
+                for dep in _stub_module_dependencies(
+                    self._module_name, state.python_module_dependency, stub_body
+                )
+            )
             if self._module_name == "TDF":
                 # the type of the attribute FindAttribute takes and returns
                 f.write(
@@ -3902,6 +3951,7 @@ def _stub_module_dependencies(module_name, module_dependencies, stub_body):
             deps.append(prefix)
     return deps
 
+
 _PYI_NEWTYPE_RE = re.compile(r"^(\w+) = NewType\(", re.MULTILINE)
 _SWIG_TEMPLATE_RE = re.compile(r"^%template\((\w+)\)", re.MULTILINE)
 
@@ -3918,10 +3968,12 @@ def fix_template_stubs(typedefs_pyi, other_pyi, swig_typedefs):
     to_remove = class_names | set(templates)
     lines = typedefs_pyi.split("\n")
     kept = []
-    for i, line in enumerate(lines):
+    for line in lines:
         match = _PYI_NEWTYPE_RE.match(line)
         if match and match.group(1) in to_remove:
-            if kept and kept[-1].startswith("# the following typedef cannot be wrapped"):
+            if kept and kept[-1].startswith(
+                "# the following typedef cannot be wrapped"
+            ):
                 kept.pop()
             continue
         kept.append(line)
@@ -4042,8 +4094,9 @@ def write_enum_templates_file():
     filled in along the way."""
     path = os.path.join(COMMON_OUTPUT_PATH, "EnumTemplates.i")
     with open(path, "w", encoding="utf8") as f:
-        for enum_name in state.all_byref_enums:
-            f.write(BYREF_ENUM_TEMPLATE % enum_name)
+        f.writelines(
+            BYREF_ENUM_TEMPLATE % enum_name for enum_name in state.all_byref_enums
+        )
 
 
 def process_module(module_name, write_files=True):
@@ -4079,9 +4132,7 @@ def process_toolkit(toolkit_name, modules_to_write=None):
     modules_list = TOOLKITS[toolkit_name]
     logging.info("Processing toolkit %s ===", toolkit_name)
     for module in sorted(modules_list):
-        process_module(
-            module, modules_to_write is None or module in modules_to_write
-        )
+        process_module(module, modules_to_write is None or module in modules_to_write)
 
 
 def process_all_toolkits(modules_to_write=None):

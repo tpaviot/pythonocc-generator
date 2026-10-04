@@ -1,0 +1,5 @@
+# the CI runs the generator from Python 3.9
+target-version = "py39"
+
+# generated files, compared byte-for-byte by test_golden.py
+extend-exclude = ["src/golden"]
