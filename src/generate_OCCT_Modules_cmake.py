@@ -2,7 +2,6 @@ from pathlib import Path
 
 import yaml
 
-
 with open(Path(__file__).with_name("modules.yaml"), "r", encoding="utf8") as f:
     toolkits = yaml.safe_load(f)["toolkits"]
 

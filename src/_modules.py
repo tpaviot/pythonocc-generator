@@ -21,7 +21,6 @@ from pathlib import Path
 
 import yaml
 
-
 _YAML_PATH = Path(__file__).with_name("modules.yaml")
 
 

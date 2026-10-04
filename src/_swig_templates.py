@@ -7,7 +7,6 @@ own module so generate_wrapper.py can stay focused on the generation logic.
 
 from string import Template
 
-
 LICENSE_HEADER = """/*
 Copyright 2008-2026 Thomas Paviot (tpaviot@gmail.com)
 
