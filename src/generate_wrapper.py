@@ -33,7 +33,6 @@ import subprocess
 import sys
 import time
 from operator import itemgetter
-from typing import Optional
 
 import CppHeaderParser
 
@@ -506,7 +505,7 @@ def _rewrite_handle_parens(header_content):
     return header_content
 
 
-_template_header_cache: dict[str, Optional[str]] = {}
+_template_header_cache: dict[str, str | None] = {}
 
 
 def find_template_header(template_name):

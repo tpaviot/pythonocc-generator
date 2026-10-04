@@ -121,8 +121,8 @@ To test against another configuration file than `wrapper_generator.conf`
 ## CI
 
 Azure Pipelines (`azure-pipelines.yml`, jobs defined in `conda-build.yml`)
-runs nightly and on `master` / `review/*` pushes, on Ubuntu 22.04 / 24.04
-across Python 3.9 to 3.12. Each job installs the OCCT headers from conda-forge
+runs nightly and on `master` / `review/*` pushes, on Ubuntu 24.04 across
+Python 3.10 to 3.14. Each job installs the OCCT headers from conda-forge
 (version set by `occt_version` in `conda-build.yml`, must match
 `src/golden/OCCT_VERSION`), runs the unit and golden tests, then generates all
 the modules.
