@@ -59,6 +59,13 @@ jobs:
         conda run -n pythonoccgen --no-capture-output python generate_wrapper.py
     displayName: 'Run pythonocc-generator on all modules'
 
+  - bash: |
+        set -ex
+        conda run -n pythonoccgen python -m pip install mypy
+        conda run -n pythonoccgen --no-capture-output bash src/mypy_check/check_stubs.sh \
+          $(Build.SourcesDirectory)/pythonocc-core/src/SWIG_files/wrapper
+    displayName: 'Type check the generated .pyi stubs with mypy'
+
   # export_occt_structure_to_json.py expects the src/TK*/PACKAGES layout of
   # OCCT 7.x sources, OCCT 8 moved toolkits under src/<Module>/
   - bash: |

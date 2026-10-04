@@ -49,6 +49,7 @@ https://dev.opencascade.org/doc/occt-7.9.0/refman/html/package_tcolgp.html"
 #include<TColStd_module.hxx>
 #include<TCollection_module.hxx>
 #include<Storage_module.hxx>
+#include<OSD_module.hxx>
 %};
 
 /*
@@ -61,7 +62,13 @@ https://github.com/tpaviot/pythonocc-core/pull/1381
 %include ../common/numpy.i
 
 %init %{
+/* the init code is in SWIG_mod_exec, returning an int, since SWIG 4.4:
+   import_array() returns NULL, i.e. success, if numpy can't be imported */
+#if SWIG_VERSION >= 0x040400
+        import_array1(-1);
+#else
         import_array();
+#endif
 %}
 
 %pythoncode {
@@ -178,21 +185,6 @@ Array2Of2DNumpyTemplate(TColgp_Array2OfXY, gp_XY)
 %apply (double* IN_ARRAY3, int DIM1, int DIM2, int DIM3) { (double* numpyArray3, int nRows3, int nCols3, int nDims3) };
 %apply (double* ARGOUT_ARRAY1, int DIM1) { (double* numpyArray3Argout, int aSizeArgout) };
 Array2Of3DNumpyTemplate(TColgp_Array2OfXYZ, gp_XYZ)
-%template(TColgp_SequenceOfArray1OfPnt2d) NCollection_Sequence<opencascade::handle<TColgp_HArray1OfPnt2d>>;
-
-%extend NCollection_Sequence<opencascade::handle<TColgp_HArray1OfPnt2d>> {
-    // occt-800: NCollection_BaseSequence methods are not wrapped through
-    // SWIG (its inner SeqNode has private new/delete). Re-export them per
-    // instantiation so Python code can call .Size(), .Length(), .IsEmpty()
-    // and use len() on every NCollection_Sequence<...>.
-    size_t Size() const noexcept { return $self->Size(); }
-    int Length() const noexcept { return $self->Length(); }
-    bool IsEmpty() const noexcept { return $self->IsEmpty(); }
-    %pythoncode {
-    def __len__(self):
-        return self.Size()
-    }
-};
 %template(TColgp_SequenceOfAx1) NCollection_Sequence<gp_Ax1>;
 
 %extend NCollection_Sequence<gp_Ax1> {
@@ -316,6 +308,21 @@ Array2Of3DNumpyTemplate(TColgp_Array2OfXYZ, gp_XYZ)
 %template(TColgp_SequenceOfXYZ) NCollection_Sequence<gp_XYZ>;
 
 %extend NCollection_Sequence<gp_XYZ> {
+    // occt-800: NCollection_BaseSequence methods are not wrapped through
+    // SWIG (its inner SeqNode has private new/delete). Re-export them per
+    // instantiation so Python code can call .Size(), .Length(), .IsEmpty()
+    // and use len() on every NCollection_Sequence<...>.
+    size_t Size() const noexcept { return $self->Size(); }
+    int Length() const noexcept { return $self->Length(); }
+    bool IsEmpty() const noexcept { return $self->IsEmpty(); }
+    %pythoncode {
+    def __len__(self):
+        return self.Size()
+    }
+};
+%template(TColgp_SequenceOfArray1OfPnt2d) NCollection_Sequence<opencascade::handle<TColgp_HArray1OfPnt2d>>;
+
+%extend NCollection_Sequence<opencascade::handle<TColgp_HArray1OfPnt2d>> {
     // occt-800: NCollection_BaseSequence methods are not wrapped through
     // SWIG (its inner SeqNode has private new/delete). Re-export them per
     // instantiation so Python code can call .Size(), .Length(), .IsEmpty()

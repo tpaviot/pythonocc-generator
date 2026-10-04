@@ -211,12 +211,6 @@ public:
 %ignore NCollection_Array2::operator();
 """
 
-MATH_HEADER_TEMPLATE = """
-%include "math_VectorBase.hxx";
-%template(math_Vector) math_VectorBase<double>;
-typedef math_VectorBase<double> math_Vector;
-"""
-
 HARRAY1_TEMPLATE = Template(
     """
 class $HClassName : public $Array1Type, public Standard_Transient {
@@ -234,7 +228,7 @@ class $HClassName : public $Array1Type, public Standard_Transient {
 
 HARRAY1_TEMPLATE_PYI = Template(
     """
-class $HClassName($Array1Type, Standard_Transient):
+class $HClassName($Bases):
     def __init__(self, theLower: int, theUpper: int) -> None: ...
     def Array1(self) -> $Array1Type: ...
 
@@ -260,7 +254,7 @@ class $HClassName : public $Array2Type, public Standard_Transient {
 
 HARRAY2_TEMPLATE_PYI = Template(
     """
-class $HClassName($Array2Type, Standard_Transient):
+class $HClassName($Bases):
     @overload
     def __init__(self, theRowLow: int, theRowUpp: int, theColLow: int, theColUpp: int) -> None: ...
     @overload
@@ -288,7 +282,7 @@ class $HClassName : public $SequenceType, public Standard_Transient {
 
 HSEQUENCE_TEMPLATE_PYI = Template(
     """
-class $HClassName($SequenceType, Standard_Transient):
+class $HClassName($Bases):
     @overload
     def __init__(self) -> None: ...
     @overload
@@ -311,9 +305,7 @@ class $NCollection_Array1_Template_Instanciation:
     def __getitem__(self, index: int) -> $Type_T: ...
     def __setitem__(self, index: int, value: $Type_T) -> None: ...
     def __len__(self) -> int: ...
-    def __iter__(self) -> Iterator[$Type_T]: ...
-    def next(self) -> $Type_T: ...
-    __next__ = next
+    def __iter__(self) -> typing.Iterator[$Type_T]: ...
     def Init(self, theValue: $Type_T) -> None: ...
     def Size(self) -> int: ...
     def Length(self) -> int: ...
@@ -414,24 +406,20 @@ class $NCollection_Sequence_Template_Instanciation:
 
 SHAPE_ANALYSIS_FREE_BOUNDS_TEMPLATE = """
 %extend ShapeAnalysis_FreeBounds {
-    static Handle(TopTools_HSequenceOfShape) ConnectEdgesToWires(opencascade::handle<TopTools_HSequenceOfShape> & edges,
+    static Handle(TopTools_HSequenceOfShape) ConnectEdgesToWires(const opencascade::handle<TopTools_HSequenceOfShape> & edges,
               const Standard_Real toler,
               const Standard_Boolean shared)
         {
-            Handle(TopTools_HSequenceOfShape) owires = new TopTools_HSequenceOfShape;
-            ShapeAnalysis_FreeBounds::ConnectEdgesToWires(edges, toler, shared, owires);
-            return owires;
+            return ShapeAnalysis_FreeBounds::ConnectEdgesToWires(edges, toler, shared);
         }
     };
 
 %extend ShapeAnalysis_FreeBounds {
-    static Handle(TopTools_HSequenceOfShape) ConnectWiresToWires(opencascade::handle<TopTools_HSequenceOfShape> & iwires,
+    static Handle(TopTools_HSequenceOfShape) ConnectWiresToWires(const opencascade::handle<TopTools_HSequenceOfShape> & iwires,
               const Standard_Real toler,
               const Standard_Boolean shared)
         {
-            Handle(TopTools_HSequenceOfShape) owires = new TopTools_HSequenceOfShape;
-            ShapeAnalysis_FreeBounds::ConnectWiresToWires(iwires, toler, shared, owires);
-            return owires;
+            return ShapeAnalysis_FreeBounds::ConnectWiresToWires(iwires, toler, shared);
         }
     };
 """
@@ -814,7 +802,13 @@ https://github.com/tpaviot/pythonocc-core/pull/1381
 %include ../common/numpy.i
 
 %init %{
+/* the init code is in SWIG_mod_exec, returning an int, since SWIG 4.4:
+   import_array() returns NULL, i.e. success, if numpy can't be imported */
+#if SWIG_VERSION >= 0x040400
+        import_array1(-1);
+#else
         import_array();
+#endif
 %}
 
 %pythoncode {
@@ -875,3 +869,57 @@ BREPTOOLS_WRITE_READ_FROM_STRING_PYI = """
 # Template for byref enum #
 ###########################
 BYREF_ENUM_TEMPLATE = "ENUM_OUTPUT_TYPEMAPS(%s);\n"
+
+
+# occt-800: math_Vector and math_IntegerVector are aliases of the
+# math_VectorBase class template. Value() returns a reference, python cannot
+# assign through it: element accessors, and the python sequence protocol with
+# 0-based indices as for the NCollection arrays. The non const Value() is
+# ignored: the const one returns a python number, not a raw pointer. Applies
+# to all the instantiations of the template.
+MATH_VECTORBASE_EXTEND = """
+%ignore math_VectorBase::Value(const int);
+%extend math_VectorBase {
+    TheItemType GetValue(const int theIndex) const { return self->Value(theIndex); }
+    void SetValue(const int theIndex, const TheItemType theValue) { self->Value(theIndex) = theValue; }
+    %pythoncode {
+    def __getitem__(self, index):
+        if index < 0 or index >= self.Length():
+            raise IndexError("index out of range")
+        return self.GetValue(index + self.Lower())
+
+    def __setitem__(self, index, value):
+        if index < 0 or index >= self.Length():
+            raise IndexError("index out of range")
+        self.SetValue(index + self.Lower(), value)
+
+    def __len__(self):
+        return self.Length()
+
+    def __iter__(self):
+        value = self.GetValue
+        for i in range(self.Lower(), self.Upper() + 1):
+            yield value(i)
+    }
+};
+"""
+
+# %ignore and %extend of the class templates wrapped through
+# `using Alias = Tpl<Args>;` aliases, written once before the template header
+# is %included
+TEMPLATE_CLASS_EXTENSIONS = {"math_VectorBase": MATH_VECTORBASE_EXTEND}
+
+# .pyi stubs of the members added by TEMPLATE_CLASS_EXTENSIONS, $Type_T is the
+# python type of the template argument
+MATH_VECTORBASE_EXTEND_PYI = Template(
+    """    def GetValue(self, theIndex: int) -> $Type_T: ...
+    def SetValue(self, theIndex: int, theValue: $Type_T) -> None: ...
+    def Value(self, theIndex: int) -> $Type_T: ...
+    def __getitem__(self, index: int) -> $Type_T: ...
+    def __setitem__(self, index: int, value: $Type_T) -> None: ...
+    def __len__(self) -> int: ...
+    def __iter__(self) -> typing.Iterator[$Type_T]: ...
+"""
+)
+
+TEMPLATE_CLASS_EXTENSIONS_PYI = {"math_VectorBase": MATH_VECTORBASE_EXTEND_PYI}

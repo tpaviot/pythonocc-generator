@@ -9,15 +9,15 @@ toolkits:
     TKernel: [FSD, Message, NCollection, OSD, Plugin, Quantity, Resource, Standard, StdFail, Storage, TColStd, TCollection, TShort, Units, UnitsAPI, UnitsMethods]
     TKMath: [BSplCLib, BSplSLib, BVH, Bnd, CSLib, Convert, ElCLib, ElSLib, Expr, ExprIntrp, GeomAbs, PLib, Poly, Precision, TColgp, TopLoc, gp, math]
   Modeling:
-    TKBRep: [BRep, BRepAdaptor, BRepLProp, BRepTools, BinTools, TopExp, TopTools, TopoDS]
-    TKG2d: [Adaptor2d, Geom2d, Geom2dAdaptor, Geom2dEvaluator, Geom2dLProp, LProp, TColGeom2d]
-    TKG3d: [Adaptor3d, AdvApprox, GProp, Geom, GeomAdaptor, GeomEvaluator, GeomLProp, LProp3d, TColGeom, TopAbs]
-    TKGeomBase: [AdvApp2Var, AppCont, AppDef, AppParCurves, Approx, BndLib, CPnts, Extrema, FEmTool, GC, GCE2d, GCPnts, Geom2dConvert, GeomConvert, GeomLib, GeomProjLib, GeomTools, Hermit, IntAna, IntAna2d, ProjLib, gce]
+    TKBRep: [BRep, BRepAdaptor, BRepGraph, BRepLProp, BRepTools, BinTools, TopExp, TopTools, TopoDS]
+    TKG2d: [Adaptor2d, Geom2d, Geom2dAdaptor, Geom2dEval, LProp, TColGeom2d]
+    TKG3d: [Adaptor3d, AdvApprox, GProp, Geom, GeomAdaptor, GeomEval, GeomLProp, TColGeom, TopAbs]
+    TKGeomBase: [AdvApp2Var, AppCont, AppDef, AppParCurves, Approx, BndLib, CPnts, GeomBndLib, Extrema, FEmTool, GC, GCE2d, GCPnts, Geom2dConvert, GeomConvert, GeomLib, GeomProjLib, GeomTools, Hermit, IntAna, IntAna2d, ProjLib, gce]
     TKBO: [BOPAlgo, BOPDS, BOPTools, BRepAlgoAPI, IntTools]
     TKBool: [BRepAlgo, BRepFill, BRepProj, TopOpeBRep, TopOpeBRepBuild, TopOpeBRepDS, TopOpeBRepTool]
     TKFeat: [BRepFeat, LocOpe]
     TKFillet: [BRepBlend, BRepFilletAPI, Blend, BlendFunc, ChFi2d, ChFi3d, ChFiDS, ChFiKPart, FilletSurf]
-    TKGeomAlgo: [AppBlend, ApproxInt, FairCurve, GccAna, GccEnt, GccInt, Geom2dAPI, Geom2dGcc, Geom2dHatch, Geom2dInt, GeomAPI, GeomFill, GeomInt, GeomPlate, Hatch, HatchGen, IntCurve, IntCurveSurface, IntImp, IntImpParGen, IntPatch, IntPolyh, IntRes2d, IntStart, IntSurf, IntWalk, Intf, Law, LocalAnalysis, NLPlate, Plate, TopClass, TopTrans]
+    TKGeomAlgo: [AppBlend, ApproxInt, FairCurve, GccAna, GccEnt, GccInt, Geom2dAPI, Geom2dGcc, Geom2dHatch, Geom2dInt, GeomAPI, GeomFill, GeomInt, GeomPlate, Hatch, HatchGen, IntCurve, IntCurveSurface, IntImp, IntImpParGen, IntPatch, IntPolyh, IntRes2d, IntStart, IntSurf, IntWalk, Intf, Law, LocalAnalysis, NLPlate, Plate, TopTrans]
     TKHLR: [Contap, HLRAlgo, HLRAppli, HLRBRep, HLRTopoBRep, Intrv, TopBas, TopCnx]
     TKMesh: [BRepMesh, BRepMeshData, IMeshData, IMeshTools]
     TKOffset: [BRepOffset, BRepOffsetAPI, BiTgte, Draft]
@@ -26,17 +26,17 @@ toolkits:
     TKTopAlgo: [BRepApprox, BRepBndLib, BRepBuilderAPI, BRepCheck, BRepClass, BRepClass3d, BRepExtrema, BRepGProp, BRepIntCurveSurface, BRepLib, BRepMAT2d, BRepTopAdaptor, Bisector, IntCurvesFace, MAT, MAT2d]
     TKXMesh: [XBRepMesh]
   Visualisation:
-    TKService: [Aspect, Image, InterfaceGraphic, Media, TColQuantity, Graphic3d]
+    TKService: [Aspect, Image, Media, Graphic3d]
     TKV3d: [AIS, DsgPrs, Prs3d, PrsMgr, Select3D, SelectBasics, SelectMgr, StdPrs, StdSelect, V3d, PrsDim]
     TKMeshVS: [MeshVS]
   DataExchange:
     TKBinXCAF: [BinMXCAFDoc, BinXCAFDrivers]
     TKIGES: [IGESControl, IGESData, IGESToBRep]
     TKRWMesh: [RWGltf, RWObj, RWMesh, RWPly]
-    TKSTEP: [GeomToStep, RWStepAP203, RWStepAP214, RWStepAP242, STEPConstruct, STEPControl, STEPEdit, STEPSelections, StepAP203, StepAP209, StepAP214, StepAP242, StepToGeom, StepToTopoDS, TopoDSToStep]
-    TKSTEP209: [RWStepElement, RWStepFEA, StepElement, StepFEA]
-    TKSTEPAttr: [RWStepDimTol, RWStepVisual, StepDimTol, StepVisual, StepKinematics, RWStepKinematics]
-    TKSTEPBase: [RWStepBasic, RWStepGeom, RWStepRepr, RWStepShape, StepBasic, StepGeom, StepRepr, StepShape]
+    TKSTEP: [GeomToStep, STEPConstruct, STEPControl, STEPEdit, STEPSelections, StepAP203, StepAP209, StepAP214, StepAP242, StepToGeom, StepToTopoDS, TopoDSToStep]
+    TKSTEP209: [StepElement, StepFEA]
+    TKSTEPAttr: [StepDimTol, StepVisual, StepKinematics]
+    TKSTEPBase: [StepBasic, StepGeom, StepRepr, StepShape]
     TKSTL: [RWStl, StlAPI]
     TKVRML: [Vrml, VrmlAPI, VrmlConverter, VrmlData]
     TKXCAF: [XCAFApp, XCAFDimTolObjects, XCAFDoc, XCAFNoteObjects, XCAFPrs, XCAFView]
@@ -45,7 +45,6 @@ toolkits:
     TKXSBase: [Interface, IFSelect, XSControl, Transfer, TransferBRep, MoniTool, StepData, HeaderSection, RWHeaderSection, APIHeaderSection]
     TKXmlXCAF: [XmlMXCAFDoc, XmlXCAFDrivers]
     TKXDE: [DE]
-    TKXDECascade: [DEBRepCascade, DEXCAFCascade]
   OCAF:
     TKBin: [BinDrivers, BinMDataXtd, BinMNaming]
     TKBinL: [BinLDrivers, BinMDF, BinMDataStd, BinMDocStd, BinMFunction, BinObjMgt]
@@ -58,17 +57,16 @@ toolkits:
     TKXml: [XmlDrivers, XmlMDataXtd, XmlMNaming]
     TKXmlL: [XmlLDrivers, XmlMDF, XmlMDataStd, XmlMDocStd, XmlMFunction, XmlObjMgt]
     TKXmlTObj: [XmlTObjDrivers]
-  VTK:
-    TKIVtk: [IVtk, IVtkOCC, IVtkVTK, IVtkTools]
 
 # Per-module wrapping configuration. Order is dependency order — do NOT
 # sort, or modules importing each other will be processed before their deps.
 #
-# Each entry supports four keys:
+# Each entry supports the keys:
 #   name                     (required) the OCCT module name
 #   additional_deps          extra modules to %include in the .i file
 #   exclude_classes          class names to skip; ['*'] skips all
 #   exclude_member_functions {class_name: [method, ...]} per-class blacklist
+#   include_classes          with exclude_classes: ['*'], the only classes wrapped
 modules:
   - name: FSD
     exclude_classes: ["*"]
@@ -84,7 +82,9 @@ modules:
     exclude_classes: ["*"]
 
   - name: OSD
+    # system services, only the thread pool used by the parallel algorithms
     exclude_classes: ["*"]
+    include_classes: [OSD_ThreadPool, OSD_Parallel]
 
   - name: Plugin
     exclude_classes: ["*"]
@@ -92,8 +92,6 @@ modules:
   - name: Quantity
 
   - name: Resource
-
-  - name: SortTools
 
   - name: Standard
     exclude_classes: [Standard_AncestorIterator, Standard_Static_Assert, Standard_CLocaleSentry, Standard_Mutex, Standard_ReadLineBuffer, Standard_ProgramError, Standard_ReadBuffer]
@@ -115,7 +113,12 @@ modules:
 
   - name: TCollection
     exclude_member_functions:
-      TCollection_ExtendedString: [ToWideString, Move]
+      # the u16string_view overloads are inline and call the private, non-exported
+      # allocate()/reallocate(): unresolved externals when linking with MSVC
+      TCollection_ExtendedString: [ToWideString, Move, u16string_view,
+        TCollection_ExtendedString::e72e19fb497ab7c85bcc889d7fff8360,
+        AssignCat::3ae91af5f946507f47e4d780b4740003,
+        operator+=::4a2c41388814b7ffd1d0c471db11b04f]
       TCollection_AsciiString: [Move, string_view, IsEqual::46e0e0c57cef5058a5cea402084ff9ed]
 
   - name: TShort
@@ -124,9 +127,6 @@ modules:
   - name: Units
 
   - name: UnitsAPI
-
-  - name: IncludeLibrary
-    exclude_classes: ["*"]
 
   - name: UnitsMethods
 
@@ -187,6 +187,11 @@ modules:
     exclude_classes: ["*"]
 
   - name: Geom2d
+    # GeomEval_Rep*Desc types are not wrapped (and would make Geom2d import Geom2dEval)
+    exclude_member_functions:
+      Geom2d_BezierCurve: [EvalRepresentation, SetEvalRepresentation]
+      Geom2d_BSplineCurve: [EvalRepresentation, SetEvalRepresentation]
+      Geom2d_OffsetCurve: [EvalRepresentation, SetEvalRepresentation]
 
   - name: LProp
 
@@ -195,25 +200,35 @@ modules:
 
   - name: Adaptor2d
 
-  - name: Geom2dLProp
-    additional_deps: [Message]
-
   - name: Geom2dAdaptor
+
+  - name: Geom2dEval
+    # classes nested in the GeomEval_Rep*Desc namespaces, not supported
+    exclude_classes: [Base, Full, DerivBounded, Mapped, Map1d, Domain1d]
 
   - name: GProp
 
-  - name: Geom2dEvaluator
-    additional_deps: [Adaptor2d, Geom2dAdaptor]
-    exclude_member_functions:
-      Geom2dEvaluator: AdjustDerivative
-
   - name: Geom
+    # GeomEval_Rep*Desc types are not wrapped (and would make Geom import GeomEval)
+    exclude_member_functions:
+      Geom_BezierCurve: [EvalRepresentation, SetEvalRepresentation]
+      Geom_BezierSurface: [EvalRepresentation, SetEvalRepresentation]
+      Geom_BSplineCurve: [EvalRepresentation, SetEvalRepresentation]
+      Geom_BSplineSurface: [EvalRepresentation, SetEvalRepresentation]
+      Geom_OffsetCurve: [EvalRepresentation, SetEvalRepresentation]
+      Geom_OffsetSurface: [EvalRepresentation, SetEvalRepresentation]
+      Geom_SurfaceOfLinearExtrusion: [EvalRepresentation, SetEvalRepresentation]
+      Geom_SurfaceOfRevolution: [EvalRepresentation, SetEvalRepresentation]
 
   - name: TColGeom
     additional_deps: [Standard]
 
   - name: GeomAdaptor
     additional_deps: [Geom2d, Adaptor2d, Message]
+
+  - name: GeomEval
+    # classes nested in the GeomEval_Rep*Desc namespaces, not supported
+    exclude_classes: [Base, Full, DerivBounded, Mapped, Map1d, Domain1d, Map2d, Domain2d]
 
   - name: AdvApprox
     additional_deps: [Message]
@@ -225,13 +240,7 @@ modules:
   - name: Adaptor3d
     additional_deps: [Geom2d, Message]
 
-  - name: LProp3d
-    additional_deps: [Adaptor2d, Geom2d, Geom, Message]
-
   - name: TopAbs
-
-  - name: GeomEvaluator
-    additional_deps: [Geom2d, Adaptor2d, GeomAdaptor, Message]
 
   - name: ProjLib
     additional_deps: [Message]
@@ -293,6 +302,11 @@ modules:
   - name: BndLib
     additional_deps: [Geom, Message]
 
+  - name: GeomBndLib
+    additional_deps: [Message]
+    # constructed from an adaptor, they only store a pointer to it
+    keep_constructor_args: [GeomBndLib_Curve, GeomBndLib_Curve2d, GeomBndLib_Surface, GeomBndLib_OtherCurve, GeomBndLib_OtherCurve2d, GeomBndLib_OtherSurface]
+
   - name: AppDef
     additional_deps: [Adaptor2d, Adaptor3d, Geom, Geom2d, PLib, Message]
     exclude_member_functions:
@@ -322,6 +336,19 @@ modules:
 
   - name: BRep
     additional_deps: [TShort, Message, Bnd]
+
+  - name: BRepGraph
+    # occt-800: graph based BRep representation. Its views are nested classes
+    # defined out of line, the ids are aliases of nested class templates
+    flatten_nested_classes: true
+    additional_deps: [TopoDS, TopLoc, TopAbs, Geom, Geom2d, Poly, gp, TCollection, TopTools, BRepTools, BRep, Adaptor2d, Adaptor3d, Geom2dAdaptor, GeomAdaptor, TShort, Bnd, Message]
+    # pointers to arrays of nested structs, internal storage: not wrapped
+    exclude_classes: [BRepGraph_LayerDeferred, BRepGraph_CacheMesh, BRepGraph_LayerTopoSupplement, BRepGraph_Data]
+    exclude_member_functions:
+      # declared without Standard_EXPORT: unresolved externals when linking with MSVC
+      BRepGraph_CopyRemap: [BRepGraph_CopyRemap]
+      # operator== is inline but calls IsEqual
+      BRepGraph_UsagePath: [IsEqual, HashCode, "operator=="]
 
   - name: BRepLProp
     additional_deps: [GeomAdaptor, Geom, Geom2d, TopLoc, Adaptor3d, TopoDS, Adaptor2d, Geom2dAdaptor, Message]
@@ -399,8 +426,6 @@ modules:
 
   - name: GccInt
 
-  - name: GccIter
-
   - name: HatchGen
 
   - name: Geom2dHatch
@@ -457,9 +482,6 @@ modules:
     exclude_classes: [IntPolyh_Array, IntPolyh_MaillageAffinage]
     exclude_member_functions:
       IntPolyh_Triangle: [GetNextChainTriangle]
-
-  - name: TopClass
-    additional_deps: [Adaptor3d, IntSurf, TopLoc, Geom2d, Geom, Adaptor2d, Message, Bnd]
 
   - name: IntCurvesFace
     additional_deps: [TopLoc, IntSurf, Geom, Geom2d, Adaptor2d, Message]
@@ -549,9 +571,6 @@ modules:
   - name: BRepAlgoAPI
     additional_deps: [TopLoc, BRepAdaptor, IntTools, GeomAdaptor, Geom2d, Geom2dAdaptor, Extrema, Adaptor2d, IntSurf, BOPDS, IntPatch, Approx, Adaptor3d, Message, AppParCurves, Bnd, BRep, TShort, Poly, IntCurvesFace, TopTools]
 
-  - name: BOPCol
-    exclude_classes: [BOPCol_Array1, BOPCol_MemBlock, BOPCol_NCVector, BOPCol_TBBCnt, BOPCol_TBBContextCnt, BOPCol_TBBContextFunctor, BOPCol_TBBFunctor, BOPCol_Functor, BOPCol_Cnt, BOPCol_Cnt_Perform, BOPCol_ContextFunctor, BOPCol_ContextCnt]
-
   - name: BOPDS
     additional_deps: [IntTools, AppParCurves, Adaptor2d, Adaptor3d, FEmTool, Extrema, IntAna, Intf, IntSurf, BRepAdaptor, Quantity, HatchGen, TopLoc, Approx, Geom2dHatch, IntRes2d, Geom, Geom2d, BRepClass3d, IntCurveSurface, GeomAdaptor, Geom2dInt, Geom2dAdaptor, IntPatch, Message, TopTools]
     exclude_classes: [BOPDS_Interf]
@@ -620,9 +639,6 @@ modules:
       BRepMeshData_Face: BRepMeshData_Face
       BRepMeshData_PCurve: BRepMeshData_PCurve
       BRepMeshData_Wire: BRepMeshData_Wire
-
-  - name: IntPoly
-    additional_deps: [TColStd, TopLoc]
 
   - name: IMeshData
     additional_deps: [Geom, Geom2d, GeomAdaptor, Geom2dAdaptor, Adaptor3d, Adaptor2d, Message]
@@ -772,6 +788,8 @@ modules:
     exclude_member_functions:
       Aspect_DisplayConnection: [Aspect_DisplayConnection, GetAtom, GetDisplay, GetDisplayName, Init, IsOwnDisplay, GetAtomX, GetDefaultVisualInfoX, SetDefaultVisualInfo]
       Aspect_Window: [NativeHandle, NativeParentHandle]
+      # returns a Graphic3d type, would make Aspect import Graphic3d
+      Aspect_XRSession: [LoadRenderModel]
 
   - name: Media
     additional_deps: [Geom, Bnd, Quantity, Aspect]
@@ -779,19 +797,15 @@ modules:
   - name: Image
     exclude_classes: ["*"]
 
-  - name: InterfaceGraphic
-
-  - name: TColQuantity
-
   - name: V3d
-    additional_deps: [TShort, TColQuantity, Bnd, Geom, BVH, TColgp, TopTools, SelectMgr, Poly, HLRAlgo, Select3D, Media]
+    additional_deps: [TShort, Bnd, Geom, BVH, TColgp, TopTools, SelectMgr, Poly, HLRAlgo, Select3D, Media]
     exclude_classes: [V3d_ImageDumpOptions]
     exclude_member_functions:
       V3d_Viewer: [Print]
       V3d_View: [Print]
 
   - name: Graphic3d
-    additional_deps: [TShort, TColQuantity, BVH, TopTools, SelectMgr, HLRAlgo, Poly, V3d]
+    additional_deps: [TShort, BVH, TopTools, SelectMgr, HLRAlgo, Poly, V3d]
     exclude_classes: [Graphic3d_UniformValue, Graphic3d_UniformValueType, Graphic3d_UniformValueTypeID, Graphic3d_Buffer, Graphic3d_IndexBuffer, Graphic3d_TextureSet, Graphic3d_CubeMapOrder, Graphic3d_CubeMapPacked, Graphic3d_BvhCStructureSetTrsfPers]
     exclude_member_functions:
       Graphic3d_ShaderVariable: [Create]
@@ -808,13 +822,13 @@ modules:
       Graphic3d_SequenceOfHClipPlane: [Remove]
 
   - name: Select3D
-    additional_deps: [TShort, TColQuantity, Aspect, Graphic3d, Quantity, Message, TopLoc, V3d, TopTools, Poly, HLRAlgo, Prs3d, TopoDS, Media, BRep, Geom2d, StdPrs, GeomAdaptor, Adaptor2d, BRepAdaptor, Adaptor3d, StdSelect, AIS]
+    additional_deps: [TShort, Aspect, Graphic3d, Quantity, Message, TopLoc, V3d, TopTools, Poly, HLRAlgo, Prs3d, TopoDS, Media, BRep, Geom2d, StdPrs, GeomAdaptor, Adaptor2d, BRepAdaptor, Adaptor3d, StdSelect, AIS]
     exclude_classes: [Select3D_SensitiveTriangulation, Select3D_SensitiveEntity, Handle_Select3D_SensitiveEntity, Select3D_SensitiveSet, Select3D_SensitiveCircle]
     exclude_member_functions:
       Select3D_SensitiveBox: [Box]
 
   - name: Prs3d
-    additional_deps: [TShort, TColQuantity, Message, BVH, V3d, Geom, SelectMgr, Select3D, Media, BRep, Geom2d, GeomAdaptor, Adaptor2d, BRepAdaptor, Adaptor3d, StdSelect, TopTools, TopoDS, HLRAlgo, Bnd]
+    additional_deps: [TShort, Message, BVH, V3d, Geom, SelectMgr, Select3D, Media, BRep, Geom2d, GeomAdaptor, Adaptor2d, BRepAdaptor, Adaptor3d, StdSelect, TopTools, TopoDS, HLRAlgo, Bnd]
     exclude_classes: [Prs3d_ShapeTool]
 
   - name: StdPrs
@@ -822,7 +836,7 @@ modules:
     exclude_classes: [StdPrs_DeflectionCurve]
 
   - name: SelectMgr
-    additional_deps: [TopTools, Message, TShort, SelectBasics, gp, HLRAlgo, TColQuantity, Geom, Aspect, Poly, TopoDS, V3d, Select3D, Graphic3d, Quantity, BVH, Prs3d, Media, BRep, Geom2d, StdPrs, GeomAdaptor, Adaptor2d, BRepAdaptor, Adaptor3d, StdSelect]
+    additional_deps: [TopTools, Message, TShort, SelectBasics, gp, HLRAlgo, Geom, Aspect, Poly, TopoDS, V3d, Select3D, Graphic3d, Quantity, BVH, Prs3d, Media, BRep, Geom2d, StdPrs, GeomAdaptor, Adaptor2d, BRepAdaptor, Adaptor3d, StdSelect]
     exclude_classes: [SelectMgr_Frustum, SelectMgr_BaseFrustum, SelectMgr_TriangularFrustum, SelectMgr_RectangularFrustum, SelectMgr_TriangularFrustumSet]
     exclude_member_functions:
       SelectMgr_ViewerSelector: [ToPixMap]
@@ -834,10 +848,10 @@ modules:
     additional_deps: [Bnd, Geom, Select3D, Graphic3d, Aspect, Quantity]
 
   - name: PrsMgr
-    additional_deps: [gp, HLRAlgo, TopoDS, Aspect, TShort, Media, Message, Bnd, TopTools, TColQuantity, Poly, TopLoc, Quantity, BVH, SelectMgr, Select3D, BRep, Geom2d, StdPrs, GeomAdaptor, Adaptor2d, BRepAdaptor, Adaptor3d, StdSelect, Geom]
+    additional_deps: [gp, HLRAlgo, TopoDS, Aspect, TShort, Media, Message, Bnd, TopTools, Poly, TopLoc, Quantity, BVH, SelectMgr, Select3D, BRep, Geom2d, StdPrs, GeomAdaptor, Adaptor2d, BRepAdaptor, Adaptor3d, StdSelect, Geom]
 
   - name: AIS
-    additional_deps: [TopTools, Message, TShort, SelectBasics, HLRAlgo, TColQuantity, SelectMgr, BRep, Geom2d, GeomAdaptor, Adaptor2d, BRepAdaptor, Adaptor3d]
+    additional_deps: [TopTools, Message, TShort, SelectBasics, HLRAlgo, SelectMgr, BRep, Geom2d, GeomAdaptor, Adaptor2d, BRepAdaptor, Adaptor3d]
     exclude_member_functions:
       AIS_LocalContext: [Reactivate, Status]
       AIS_Dimension: [AIS_Dimension]
@@ -857,7 +871,7 @@ modules:
       PrsDim_Dimension: [PrsDim_Dimension]
 
   - name: MeshVS
-    additional_deps: [TopTools, Message, TShort, Geom, HLRAlgo, Poly, TColQuantity, TopoDS, V3d, TopLoc, Prs3d, StdSelect, Media, BRep, Geom2d, StdPrs, GeomAdaptor, Adaptor2d, BRepAdaptor, Adaptor3d, Aspect]
+    additional_deps: [TopTools, Message, TShort, Geom, HLRAlgo, Poly, TopoDS, V3d, TopLoc, Prs3d, StdSelect, Media, BRep, Geom2d, StdPrs, GeomAdaptor, Adaptor2d, BRepAdaptor, Adaptor3d, Aspect]
 
   - name: StlAPI
     additional_deps: [Message, TopLoc]
@@ -876,45 +890,24 @@ modules:
     additional_deps: [MoniTool, TCollection, StepBasic, Message, Interface, TopoDS, Resource]
     exclude_classes: [StepBasic_GeneralPropertyAssociation, StepRepr_MakeFromUsageOption]
 
-  - name: RWStepBasic
-    additional_deps: [MoniTool, TCollection, StepBasic, Message, TopoDS, Resource, StepRepr]
-
   - name: StepRepr
     additional_deps: [MoniTool, TCollection, Interface, StepBasic, Message, StepData, StepGeom, StepShape, TopoDS, Resource]
     exclude_classes: [StepRepr_ReprItemAndMeasureWithUnitAndQRI]
 
-  - name: RWStepRepr
-    additional_deps: [MoniTool, TCollection, Interface, StepBasic, StepData, Message, StepShape, StepGeom, TopoDS, Resource]
-
   - name: StepGeom
     additional_deps: [MoniTool, TCollection, Interface, StepBasic, Message, StepShape, TopoDS, Resource]
-
-  - name: RWStepGeom
-    additional_deps: [MoniTool, TCollection, StepBasic, StepData, Message, StepShape, StepRepr, TopoDS, Resource]
 
   - name: StepShape
     additional_deps: [MoniTool, TCollection, Interface, StepBasic, Message, TopoDS, Resource]
 
-  - name: RWStepShape
-    additional_deps: [MoniTool, TCollection, Interface, StepBasic, Message, StepGeom, StepRepr, TopoDS, Resource]
-
   - name: StepAP214
     additional_deps: [Message, StepBasic, StepData, StepShape, StepRepr, StepGeom, Interface, MoniTool, TopoDS, Resource]
-
-  - name: RWStepAP214
-    additional_deps: [Message, StepRepr, StepGeom, StepBasic, StepShape, StepVisual, MoniTool, TopoDS, Resource]
 
   - name: StepAP203
     additional_deps: [Message, StepBasic, Interface, StepShape, StepGeom, MoniTool, TopoDS, Resource]
 
-  - name: RWStepAP203
-    additional_deps: [Message, StepBasic, StepData, StepGeom, StepShape, StepRepr, MoniTool, TopoDS, Resource]
-
   - name: StepAP242
     additional_deps: [Message, StepBasic, Interface, StepShape, StepGeom, StepVisual, MoniTool, TopoDS, Resource]
-
-  - name: RWStepAP242
-    additional_deps: [Message, StepBasic, Interface, StepShape, StepGeom, StepRepr, StepVisual, StepAP214, StepDimTol, MoniTool, TopoDS, Resource]
 
   - name: StepAP209
     additional_deps: [Message, StepBasic, StepGeom, Geom2d, StepVisual, IFSelect, StepAP203, Geom, TopoDS, Interface, Transfer, TopTools, Quantity, TopLoc, StepRepr, StepData, MoniTool, Resource, TDF, TDocStd, PCDM, CDF, DE, Aspect, Graphic3d, Media, StepElement, TDataStd, XCAFDimTolObjects, XCAFDoc, XCAFNoteObjects, XCAFView, Bnd]
@@ -948,12 +941,6 @@ modules:
     exclude_member_functions:
       STEPSelections_Counter: [POP, POP2]
 
-  - name: RWStepElement
-    additional_deps: [Message, StepShape, StepBasic, StepGeom, StepRepr, StepElement, MoniTool, TopoDS, Resource]
-
-  - name: RWStepFEA
-    additional_deps: [Message, StepShape, StepBasic, StepGeom, StepRepr, StepElement, MoniTool, TopoDS, Resource]
-
   - name: StepElement
     additional_deps: [Message, Interface, StepBasic, StepShape, StepGeom, MoniTool, TopoDS, Resource]
 
@@ -961,12 +948,6 @@ modules:
     additional_deps: [Message, Interface, StepData, StepShape, MoniTool, TopoDS, Resource]
     exclude_member_functions:
       StepFEA_SymmetricTensor43d: [SetFeaIsotropicSymmetricTensor43d]
-
-  - name: RWStepDimTol
-    additional_deps: [Message, StepShape, StepBasic, StepGeom, StepRepr, StepElement, MoniTool, TopoDS, Resource]
-
-  - name: RWStepVisual
-    additional_deps: [Message, StepShape, StepBasic, StepGeom, StepRepr, StepElement, MoniTool, TopoDS, Resource]
 
   - name: StepDimTol
     additional_deps: [Message, Interface, StepGeom, StepData, StepBasic, MoniTool, TopoDS, Resource]
@@ -976,9 +957,6 @@ modules:
 
   - name: StepKinematics
     additional_deps: [Message, Interface, StepGeom, StepData, StepBasic, MoniTool, TopoDS, Resource]
-
-  - name: RWStepKinematics
-    additional_deps: [Message, StepShape, StepBasic, StepGeom, StepRepr, StepElement, MoniTool, TopoDS, Resource]
 
   - name: IGESData
     additional_deps: [MoniTool, TopoDS, Poly, BRep, TopTools, TShort, TColGeom, ShapeExtend, Geom, Geom2d, Bnd, BRepTools]
@@ -1007,10 +985,17 @@ modules:
 
   - name: XSControl
     additional_deps: [Message, TopLoc, Transfer, MoniTool, TDF, IFSelect, TDocStd, XSControl, PCDM, CDF]
+    exclude_member_functions:
+      # DE_ShapeFixParameters is not wrapped, would make XSControl import DE
+      XSControl_Reader: [SetShapeFixParameters::e895be254466ec0dab7446ab439d8103]
 
   - name: Transfer
     additional_deps: [MoniTool, TopoDS, TDF, IFSelect, TDocStd, XSControl, PCDM, CDF, Geom, gp, Geom2d, TopTools]
     exclude_classes: [Transfer_ProcessForFinder]
+    exclude_member_functions:
+      # DE_ShapeFixParameters is not wrapped, would make Transfer import DE
+      Transfer_ActorOfFinderProcess: [SetShapeFixParameters::e895be254466ec0dab7446ab439d8103]
+      Transfer_ActorOfTransientProcess: [SetShapeFixParameters::e895be254466ec0dab7446ab439d8103]
 
   - name: TransferBRep
     additional_deps: [TopLoc, MoniTool, TDF, IFSelect, TDocStd, XSControl, PCDM, CDF, Geom, gp, Geom2d, DE]
@@ -1067,7 +1052,6 @@ modules:
     exclude_classes: [TDF_LabelNode, TDF_DerivedAttribute]
 
   - name: TDataStd
-    exclude_classes: [TDataStd_GenericEmpty, TDataStd_GenericExtString]
 
   - name: TFunction
 
@@ -1124,9 +1108,6 @@ modules:
   - name: XmlMNaming
     additional_deps: [Message, Resource, TopLoc, PCDM, CDF]
 
-  - name: XmlMPrsStd
-    additional_deps: [Message, Resource]
-
   - name: XmlLDrivers
     additional_deps: [Message, Resource, TDF, CDF]
 
@@ -1161,12 +1142,6 @@ modules:
     exclude_member_functions:
       DE_Provider: [Read, Write]
 
-  - name: DEBRepCascade
-    additional_deps: [CDF, TopTools, Transfer, TDF, PCDM, MoniTool, Interface, IFSelect, Geom, Geom2d]
-
-  - name: DEXCAFCascade
-    additional_deps: [CDF, TopTools, Transfer, TDF, PCDM, MoniTool, Interface, IFSelect, Geom, Geom2d]
-
   - name: CDF
     additional_deps: [Resource, Message]
     exclude_classes: [CDF_DirectoryIterator]
@@ -1190,7 +1165,7 @@ modules:
     exclude_classes: [XCAFDoc_GeomTolerance]
 
   - name: XCAFPrs
-    additional_deps: [TopTools, Message, TShort, Poly, Aspect, V3d, Select3D, Geom, HLRAlgo, Bnd, SelectBasics, Prs3d, Media, TColQuantity, TDF, TDataStd, TNaming, TDataXtd, Graphic3d, SelectMgr, TopoDS, PrsMgr, CDF, CDM, PCDM, StdSelect, BRep, Geom2d, StdPrs, GeomAdaptor, Adaptor2d, BRepAdaptor, Adaptor3d]
+    additional_deps: [TopTools, Message, TShort, Poly, Aspect, V3d, Select3D, Geom, HLRAlgo, Bnd, SelectBasics, Prs3d, Media, TDF, TDataStd, TNaming, TDataXtd, Graphic3d, SelectMgr, TopoDS, PrsMgr, CDF, CDM, PCDM, StdSelect, BRep, Geom2d, StdPrs, GeomAdaptor, Adaptor2d, BRepAdaptor, Adaptor3d]
 
   - name: XCAFDimTolObjects
     additional_deps: [Message, CDF, CDM, PCDM, LDOM, TDF, Resource, TopLoc]
@@ -1207,7 +1182,7 @@ modules:
     additional_deps: [TCollection, Message]
 
   - name: TPrsStd
-    additional_deps: [TDF, gp, HLRAlgo, TopTools, TCollection, Geom, TDataStd, Aspect, TNaming, Select3D, TColQuantity, Message, Poly, Prs3d, Bnd, TopLoc, TShort, SelectBasics, TopoDS, SelectMgr, PrsMgr, V3d, Graphic3d, StdSelect, Media, BRep, Geom2d, StdPrs, GeomAdaptor, Adaptor2d, BRepAdaptor, Adaptor3d]
+    additional_deps: [TDF, gp, HLRAlgo, TopTools, TCollection, Geom, TDataStd, Aspect, TNaming, Select3D, Message, Poly, Prs3d, Bnd, TopLoc, TShort, SelectBasics, TopoDS, SelectMgr, PrsMgr, V3d, Graphic3d, StdSelect, Media, BRep, Geom2d, StdPrs, GeomAdaptor, Adaptor2d, BRepAdaptor, Adaptor3d]
 
   - name: AppStd
     additional_deps: [Resource, CDF, PCDM, TDF, CDM, Message]
@@ -1217,11 +1192,3 @@ modules:
 
   - name: IGESCAFControl
     additional_deps: [Geom2d, IFSelect, Interface, IGESData, Geom, Transfer, PCDM, TopTools, CDF, Message, CDM, TopoDS, Resource, TopLoc, XSControl, ShapeExtend, TColGeom, MoniTool, IGESToBRep, BRep, TShort, Poly, Bnd, BRep, BRepTools, DE]
-
-  - name: IVtk
-
-  - name: IVtkOCC
-
-  - name: IVtkVTK
-
-  - name: IVtkTools

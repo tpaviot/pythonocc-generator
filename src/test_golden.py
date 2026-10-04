@@ -14,6 +14,7 @@ golden/OCCT_VERSION:
 The generator runs in a subprocess: its state is global to the process.
 """
 
+import ast
 import difflib
 import os
 import shutil
@@ -35,8 +36,8 @@ GOLDEN_VERSION_FILE = GOLDEN_DIR / "OCCT_VERSION"
 # TColStd, TColgp, TopTools, Storage), operators (gp), class-specific
 # templates and pickling (TopoDS), numpy extensions (Geom), by-ref enums from
 # another module (Geom2dGcc), primitive-ref getters/setters (math), handles
-# inherited through several levels (XCAFDoc) and typical APIs (BRepPrimAPI,
-# BRepAlgoAPI).
+# inherited through several levels (XCAFDoc), typical APIs (BRepPrimAPI,
+# BRepAlgoAPI) and constructor arguments kept alive (GeomBndLib).
 GOLDEN_MODULES = [
     "Standard",
     "NCollection",
@@ -52,6 +53,7 @@ GOLDEN_MODULES = [
     "XCAFDoc",
     "BRepPrimAPI",
     "BRepAlgoAPI",
+    "GeomBndLib",
 ]
 
 
@@ -146,3 +148,11 @@ def test_golden(tmp_path):
         "(UPDATE_GOLDEN=1 to refresh it if the change is intended):\n"
         + "\n".join(differences)
     )
+
+
+@pytest.mark.parametrize(
+    "stub", sorted(GOLDEN_SWIG_FILES.glob("wrapper/*.pyi")), ids=lambda p: p.name
+)
+def test_golden_stubs_are_valid_python(stub):
+    # a single syntax error in a .pyi stops mypy for all pythonocc-core users
+    ast.parse(stub.read_text(encoding="utf8"), filename=str(stub))

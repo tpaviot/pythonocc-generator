@@ -162,6 +162,10 @@ NODEFAULTCTOR = [
     "BRepMeshData_Curve",
     "Graphic3d_BvhCStructureSet",
     "PrsDim_Dimension",
+    # abstract: pure virtual methods inherited from TDF_Attribute, not seen
+    # by the generator
+    "TDataStd_GenericEmpty",
+    "TDataStd_GenericExtString",
 ]
 
 
@@ -218,4 +222,8 @@ TEMPLATES_TO_EXCLUDE = [
     "TFunction_Array1OfDataMapOfGUIDDriver",
     "TopoDS_ListOfShape",  # shadows TopTools_ListOfShape
     "TopoDS_ListIteratorOfListOfShape",  # shadows TopTools_ListIteratorOfListOfShape
+    # occt-800: aliases of the GeomLProp templates defined in LProp; wrapping
+    # them would make LProp import GeomLProp, which already imports LProp
+    "LProp_CLProps3d",
+    "LProp_SLProps3d",
 ]

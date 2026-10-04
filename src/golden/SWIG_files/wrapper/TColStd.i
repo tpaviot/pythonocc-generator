@@ -49,6 +49,7 @@ https://dev.opencascade.org/doc/occt-7.9.0/refman/html/package_tcolstd.html"
 #include<TColStd_module.hxx>
 #include<TCollection_module.hxx>
 #include<Storage_module.hxx>
+#include<OSD_module.hxx>
 %};
 
 /*
@@ -61,7 +62,13 @@ https://github.com/tpaviot/pythonocc-core/pull/1381
 %include ../common/numpy.i
 
 %init %{
+/* the init code is in SWIG_mod_exec, returning an int, since SWIG 4.4:
+   import_array() returns NULL, i.e. success, if numpy can't be imported */
+#if SWIG_VERSION >= 0x040400
+        import_array1(-1);
+#else
         import_array();
+#endif
 %}
 
 %pythoncode {
@@ -161,21 +168,6 @@ Array2NumpyTemplate(TColStd_Array2OfReal, double, double)
     PyObject* Keys() {
         PyObject *l=PyList_New(0);
         for (TColStd_DataMapOfIntegerInteger::Iterator anIt1(*self); anIt1.More(); anIt1.Next()) {
-          PyObject *o = PyLong_FromLong(anIt1.Key());
-          PyList_Append(l, o);
-          Py_DECREF(o);
-        }
-    return l;
-    }
-};
-%ignore NCollection_DataMap<int,TColStd_ListOfInteger>::Items;
-%ignore NCollection_DataMap<int,TColStd_ListOfInteger>::KeyValues;
-%template(TColStd_DataMapOfIntegerListOfInteger) NCollection_DataMap<int,TColStd_ListOfInteger>;
-
-%extend NCollection_DataMap<int,TColStd_ListOfInteger> {
-    PyObject* Keys() {
-        PyObject *l=PyList_New(0);
-        for (TColStd_DataMapOfIntegerListOfInteger::Iterator anIt1(*self); anIt1.More(); anIt1.Next()) {
           PyObject *o = PyLong_FromLong(anIt1.Key());
           PyList_Append(l, o);
           Py_DECREF(o);
@@ -466,6 +458,21 @@ Array2NumpyTemplate(TColStd_Array2OfReal, double, double)
     %pythoncode {
     def __len__(self):
         return self.Size()
+    }
+};
+%ignore NCollection_DataMap<int,TColStd_ListOfInteger>::Items;
+%ignore NCollection_DataMap<int,TColStd_ListOfInteger>::KeyValues;
+%template(TColStd_DataMapOfIntegerListOfInteger) NCollection_DataMap<int,TColStd_ListOfInteger>;
+
+%extend NCollection_DataMap<int,TColStd_ListOfInteger> {
+    PyObject* Keys() {
+        PyObject *l=PyList_New(0);
+        for (TColStd_DataMapOfIntegerListOfInteger::Iterator anIt1(*self); anIt1.More(); anIt1.Next()) {
+          PyObject *o = PyLong_FromLong(anIt1.Key());
+          PyList_Append(l, o);
+          Py_DECREF(o);
+        }
+    return l;
     }
 };
 /* end templates declaration */

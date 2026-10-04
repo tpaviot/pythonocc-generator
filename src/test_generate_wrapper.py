@@ -122,3 +122,85 @@ def test_adapt_default_value():
 def test_is_module():
     assert is_module("Standard") is True
     assert is_module("something") is False
+
+
+def test_convert_using_to_typedef_template_alias():
+    from generate_wrapper import _convert_using_to_typedef, state
+
+    saved_module = state.current_module
+    state.current_module = "BRepLProp"
+    state.template_alias_names = set()
+    try:
+        # occt-800: alias of a class template, wrapped as %template(alias)
+        header = "using BRepLProp_SLProps = GeomLProp_SLPropsBase<BRepAdaptor_Surface>;"
+        assert (
+            _convert_using_to_typedef(header)
+            == "typedef GeomLProp_SLPropsBase<BRepAdaptor_Surface> BRepLProp_SLProps;"
+        )
+        assert state.template_alias_names == {"BRepLProp_SLProps"}
+        # a multi-line alias is collapsed on one line
+        header = (
+            "using BRepLProp_CLProps =\n"
+            "  GeomLProp_CLPropsBase<gp_Pnt,\n"
+            "                        gp_Vec, gp_Dir, BRepAdaptor_Curve>;"
+        )
+        assert _convert_using_to_typedef(header) == (
+            "typedef GeomLProp_CLPropsBase<gp_Pnt, gp_Vec, gp_Dir, BRepAdaptor_Curve> "
+            "BRepLProp_CLProps;"
+        )
+        # left untouched: alias of another module (copy of math_Vector found
+        # in several packages), NCollection template, handle, nested template,
+        # template without a header, excluded alias
+        for header in (
+            "using math_Vector = math_VectorBase<double>;",
+            "using BRepLProp_Array = NCollection_Array1<int>;",
+            "using BRepLProp_Handle = opencascade::handle<Geom_Surface>;",
+            "using Traits = BRepGraph_IteratorDetail::NodeTraits<NodeType>;",
+            "using BRepLProp_Instance = Instance<BRepGraph_NodeId>;",
+        ):
+            assert _convert_using_to_typedef(header) == header
+        assert state.template_alias_names == {"BRepLProp_SLProps", "BRepLProp_CLProps"}
+        # plain class aliases are still converted
+        assert (
+            _convert_using_to_typedef("using GCE2d_MakeLine = GC_MakeLine2d;")
+            == "typedef GC_MakeLine2d GCE2d_MakeLine;"
+        )
+        state.current_module = "LProp"
+        header = "using LProp_SLProps3d = GeomLProp_SLPropsBase<opencascade::handle<Adaptor3d_Surface>>;"
+        assert _convert_using_to_typedef(header) == header
+    finally:
+        state.current_module = saved_module
+        state.template_alias_names = set()
+
+
+def test_sort_templates_by_dependency():
+    from generate_wrapper import sort_templates_by_dependency
+
+    templates = [
+        [
+            "Extrema_GGenExtPC<Adaptor3d_Curve, Extrema_PCFOfEPCOfExtPC>",
+            "Extrema_EPCOfExtPC",
+        ],
+        ["Extrema_GGExtPC<Adaptor3d_Curve, Extrema_EPCOfExtPC>", "Extrema_ExtPC"],
+        ["Extrema_GFuncExtPC<Adaptor3d_Curve, gp_Pnt>", "Extrema_PCFOfEPCOfExtPC"],
+        ["NCollection_Array1<Extrema_POnCurv>", "Extrema_Array1OfPOnCurv"],
+    ]
+    assert [name for _, name in sort_templates_by_dependency(templates)] == [
+        "Extrema_PCFOfEPCOfExtPC",
+        "Extrema_Array1OfPOnCurv",
+        "Extrema_EPCOfExtPC",
+        "Extrema_ExtPC",
+    ]
+    # circular dependencies: the input order is kept
+    circular = [["B<A>", "A"], ["A<B>", "B"]]
+    assert sort_templates_by_dependency(circular) == circular
+
+
+def test_find_template_header():
+    from generate_wrapper import find_template_header
+
+    assert find_template_header("Extrema_GGExtPC") == "Extrema_GGExtPC.hxx"
+    # the template is not declared in a header of its own name
+    assert find_template_header("GeomLProp_SLPropsBase") == "GeomLProp_SLProps.hxx"
+    assert find_template_header("Instance") is None
+    assert find_template_header("BRepLProp_NoSuchTemplate") is None
