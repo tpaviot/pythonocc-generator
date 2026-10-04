@@ -38,6 +38,7 @@ double d = p.Distance(other);
 ```python
 # Python
 from OCC.Core.gp import gp_Pnt
+
 p = gp_Pnt(0.0, 0.0, 0.0)
 d = p.Distance(other)
 ```
@@ -51,8 +52,9 @@ the lowercase rename for any C++ class whose name matches its module. So:
 
 ```python
 from OCC.Core.TopoDS import topods, TopoDS_Edge
-edge = topods.Edge(some_shape)        # OCCT TopoDS::Edge(...)
-isinstance(edge, TopoDS_Edge)         # True
+
+edge = topods.Edge(some_shape)  # OCCT TopoDS::Edge(...)
+isinstance(edge, TopoDS_Edge)  # True
 ```
 
 ---
@@ -80,7 +82,7 @@ void DoSomething(const occ::handle<Geom_Curve>& c);
 ```
 ```python
 # Python — the call shape is always the same
-DoSomething(curve)         # `curve` is a Geom_Curve (or any subtype)
+DoSomething(curve)  # `curve` is a Geom_Curve (or any subtype)
 ```
 
 ### Standard_Transient itself
@@ -88,7 +90,7 @@ DoSomething(curve)         # `curve` is a Geom_Curve (or any subtype)
 `Standard_Transient` gets three Python operators by reference identity:
 
 ```python
-a == b   # True iff a and b wrap the same C++ object
+a == b  # True iff a and b wrap the same C++ object
 a != b
 hash(a)  # opencascade::hash(self)
 ```
@@ -205,7 +207,8 @@ class TopAbs_Orientation(IntEnum):
     TopAbs_INTERNAL: int = 2
     TopAbs_EXTERNAL: int = 3
 
-TopAbs_FORWARD = TopAbs_Orientation.TopAbs_FORWARD   # alias at module level
+
+TopAbs_FORWARD = TopAbs_Orientation.TopAbs_FORWARD  # alias at module level
 ```
 
 Notes:
@@ -300,8 +303,9 @@ with numpy-typed evaluation helpers (`CurveArrayEvalExtend`,
 ```python
 import numpy as np
 from OCC.Core.TColgp import TColgp_Array1OfPnt
+
 arr = TColgp_Array1OfPnt(1, 10)
-xyz = np.asarray(arr)        # zero-copy view, when the numpy path applies
+xyz = np.asarray(arr)  # zero-copy view, when the numpy path applies
 ```
 
 ---
@@ -330,7 +334,7 @@ that reshapes the C++ stream-based API into a string-based one:
 
 ```python
 text = obj.DumpJson(depth=-1)
-obj.InitFromJson(text)        # returns bool
+obj.InitFromJson(text)  # returns bool
 ```
 
 If a class exposes **both** `DumpJson` and `InitFromJson` (and is not
@@ -410,6 +414,7 @@ time, rather than disappearing silently:
 @classnotwrapped
 class Foo_BadClass:
     pass
+
 
 # Excluded method on a wrapped class
 class Foo_GoodClass:

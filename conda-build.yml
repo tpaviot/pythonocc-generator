@@ -2,7 +2,7 @@ parameters:
   name: 'Conda build job'
   vmImage: 'ubuntu-24.04'
   py_maj: '3'
-  py_min: '12'
+  py_min: '14'
   # must match src/golden/OCCT_VERSION, otherwise the golden test fails
   occt_version: '8.0.1'
 
@@ -14,12 +14,8 @@ jobs:
     vmImage: ${{ parameters.vmImage }}
 
   steps:
-  - ${{ if or(contains(parameters.vmImage, 'macOS'),contains(parameters.vmImage, 'ubuntu')) }}:
-    - bash: echo "##vso[task.prependpath]$CONDA/bin"
-      displayName: 'Add conda to PATH'
-  - ${{ if contains(parameters.vmImage, 'win') }}:
-    - powershell: Write-Host "##vso[task.prependpath]$env:CONDA\Scripts"
-      displayName: 'Add conda to PATH'
+  - bash: echo "##vso[task.prependpath]$CONDA/bin"
+    displayName: 'Add conda to PATH'
 
   # conda-forge only: the defaults channel requires accepting Anaconda's
   # terms of service, which fails in an unattended CI run

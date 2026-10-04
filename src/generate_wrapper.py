@@ -33,7 +33,7 @@ import subprocess
 import sys
 import time
 from operator import itemgetter
-from typing import Optional
+from typing import ClassVar
 
 import CppHeaderParser
 
@@ -98,6 +98,9 @@ from _swig_templates import (
     TOPODS_SHAPE_PICKLE_TEMPLATE,
     WIN_PRAGMAS,
 )
+
+# handlers are attached to the root logger by setup_logging()
+logger = logging.getLogger(__name__)
 
 ##############################################
 # Load configuration file and setup settings #
@@ -295,7 +298,7 @@ def get_log_header():
             "GITREVISION": generator_git_revision,
             "OS": os_name,
             "OCCTVERSION": occ_version,
-            "DATE": f"{datetime.datetime.now()}",
+            "DATE": f"{datetime.datetime.now().astimezone()}",
         }
     )
 
@@ -455,7 +458,7 @@ def _collect_harray_macros(header_content):
         for match in regex.findall(header_content):
             typename = match.split("(")[1].split(",")[0]
             base_typename = match.split(",")[1].split(")")[0]
-            logging.info("Found %s definition %s:%s", label, typename, base_typename)
+            logger.info("Found %s definition %s:%s", label, typename, base_typename)
             store[typename] = base_typename.strip()
 
 
@@ -506,7 +509,7 @@ def _rewrite_handle_parens(header_content):
     return header_content
 
 
-_template_header_cache: dict[str, Optional[str]] = {}
+_template_header_cache: dict[str, str | None] = {}
 
 
 def find_template_header(template_name):
@@ -649,23 +652,23 @@ def filter_typedefs(typedef_dict):
             continue
         # remove typedefs that ends with function callbacks
         if key.endswith("Function"):
-            logging.info("Skip typedef %s because ends with 'Function'", key)
+            logger.info("Skip typedef %s because ends with 'Function'", key)
             del typedef_dict[key]
             continue
         # remove typedefs tha ends with _fp (means function pointer?)
         if key.endswith("_fp"):
-            logging.info("Skip typedef %s because ends with '_fp'", key)
+            logger.info("Skip typedef %s because ends with '_fp'", key)
             del typedef_dict[key]
             continue
         # remove typedefs tha ends with Func (function pointer)
         if key.endswith("Func"):
-            logging.info("Skip typedef %s because ends with 'Func'", key)
+            logger.info("Skip typedef %s because ends with 'Func'", key)
             del typedef_dict[key]
             continue
         # occt-800: skip pointer typedefs (e.g. typedef NCollection_List<X>* Plos)
         # SWIG cannot generate %template(...) Foo<X>*; with a pointer
         if typedef_dict[key].rstrip().endswith("*"):
-            logging.info("Skip typedef %s because target is a pointer type", key)
+            logger.info("Skip typedef %s because target is a pointer type", key)
             del typedef_dict[key]
     for key in list(typedef_dict):
         typedef_dict[key] = typedef_dict[key].replace(" ::", "::")
@@ -1006,7 +1009,7 @@ def process_typedefs(typedefs_dict):
             elif template_type.count("<") == 1:
                 h_typ = (template_type.split("<")[1]).split(">")[0]
             else:
-                logging.warning(
+                logger.warning(
                     "This template type cannot be handled: %s", template_type
                 )
                 continue
@@ -1221,14 +1224,14 @@ def process_enums(enums_list):
                 state.all_enums.append(enum_name)
 
         if enum_name in ENUMS_TO_EXLUDE:
-            logging.info("Skipping Enum: %s", enum_name)
+            logger.info("Skipping Enum: %s", enum_name)
             continue
 
         # occt-800: respect "enum class X" (scoped enum) so values like
         # gp_Dir::D::X don't collide with member functions like gp_Dir::X()
         is_enum_class = enum.get("isclass", False)
         enum_keyword = "enum class" if is_enum_class else "enum"
-        logging.info("Enum: %s", enum_name)
+        logger.info("Enum: %s", enum_name)
         enum_str += f"{enum_keyword} {enum_name}" + " {\n"
         if python_proxy:
             enum_python_proxies += f"\nclass {enum_name}(IntEnum):\n"
@@ -1334,7 +1337,7 @@ def adapt_param_type(param_type):
             elif pattern == param_type:
                 param_type = param_type.replace(pattern, "int")
             else:
-                logging.warning("Unknown pattern in Standard_Integer typedef")
+                logger.warning("Unknown pattern in Standard_Integer typedef")
     # replace Standard_IStream with std::istream
     # so that SWIG template can apply
     param_type = param_type.replace("Standard_IStream", "std::istream")
@@ -1396,7 +1399,7 @@ def adapt_param_type_and_name(param_type_and_name):
         enum_name = param_type_and_name.split()[0]
         if enum_name not in state.all_byref_enums:
             state.all_byref_enums.append(enum_name)
-        logging.info(
+        logger.info(
             "Enum passed by reference: %s changed to %s &OutValue",
             param_type_and_name,
             enum_name,
@@ -1491,7 +1494,7 @@ def adapt_return_type(return_type):
         and ("Surface" in return_type or "Curve" in return_type)
         and "handle" not in return_type
     ):
-        logging.warning("%s wrapped as a copy", return_type)
+        logger.warning("%s wrapped as a copy", return_type)
         return_type = return_type.replace("const", "")
         return_type = return_type.replace("&", "")
         return_type = return_type.strip()
@@ -1712,17 +1715,17 @@ def filter_member_functions(
         if (method_name in member_functions_to_exclude) or (
             f"{method_name}::{public_method_signature}" in member_functions_to_exclude
         ):
-            logging.info(
+            logger.info(
                 "    explicitly excluded method %s::%s",
                 class_name,
                 public_method_signature,
             )
             continue
         if class_is_abstract and public_method["constructor"]:
-            logging.info("    Constructor skipped for abstract class %s", class_name)
+            logger.info("    Constructor skipped for abstract class %s", class_name)
             continue
         if "<" in method_name:
-            logging.info("    %s skipped because invalid name", method_name)
+            logger.info("    %s skipped because invalid name", method_name)
             continue
         # finally, we add this method to process in the correct list
         if public_method["constructor"]:
@@ -1797,7 +1800,7 @@ def adapt_type_for_hint(type_str):
     Returns False if there's no possible type
     """
     if type_str == "0":  # huu ? in XCAFDoc, skip it
-        logging.warning("    [TypeHint] Skipping unknown type, 0")
+        logger.warning("    [TypeHint] Skipping unknown type, 0")
         return False
     if "void" in type_str or type_str in [""]:
         return "None"
@@ -1838,7 +1841,7 @@ def adapt_type_for_hint(type_str):
     if builtin_hint is not None:
         return builtin_hint
     if "_" not in type_str:  # TODO these are special cases, e.g. nested classes
-        logging.warning("    [TypeHint] Skipping type %s, should contain _", type_str)
+        logger.warning("    [TypeHint] Skipping type %s, should contain _", type_str)
         return False  # returns a boolean to prevent type hint creation, the type will not be found
     # we only keep what is
     for tp in type_str.split(" "):
@@ -1868,17 +1871,17 @@ def adapt_type_for_hint(type_str):
         # e.g. gp_Dir::D, whose stub is written in the class body
         return f"{nested_enum.group(1)}.{nested_enum.group(2)}"
     if ":" in type_str:
-        logging.warning("    [TypeHint] Skip type %s, because of trailing :", type_str)
+        logger.warning("    [TypeHint] Skip type %s, because of trailing :", type_str)
         return False
     if "_" in type_str and not is_module(type_str.split("_")[0]):
-        logging.warning(
+        logger.warning(
             "    [TypeHint] Skipping unknown type %s, %s not in module list",
             type_str,
             type_str.split("_")[0],
         )
         return False
     if type_str.count("<") >= 1:  # at least one <, it's a template
-        logging.warning(
+        logger.warning(
             "    [TypeHint] Skipping type %s, seems to be a template", type_str
         )
         return False
@@ -1913,7 +1916,7 @@ def adapt_type_hint_parameter_name(param_name_str):
         # Standard_EXPORT static int mma1her_(const integer *  ,
         #            doublereal * ,
         #            integer *   );
-        logging.warning("    [TypeHint] param name missing or '&', generic name used")
+        logger.warning("    [TypeHint] param name missing or '&', generic name used")
         new_param_name = ""
         success = False
     else:  # default
@@ -2053,7 +2056,7 @@ def _wrap_operator(f, function_name, parent_class_name):
         return None
     operand = function_name.split("operator ")[1].strip()
     if operand not in _OPERATOR_WRAPPERS:
-        logging.info("    operand %s cannot be wrapped", operand)
+        logger.info("    operand %s cannot be wrapped", operand)
         return "", ""
     template = _OPERATOR_WRAPPERS[operand]
     if template is None:
@@ -2068,7 +2071,7 @@ def _wrap_operator(f, function_name, parent_class_name):
 def _build_getter_setter_pair(f, function_name, return_type):
     """Generate a Get*/Set* pair when a method returns a primitive by-ref.
     Returns (swig_str, type_hint_str)."""
-    logging.info("    Creating Get and Set methods for method %s", function_name)
+    logger.info("    Creating Get and Set methods for method %s", function_name)
     modified_return_type = return_type.split(" ")[0]
     getter_params_type_and_names = []
     getter_params_only_names = []
@@ -2417,7 +2420,7 @@ def process_free_functions(free_functions_list):
         # and the C++ compiler would not find the symbol (occt-800 introduces
         # several functions in inner namespaces such as BVH::EncodeMortonCode)
         if free_function.get("namespace", ""):
-            logging.info(
+            logger.info(
                 "    Skipping namespaced free function %s%s",
                 free_function.get("namespace", ""),
                 free_function["name"],
@@ -2444,7 +2447,7 @@ def process_constructors(constructors_list):
     need_overload = False
     if number_of_constructors > 1:
         need_overload = True
-        logging.info(
+        logger.info(
             "    [TypeHint] More than 1 constructor, @overload decorator needed."
         )
     # then process the constructors
@@ -2536,7 +2539,7 @@ def class_can_have_default_constructor(klass):
         return False
     # class must not be an abstract class
     if klass["abstract"]:
-        logging.info("    Class %s is abstract, using %%nodefaultctor.", klass["name"])
+        logger.info("    Class %s is abstract, using %%nodefaultctor.", klass["name"])
         return False
     # check if the class has at least one public constructor defined
     has_one_public_constructor = False
@@ -2545,7 +2548,7 @@ def class_can_have_default_constructor(klass):
         if public_method["constructor"] and public_method["name"] == klass["name"]:
             if public_method.get("deleted") and not public_method["parameters"]:
                 # occt-800: `X() = delete;`
-                logging.info(
+                logger.info(
                     "    Class %s has a deleted default constructor.", klass["name"]
                 )
                 return False
@@ -2617,7 +2620,7 @@ def build_inheritance_tree(classes_dict):
             upper_class_name_2 = upper_classes[1]["class"]
             class_2_module = upper_class_name_2.split("_")[0]
             if class_1_module == upper_class_name_2 == state.current_module:
-                logging.warning(
+                logger.warning(
                     "This is a special case, where the 2 ancestors belong the same module. Class %s skipped.",
                     class_name,
                 )
@@ -2633,7 +2636,7 @@ def build_inheritance_tree(classes_dict):
         else:
             # prevent multiple inheritance: OCCT only has single
             # inheritance
-            logging.warning(
+            logger.warning(
                 "Class %s has %s ancestors and is skipped.",
                 class_name,
                 nbr_upper_classes,
@@ -3135,11 +3138,11 @@ def flatten_nested_classes(classes_dict):
             alias, outer, template_name, args_str, classes_dict
         )
         if klass is None:
-            logging.info("    nested template alias %s not instantiated", alias)
+            logger.info("    nested template alias %s not instantiated", alias)
             continue
         klass["_scope"] = f"{outer}::{template_name}"
         classes_dict[alias] = klass
-        logging.info("    nested template alias %s instantiated", alias)
+        logger.info("    nested template alias %s instantiated", alias)
     # the flat names, of the public nested classes
     nested_map = {}
     for name, klass in classes_dict.items():
@@ -3147,7 +3150,7 @@ def flatten_nested_classes(classes_dict):
             parent = classes_dict.get(name.rsplit("::", 1)[0])
             if parent is not None and _nested_class_access(klass, parent) != "public":
                 klass["_skip"] = True
-                logging.info("    nested class %s is not public, skipped", name)
+                logger.info("    nested class %s is not public, skipped", name)
                 continue
             nested_map[name] = name.replace("::", "_")
     for name, klass in classes_dict.items():
@@ -3255,7 +3258,7 @@ def _propagate_abstract_classes(classes_dict):
             continue
         missing = unimplemented(klass)
         if missing:
-            logging.info(
+            logger.info(
                 "    %s is abstract, it does not override %s",
                 klass["name"],
                 sorted(missing),
@@ -3321,7 +3324,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # occt-800: skip class templates without an explicit instantiation,
         # they cannot be wrapped by SWIG and produce invalid C++ casts
         if klass.get("template", ""):
-            logging.info("    %s skipped because it is a class template", class_name)
+            logger.info("    %s skipped because it is a class template", class_name)
             continue
         # ensure the class returned by CppHeader is defined in this module
         # otherwise we go on with the next class
@@ -3332,14 +3335,14 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         ):
             # occt-800: e.g. BRepGraph_FacesOfEdge derives from an
             # instantiation of a nested class template, which is not wrapped
-            logging.info("    %s skipped, its base class is not wrapped", class_name)
+            logger.info("    %s skipped, its base class is not wrapped", class_name)
             continue
         if klass.get("_skip"):
             continue
         # we rename the class if the module is the same name
         # for instance TopoDS is both a module and a class
         # then we rename the class with lowercase
-        logging.info("Class: %s", class_name)
+        logger.info("Class: %s", class_name)
         # the class type hint
         class_name_for_pyi = class_name.split("<")[0]
 
@@ -3411,7 +3414,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             # or Graphic3d_TransformPers
             if "anon" in nested_class_name:
                 continue
-            logging.info("    Wrap nested class %s::%s", class_name, nested_class_name)
+            logger.info("    Wrap nested class %s::%s", class_name, nested_class_name)
             class_def_str += "\t\tclass " + nested_class_name + " {};\n"
         ####### class enums
         if class_enums_list:
@@ -3433,16 +3436,16 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
                 if (
                     "NCollection_Vec2" in property_value["type"]
                 ):  # issue in Aspect_Touch
-                    logging.warning("Wrong type in class property : NCollection_Vec2")
+                    logger.warning("Wrong type in class property : NCollection_Vec2")
                     continue
                 if "using" in property_value["type"]:
-                    logging.warning("Wrong type in class property : using")
+                    logger.warning("Wrong type in class property : using")
                     continue
                 if "return" in property_value["type"]:
-                    logging.warning("Wrong type in class property : return")
+                    logger.warning("Wrong type in class property : return")
                     continue
                 if "std::map<" in property_value["type"]:
-                    logging.warning("Wrong type in class property std::map")
+                    logger.warning("Wrong type in class property std::map")
                     continue
                 if (
                     "static" in property_value["type"]
@@ -3452,7 +3455,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
                 if state.flatten_nested_classes and not _is_wrappable_property_type(
                     property_value["type"], klass
                 ):
-                    logging.info(
+                    logger.info(
                         "    property %s of type %s skipped",
                         property_value["name"],
                         property_value["type"],
@@ -3664,7 +3667,7 @@ def parse_module(module_name):
     module_headers.sort()
     # check if there are some files
     if len(module_headers) == 0:
-        logging.warning(
+        logger.warning(
             "No file for module %s. Please check that the module name is part of occt.",
             module_name,
         )
@@ -3719,7 +3722,7 @@ class ModuleWrapper:
         else:
             state.python_module_dependency = []
 
-        logging.info("## Processing module %s", module_name)
+        logger.info("## Processing module %s", module_name)
         self._module_name = module_name
         self._module_docstring = get_module_docstring(module_name)
         # parse
@@ -3766,7 +3769,7 @@ class ModuleWrapper:
         )
 
     # Module-specific header injections (matched on module name).
-    _MODULE_TEMPLATE_INJECTIONS = {
+    _MODULE_TEMPLATE_INJECTIONS: ClassVar[dict[str, str]] = {
         "NCollection": NCOLLECTION_HEADER_TEMPLATE,
         "BVH": BVH_HEADER_TEMPLATE,
         "Prs3d": PRS3D_HEADER_TEMPLATE,
@@ -3785,7 +3788,9 @@ class ModuleWrapper:
         "ArrayMacros",
     )
 
-    _NUMPY_MODULES = {"Geom", "Geom2d", "Poly", "TColStd", "TColgp", "TShort"}
+    _NUMPY_MODULES = frozenset(
+        {"Geom", "Geom2d", "Poly", "TColStd", "TColgp", "TShort"}
+    )
 
     def generate_SWIG_files(self):
         if GENERATE_SWIG_FILES:
@@ -4082,7 +4087,7 @@ def scan_typedef_aliases():
         sorted(seen.items(), key=lambda kv: -len(kv[0]))
     )
     state.harray_typedef_rewrites.extend(_NESTED_TYPEDEF_REWRITES)
-    logging.info(
+    logger.info(
         "Built %d typedef rewrite mappings from OCCT headers",
         len(state.harray_typedef_rewrites),
     )
@@ -4130,7 +4135,7 @@ def process_toolkit(toolkit_name, modules_to_write=None):
     If modules_to_write is given, only these modules' files are written.
     """
     modules_list = TOOLKITS[toolkit_name]
-    logging.info("Processing toolkit %s ===", toolkit_name)
+    logger.info("Processing toolkit %s ===", toolkit_name)
     for module in sorted(modules_list):
         process_module(module, modules_to_write is None or module in modules_to_write)
 
@@ -4178,7 +4183,7 @@ def main(argv=None):
     # that take a parameter typed as `NCollection_X<...>` cannot be passed a
     # Python object of the corresponding TopTools_/TColgp_/... typedef.
     scan_typedef_aliases()
-    logging.info(get_log_header())
+    logger.info(get_log_header())
     start_time = time.perf_counter()
     process_all_toolkits(set(args.modules) if args.modules else None)
     if GENERATE_SWIG_FILES:
@@ -4186,9 +4191,9 @@ def main(argv=None):
     end_time = time.perf_counter()
     total_time = end_time - start_time
     # footer
-    logging.info(get_log_footer(total_time))
-    logging.info("Number of classes: %s", state.nb_total_classes)
-    logging.info("Number of methods: %s", state.nb_total_methods)
+    logger.info(get_log_footer(total_time))
+    logger.info("Number of classes: %s", state.nb_total_classes)
+    logger.info("Number of methods: %s", state.nb_total_methods)
 
 
 if __name__ == "__main__":
