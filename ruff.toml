@@ -2,4 +2,5 @@
 target-version = "py310"
 
 # generated files, compared byte-for-byte by test_golden.py
-extend-exclude = ["src/golden"]
+# Documentation.md: historical page, its snippets are fragments, not modules
+extend-exclude = ["src/golden", "Documentation.md"]
