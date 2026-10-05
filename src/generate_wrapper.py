@@ -2166,6 +2166,11 @@ def _build_swig_parameter_list(f):
 _NON_CONST_HANDLE_REF_RE = re.compile(r"opencascade::handle<[^&]*>\s*&")
 
 
+_SCALAR_REF_RETURN_RE = re.compile(
+    r"^\s*((?:unsigned\s+|signed\s+)?(?:int|long|short|long long|double|float|bool|size_t))\s*&\s*$"
+)
+
+
 def _build_typehint(
     f,
     function_name,
@@ -2181,6 +2186,9 @@ def _build_typehint(
     str_typehint = ""
     # adapt_type_for_hint returns False for a type it can't translate: Any
     # (not the "False" string, which is not a valid type hint)
+    # a non-const reference to a scalar is returned by value, see the
+    # FunctionTransformers.i out typemaps (int &, double &, bool &...)
+    return_type = _SCALAR_REF_RETURN_RE.sub(r"\1", return_type)
     types_returned = [adapt_type_for_hint(return_type) or "Any"]
     all_parameters_type_hint = ["self"]
 
