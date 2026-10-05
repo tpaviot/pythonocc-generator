@@ -204,3 +204,50 @@ def test_find_template_header():
     assert find_template_header("GeomLProp_SLPropsBase") == "GeomLProp_SLProps.hxx"
     assert find_template_header("Instance") is None
     assert find_template_header("BRepLProp_NoSuchTemplate") is None
+
+
+def test_derived_handle_outputs_first():
+    """the overload with the most derived handle outputs is declared first,
+    SWIG tries the overloads in their declaration order"""
+    from generate_wrapper import derived_handle_outputs_first, is_subclass, state
+
+    saved_parents = dict(state.class_parents)
+    state.class_parents.update(
+        {"TDocStd_Document": "CDM_Document", "CDM_Document": "Standard_Transient"}
+    )
+    try:
+        assert is_subclass("TDocStd_Document", "CDM_Document")
+        assert is_subclass("TDocStd_Document", "Standard_Transient")
+        assert not is_subclass("CDM_Document", "TDocStd_Document")
+
+        def method(name, *types):
+            return {"name": name, "parameters": [{"type": t} for t in types]}
+
+        base = method(
+            "NewDocument",
+            "TCollection_ExtendedString",
+            "opencascade::handle<CDM_Document> &",
+        )
+        derived = method(
+            "NewDocument",
+            "TCollection_ExtendedString",
+            "opencascade::handle<TDocStd_Document> &",
+        )
+        other = method("NewDocument", "int")
+        const_input = method("Add", "const opencascade::handle<CDM_Document> &")
+        const_derived = method("Add", "const opencascade::handle<TDocStd_Document> &")
+
+        assert derived_handle_outputs_first([other, base, derived]) == [
+            other,
+            derived,
+            base,
+        ]
+        assert derived_handle_outputs_first([derived, base]) == [derived, base]
+        # const handles are inputs, their order is kept
+        assert derived_handle_outputs_first([const_input, const_derived]) == [
+            const_input,
+            const_derived,
+        ]
+    finally:
+        state.class_parents.clear()
+        state.class_parents.update(saved_parents)

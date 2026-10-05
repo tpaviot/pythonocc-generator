@@ -251,6 +251,9 @@ class GeneratorState:
         # Classes that need %wrap_handle / %make_alias.
         self.all_standard_handles = []
         self.all_standard_transients = ["Standard_Transient"]
+        # class name -> name of its first ancestor, for every class seen so
+        # far, whatever its module. Filled by build_inheritance_tree().
+        self.class_parents = {}
 
         # since SWIG 4.1.1, static functions can no longer be called as free
         # functions; we emit deprecation shims for the old name.
@@ -2469,12 +2472,75 @@ def process_constructors(constructors_list):
     return str_functions, type_hints
 
 
+_HANDLE_OUTPUT_TYPE_RE = re.compile(
+    r"^\s*(?:opencascade|occ)::handle\s*<\s*(\w+)\s*>\s*&\s*$"
+)
+
+
+def is_subclass(class_name, ancestor_name):
+    """True if class_name derives from ancestor_name, according to the
+    classes processed so far (state.class_parents)."""
+    seen = set()
+    parent = state.class_parents.get(class_name)
+    while parent is not None and parent not in seen:
+        if parent == ancestor_name:
+            return True
+        seen.add(parent)
+        parent = state.class_parents.get(parent)
+    return False
+
+
+def _overrides_handle_outputs(f, g):
+    """True if the parameters of f and g are the same, but for non-const
+    handle outputs whose types in f derive from the ones in g, e.g.
+    TDocStd_Application::NewDocument(format, handle<TDocStd_Document>&) and
+    NewDocument(format, handle<CDM_Document>&)."""
+    if len(f["parameters"]) != len(g["parameters"]):
+        return False
+    derived = False
+    for param_f, param_g in zip(f["parameters"], g["parameters"]):
+        type_f, type_g = param_f["type"].strip(), param_g["type"].strip()
+        if type_f == type_g:
+            continue
+        handle_f = _HANDLE_OUTPUT_TYPE_RE.match(type_f)
+        handle_g = _HANDLE_OUTPUT_TYPE_RE.match(type_g)
+        if not (
+            handle_f and handle_g and is_subclass(handle_f.group(1), handle_g.group(1))
+        ):
+            return False
+        derived = True
+    return derived
+
+
+def derived_handle_outputs_first(methods_list):
+    """Order the overloads so that the one whose handle outputs are the most
+    derived comes first. SWIG tries the overloads in their declaration order
+    and the typecheck of a handle output accepts None and any subclass: the
+    base class overload would always be chosen, and return the base class."""
+    result = list(methods_list)
+    moved = True
+    while moved:
+        moved = False
+        for i, f in enumerate(result):
+            for j in range(i):
+                g = result[j]
+                if g["name"] == f["name"] and _overrides_handle_outputs(f, g):
+                    result.insert(j, result.pop(i))
+                    moved = True
+                    break
+            if moved:
+                break
+    return result
+
+
 def process_methods(methods_list):
     """process a list of public process_methods"""
     str_functions = ""
     type_hints = ""
     # sort methods according to the method name
-    sorted_methods_list = sorted(methods_list, key=itemgetter("name"))
+    sorted_methods_list = derived_handle_outputs_first(
+        sorted(methods_list, key=itemgetter("name"))
+    )
     # create a dict to map function names and the number of occurrences,
     # to determine whether or not use the @overload decorator
     for function in sorted_methods_list:
@@ -2606,6 +2672,8 @@ def build_inheritance_tree(classes_dict):
         class_name = klass["name"]
         upper_classes = klass["inherits"]
         nbr_upper_classes = len(upper_classes)
+        if nbr_upper_classes > 0:
+            state.class_parents[class_name] = upper_classes[0]["class"]
         if nbr_upper_classes == 0:
             level_0_classes.append(class_name)
         # if class has one or more ancestors
