@@ -2760,10 +2760,13 @@ def process_hsequence():
             wrapper_str += HSEQUENCE_TEMPLATE.substitute(
                 {"HClassName": f"{HClassName}", "SequenceType": f"{sequence_type}"}
             )
-            # type hint
-            pyi_str += HSEQUENCE_TEMPLATE_PYI.substitute(
-                _container_pyi_mapping(HClassName, "SequenceType", sequence_type)
-            )
+            # type hint: Append(theItem) overloads the inherited
+            # Sequence.Append(theItem), it must be declared along with
+            # Append(theSequence) or mypy only sees the latter
+            mapping = _container_pyi_mapping(HClassName, "SequenceType", sequence_type)
+            item_type = sequence_type.strip()[len("NCollection_Sequence<") : -1]
+            mapping["ItemType"] = adapt_type_for_hint(item_type.strip()) or "Any"
+            pyi_str += HSEQUENCE_TEMPLATE_PYI.substitute(mapping)
     wrapper_str += "\n"
     pyi_str += "\n"
     return wrapper_str, pyi_str
