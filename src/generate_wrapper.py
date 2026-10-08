@@ -91,6 +91,7 @@ from _swig_templates import (
     TEMPLATE_GETTER_SETTER,
     TEMPLATE_INITFROMJSON,
     TEMPLATE_INITFROMJSON_PYI,
+    TEMPLATE_KEEP_OWNER,
     TEMPLATE_SETTER_PYI,
     TIMESTAMP_TEMPLATE,
     TOPODS_CLASS,
@@ -1477,6 +1478,16 @@ def check_dependency(item):
     return module
 
 
+def _is_returned_as_copy(return_type):
+    """The const references to curves and surfaces are wrapped as copies."""
+    return (
+        "const" in return_type
+        and "&" in return_type
+        and ("Surface" in return_type or "Curve" in return_type)
+        and "handle" not in return_type
+    )
+
+
 def adapt_return_type(return_type):
     """adapt the type definition"""
     replaces = [
@@ -1491,12 +1502,7 @@ def adapt_return_type(return_type):
     # occt-800: rewrite canonical NCollection<...> forms back to typedef alias
     return_type = _apply_typedef_rewrites(return_type)
 
-    if (
-        "const" in return_type
-        and "&" in return_type
-        and ("Surface" in return_type or "Curve" in return_type)
-        and "handle" not in return_type
-    ):
+    if _is_returned_as_copy(return_type):
         logger.warning("%s wrapped as a copy", return_type)
         return_type = return_type.replace("const", "")
         return_type = return_type.replace("&", "")
@@ -1516,9 +1522,7 @@ def adapt_return_type(return_type):
     # opencascade::handle may contain extra spaces, that has to be removed
     if "opencascade::handle" in return_type:
         return_type = return_type.replace(" >", ">")
-    if (("gp" in return_type) and "TColgp" not in return_type) or (
-        "TopoDS" in return_type
-    ):
+    if _is_reference_returned_by_value(return_type):
         return_type = return_type.replace("&", "").strip()
     check_dependency(return_type)
     # check is it is an enum
@@ -1526,6 +1530,13 @@ def adapt_return_type(return_type):
         # remove the reference
         return_type = return_type.replace("&", "")
     return return_type
+
+
+def _is_reference_returned_by_value(return_type):
+    """The references to the gp and TopoDS classes are returned by value."""
+    return (("gp" in return_type) and "TColgp" not in return_type) or (
+        "TopoDS" in return_type
+    )
 
 
 def adapt_function_name(f_name):
@@ -2541,6 +2552,7 @@ def process_methods(methods_list):
     sorted_methods_list = derived_handle_outputs_first(
         sorted(methods_list, key=itemgetter("name"))
     )
+    keep_owner_names = _names_returning_owned_references(sorted_methods_list)
     # create a dict to map function names and the number of occurrences,
     # to determine whether or not use the @overload decorator
     for function in sorted_methods_list:
@@ -2568,9 +2580,60 @@ def process_methods(methods_list):
                 need_overload = True
             ok_to_wrap, ok_hints = process_function(function, need_overload)
             if ok_to_wrap:
+                if function_name in keep_owner_names:
+                    keep_owner_names.remove(function_name)
+                    str_functions += TEMPLATE_KEEP_OWNER.substitute(
+                        {"MethodName": adapt_function_name(function_name)}
+                    )
                 str_functions += ok_to_wrap
                 type_hints += ok_hints
     return str_functions, type_hints
+
+
+# the referenced types SWIG does not wrap as a proxy pointing into the owner:
+# numbers and strings (FunctionTransformers.i), handles (OccHandle.i), streams.
+# The type is matched once the qualifiers, '&', '*' and '::' are removed.
+_NOT_OWNED_REFERENCE_TYPES_RE = re.compile(
+    r"^(?:Standard_(?:Integer|Real|Boolean|ShortReal|Size|Character|Byte"
+    r"|ExtCharacter|Utf8Char|CString|ExtString|Address|OStream|IStream|SStream)"
+    r"|(?:unsigned )?(?:int|long|short|char)|double|float|bool|size_t|void"
+    r"|std \w+|(?:opencascade |occ )?handle ?<.*>|Handle_\w+)$"
+)
+
+
+def _returns_owned_reference(f):
+    """True if the method returns a reference to an object stored in the
+    instance, e.g. NCollection_HArray1::Array1() or Geom_BSplineCurve::Poles().
+    SWIG wraps it as a proxy that does not own the referenced object, which is
+    freed with the instance (issue #1499)."""
+    if f["constructor"] or f["static"] or f["friend"] or f["parent"] is None:
+        return False
+    if not adapt_function_name(f["name"]).isidentifier():  # operators
+        return False
+    rtn_type = _apply_typedef_rewrites(f["rtnType"])
+    if "*" not in rtn_type and (
+        "&" not in rtn_type
+        or _is_returned_as_copy(rtn_type)
+        or _is_reference_returned_by_value(rtn_type)
+        or is_return_type_enum(rtn_type)
+    ):
+        return False
+    referenced_type = re.sub(
+        r"\b(?:const|virtual|inline|static|public|protected|private"
+        r"|Standard_EXPORT|DEFINE_NCOLLECTION_ALLOC)\b|[&*:]",
+        " ",
+        rtn_type,
+    )
+    referenced_type = " ".join(referenced_type.split())
+    return not _NOT_OWNED_REFERENCE_TYPES_RE.match(referenced_type)
+
+
+def _names_returning_owned_references(methods_list):
+    """Names of the methods whose returned reference must keep the instance
+    alive. The SWIG feature applies to all the overloads of a name: a name
+    with a static overload is left out, the python wrapper has no self."""
+    names = {f["name"] for f in methods_list if _returns_owned_reference(f)}
+    return names - {f["name"] for f in methods_list if f["static"]}
 
 
 def must_ignore_default_destructor(klass):

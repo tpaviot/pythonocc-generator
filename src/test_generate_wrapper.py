@@ -11,6 +11,7 @@ import sys
 from _exclusions import HXX_TO_EXCLUDE_FROM_CPPPARSER
 from generate_wrapper import (
     OCCT_INCLUDE_DIR,
+    _names_returning_owned_references,
     adapt_function_name,
     adapt_param_type_and_name,
     adapt_return_type,
@@ -251,3 +252,38 @@ def test_derived_handle_outputs_first():
     finally:
         state.class_parents.clear()
         state.class_parents.update(saved_parents)
+
+
+def test_names_returning_owned_references():
+    def method(name, rtn_type, static=False):
+        return {
+            "name": name,
+            "rtnType": rtn_type,
+            "constructor": False,
+            "static": static,
+            "friend": False,
+            "parent": {"name": "Geom_BSplineCurve"},
+        }
+
+    methods = [
+        method("Poles", "const TColgp_Array1OfPnt &"),
+        method("ChangeArray1", "NCollection_Array1<double> &"),
+        method("Weights", "const TColStd_Array1OfReal *"),
+        method("Pole", "const gp_Pnt &"),  # returned by value
+        method("Shape", "const TopoDS_Shape &"),  # returned by value
+        method("Curve", "const GeomAdaptor_Curve &"),  # wrapped as a copy
+        method("Degree", "int"),
+        method("ChangeValue", "double &"),
+        method("Tolerance", "const Standard_Real &"),
+        method("Handle", "const opencascade::handle<Geom_Curve> &"),
+        method("Dump", "Standard_OStream &"),
+        method("String", "Standard_CString"),
+        method("Find", "const TColStd_ListOfInteger &"),
+        method("Find", "const TColStd_ListOfInteger &", static=True),
+        method("operator()", "const TColgp_Array1OfPnt &"),
+    ]
+    assert _names_returning_owned_references(methods) == {
+        "Poles",
+        "ChangeArray1",
+        "Weights",
+    }

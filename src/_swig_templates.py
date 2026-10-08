@@ -210,6 +210,15 @@ public:
 %ignore NCollection_Array2::operator();
 """
 
+TEMPLATE_KEEP_OWNER = Template(
+    """\t\t/* the returned reference keeps the instance alive (issue #1499) */
+\t\t%pythonappend $MethodName %{
+\t\tif hasattr(val, "this"):
+\t\t    val._owner = self
+\t\t%}
+"""
+)
+
 HARRAY1_TEMPLATE = Template(
     """
 class $HClassName : public $Array1Type, public Standard_Transient {
@@ -217,7 +226,13 @@ class $HClassName : public $Array1Type, public Standard_Transient {
     $HClassName(const Standard_Integer theLower, const Standard_Integer theUpper);
     $HClassName(const Standard_Integer theLower, const Standard_Integer theUpper, const $Array1Type::value_type& theValue);
     $HClassName(const $Array1Type& theOther);
+    %pythonappend Array1 %{
+    val._owner = self
+    %}
     const $Array1Type& Array1();
+    %pythonappend ChangeArray1 %{
+    val._owner = self
+    %}
     $Array1Type& ChangeArray1();
 };
 %make_alias($HClassName)
@@ -243,7 +258,13 @@ class $HClassName : public $Array2Type, public Standard_Transient {
     $HClassName(const Standard_Integer theRowLow, const Standard_Integer theRowUpp, const Standard_Integer theColLow,
                const Standard_Integer theColUpp, const $Array2Type::value_type& theValue);
     $HClassName(const $Array2Type& theOther);
+    %pythonappend Array2 %{
+    val._owner = self
+    %}
     const $Array2Type& Array2 ();
+    %pythonappend ChangeArray2 %{
+    val._owner = self
+    %}
     $Array2Type& ChangeArray2 (); 
 };
 %make_alias($HClassName)
@@ -269,9 +290,15 @@ class $HClassName : public $SequenceType, public Standard_Transient {
   public:
     $HClassName();
     $HClassName(const $SequenceType& theOther);
+    %pythonappend Sequence %{
+    val._owner = self
+    %}
     const $SequenceType& Sequence();
     void Append (const $SequenceType::value_type& theItem);
     void Append ($SequenceType& theSequence);
+    %pythonappend ChangeSequence %{
+    val._owner = self
+    %}
     $SequenceType& ChangeSequence();
 };
 %make_alias($HClassName)
