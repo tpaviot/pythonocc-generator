@@ -58,6 +58,14 @@ BREPALGOAPI_HEADER = """
 %include "BRepAlgoAPI_Algo.hxx";
 """
 
+# the type descriptors of the TopoDS_Shape subclasses, used by the
+# pythonocc_shape_to_python fragment of FunctionTransformers.i, for the
+# modules that return TopoDS_Shape objects but do not use the subclasses
+TOPODS_SHAPE_TYPES_HEADER = """
+%types(TopoDS_Compound *, TopoDS_CompSolid *, TopoDS_Solid *, TopoDS_Shell *,
+       TopoDS_Face *, TopoDS_Wire *, TopoDS_Edge *, TopoDS_Vertex *);
+"""
+
 GRAPHIC3D_DEFINE_HEADER = """
 %define Handle_Graphic3d_TextureSet Handle(Graphic3d_TextureSet)
 %enddef

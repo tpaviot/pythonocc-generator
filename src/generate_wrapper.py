@@ -103,6 +103,7 @@ from _swig_templates import (
     TOPODS_CLASS,
     TOPODS_CLASS_PYI,
     TOPODS_SHAPE_PICKLE_TEMPLATE,
+    TOPODS_SHAPE_TYPES_HEADER,
     WIN_PRAGMAS,
 )
 
@@ -4107,6 +4108,7 @@ class ModuleWrapper:
         "Prs3d": PRS3D_HEADER_TEMPLATE,
         "Graphic3d": GRAPHIC3D_DEFINE_HEADER,
         "BRepAlgoAPI": BREPALGOAPI_HEADER,
+        "HelixBRep": TOPODS_SHAPE_TYPES_HEADER,
     }
 
     _COMMON_INCLUDES = (
