@@ -206,6 +206,9 @@ class GeneratorState:
         # Like above but for additional headers; reset at every module via
         # reset_header_depency().
         self.header_dependency = []
+        # the types used as template arguments in the typedefs of the
+        # current module, set by process_typedefs()
+        self.template_argument_types = []
 
         # occt-800: built lazily by scan_typedef_aliases() — a mapping from
         # canonical template form (e.g. "NCollection_HArray1<gp_Pnt2d>") to
@@ -323,8 +326,19 @@ SWIG interface file generation completed in {elapsed_seconds:.2f}s
 
 def reset_header_depency():
     # OSD: the wrapped OSD classes (OSD_ThreadPool) reach every module that
-    # imports Message.i, their declaration is required by the SWIG casts
-    state.header_dependency = ["TColgp", "TColStd", "TCollection", "Storage", "OSD"]
+    # imports Message.i, their declaration is required by the SWIG casts.
+    # Bnd and TopTools: same for the modules importing TopTools.i (that
+    # imports Bnd.i for TopTools_DataMapOfShapeBox) and MoniTool.i (that
+    # imports TopTools.i for MoniTool_IndexedDataMapOfShapeTransient)
+    state.header_dependency = [
+        "TColgp",
+        "TColStd",
+        "TCollection",
+        "Storage",
+        "OSD",
+        "Bnd",
+        "TopTools",
+    ]
 
 
 def check_is_persistent(class_name):
@@ -1170,6 +1184,17 @@ def process_typedefs(typedefs_dict):
             typedef_pyi_str += "\n# the following typedef cannot be wrapped as is"
             typedef_pyi_str += f'\n{typedef_value} = NewType("{typedef_value}", Any)'
 
+    # the modules of the template arguments, see ModuleWrapper. Not for the
+    # namespace typedefs (IMeshData::VectorOfVertex), that are not wrapped
+    # and would make modules import each other (IMeshData and BRepMesh)
+    state.template_argument_types = [
+        identifier
+        for template_type, typedef_name in templates
+        if "::" not in typedef_name
+        for identifier in re.findall(
+            r"\b[A-Za-z]\w*_\w+\b", template_type.split("<", 1)[1]
+        )
+    ]
     typedef_pyi_str += "\n"
     typedef_str += "/* end typedefs declaration */\n\n"
     # then we process templates
@@ -4069,6 +4094,12 @@ class ModuleWrapper:
         self._free_functions_str, self._free_functions_pyi_str = process_methods(
             free_functions
         )
+        # the modules of the template arguments must be imported, else SWIG
+        # returns the items as opaque pointers until the python module is
+        # imported (e.g. the gp_Pnt of TColgp_Array1OfPnt). Checked last to
+        # keep the order of the other imports.
+        for type_name in state.template_argument_types:
+            check_dependency(type_name)
         # other dependencies
         self._additional_dependencies = (
             additional_dependencies + state.header_dependency
