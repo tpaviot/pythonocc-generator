@@ -351,3 +351,35 @@ def test_widen_parameter_hint():
     assert _widen_parameter_hint("TCollection_AsciiString &", "str") == "str"
     assert _widen_parameter_hint("Standard_CString", "str") == "str"
     assert _widen_parameter_hint("gp_Pnt", "gp_Pnt") == "gp_Pnt"
+
+
+def test_template_typedef_name(monkeypatch):
+    from generate_wrapper import _template_typedef_name, state
+
+    monkeypatch.setattr(state, "current_module", "GeomGridEval")
+    monkeypatch.setattr(state, "python_module_dependency", ["Standard", "gp"])
+    monkeypatch.setattr(
+        state,
+        "template_typedef_names",
+        {
+            "NCollection_Array1<gp_Pnt>": "TColgp_Array1OfPnt",
+            "NCollection_Vec2<int>": "Graphic3d_Vec2i",
+        },
+    )
+    # TColgp is processed, Graphic3d is processed but imports GeomGridEval
+    monkeypatch.setattr(
+        state,
+        "module_dependencies",
+        {"TColgp": ["Standard", "gp"], "Graphic3d": ["GeomGridEval"]},
+    )
+    assert _template_typedef_name("NCollection_Array1<gp_Pnt >") == "TColgp_Array1OfPnt"
+    assert (
+        _template_typedef_name("const NCollection_Array1<gp_Pnt> &")
+        == "TColgp_Array1OfPnt"
+    )
+    # an output parameter, a handle, a nested type, a module importing back
+    assert _template_typedef_name("NCollection_Array1<gp_Pnt> &") is None
+    assert _template_typedef_name("opencascade::handle<Geom_Curve>") is None
+    assert _template_typedef_name("NCollection_Array1<gp_Pnt>::Iterator") is None
+    assert _template_typedef_name("NCollection_Vec2<int>") is None
+    assert _template_typedef_name("gp_Pnt") is None

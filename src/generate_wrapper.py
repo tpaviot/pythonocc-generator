@@ -210,6 +210,8 @@ class GeneratorState:
         # Like above but for additional headers; reset at every module via
         # reset_header_depency().
         self.header_dependency = []
+        # module -> the modules it imports, for the modules processed so far
+        self.module_dependencies = {}
         # the types used as template arguments in the typedefs of the
         # current module, set by process_typedefs()
         self.template_argument_types = []
@@ -222,6 +224,8 @@ class GeneratorState:
         # typedef alias is what carries the SWIG type tag, so we have to
         # rewrite back.
         self.harray_typedef_rewrites = []
+        # the same, as a dict: canonical template form -> typedef alias
+        self.typedef_rewrite_names = {}
         # Canonical template form -> typedef name, filled by
         # process_templates_from_typedefs() for every module processed so far.
         # Used to emit valid python names in the HArray/HSequence stubs.
@@ -1886,6 +1890,54 @@ def _is_class_enum(class_name, enum_name):
     return _class_enums_cache[key]
 
 
+_TYPE_QUALIFIERS_RE = re.compile(r"\b(?:const|static|virtual|inline)\b|&")
+
+
+def _template_typedef_name(type_str):
+    """The typedef wrapping a template instantiation, e.g. TColgp_Array1OfPnt
+    for `const NCollection_Array1<gp_Pnt > &`, None if there is none."""
+    if "<" not in type_str or "OutValue" in type_str:
+        return None
+    if "&" in type_str and "const" not in type_str:
+        # a non const reference is an output parameter
+        return None
+    canonical = re.sub(r"\s+", "", _TYPE_QUALIFIERS_RE.sub("", type_str))
+    if canonical.startswith(("opencascade::handle<", "occ::handle<")):
+        # a handle is typed with the class it holds, see adapt_type_for_hint
+        return None
+    if "::" in canonical:
+        # a nested type, e.g. an iterator, not wrapped
+        return None
+    name = state.template_typedef_names.get(canonical)
+    if name is None:
+        name = state.typedef_rewrite_names.get(canonical)
+    if name is None:
+        return None
+    if not _stub_can_import(name.split("_")[0]):
+        return None
+    return name
+
+
+def _stub_can_import(module):
+    """True if the stub of the current module can import module: a module
+    it depends on, or a module already processed that does not depend on it,
+    else the stubs would import each other (Media and Graphic3d)."""
+    if module == state.current_module or module in state.python_module_dependency:
+        return True
+    if module not in state.module_dependencies:
+        return False
+    seen = set()
+    stack = [module]
+    while stack:
+        dependency = stack.pop()
+        if dependency == state.current_module:
+            return False
+        if dependency not in seen:
+            seen.add(dependency)
+            stack.extend(state.module_dependencies.get(dependency, ()))
+    return True
+
+
 def adapt_type_for_hint(type_str):
     """convert c++ types to python types, for type hints
     Returns False if there's no possible type
@@ -1893,6 +1945,9 @@ def adapt_type_for_hint(type_str):
     if type_str == "0":  # huu ? in XCAFDoc, skip it
         logger.warning("    [TypeHint] Skipping unknown type, 0")
         return False
+    typedef_name = _template_typedef_name(type_str)
+    if typedef_name is not None:
+        return typedef_name
     if "void" in type_str or type_str == "":
         return "None"
     # the substring tests below don't apply to a template argument, e.g.
@@ -4091,6 +4146,7 @@ class ModuleWrapper:
         # keep the order of the other imports.
         for type_name in state.template_argument_types:
             check_dependency(type_name)
+        state.module_dependencies[module_name] = list(state.python_module_dependency)
         # other dependencies
         self._additional_dependencies = (
             additional_dependencies + state.header_dependency
@@ -4423,6 +4479,9 @@ def scan_typedef_aliases():
         sorted(seen.items(), key=lambda kv: -len(kv[0]))
     )
     state.harray_typedef_rewrites.extend(_NESTED_TYPEDEF_REWRITES)
+    # the first alias of a template wins, as in _apply_typedef_rewrites
+    for tpl, name in reversed(state.harray_typedef_rewrites):
+        state.typedef_rewrite_names[tpl] = name
     logger.info(
         "Built %d typedef rewrite mappings from OCCT headers",
         len(state.harray_typedef_rewrites),
