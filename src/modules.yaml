@@ -1153,6 +1153,9 @@ modules:
     additional_deps: [Message, Resource, TopoDS, XCAFDimTolObjects]
 
   - name: DE
+    # the fields of DE_ShapeFixParameters and of the struct nested in
+    # DE_ConfigurationNode, wrapped with its fields
+    flatten_nested_classes: true
     additional_deps: [CDF, TopTools, Transfer, TDF, PCDM, MoniTool, Interface, IFSelect, Geom, Geom2d]
     exclude_classes: [DE_PluginHolder, DE_MultiPluginHolder]
     exclude_member_functions:
@@ -1211,9 +1214,15 @@ modules:
 
   # occt-800: the providers of the DE framework, one per format
   - name: DEBREP
+    # the parameters are the fields of a struct nested in the
+    # configuration node, wrapped with its fields
+    flatten_nested_classes: true
     additional_deps: [DE, CDF, TopTools, Transfer, TDF, PCDM, MoniTool, Interface, IFSelect, Geom, Geom2d]
 
   - name: DEXCAF
+    # the parameters are the fields of a struct nested in the
+    # configuration node, wrapped with its fields
+    flatten_nested_classes: true
     additional_deps: [DE, CDF, TopTools, Transfer, TDF, PCDM, MoniTool, Interface, IFSelect, Geom, Geom2d]
 
   - name: DESTEP
@@ -1222,19 +1231,36 @@ modules:
     additional_deps: [DE, CDF, TopTools, Transfer, TDF, PCDM, MoniTool, Interface, IFSelect, Geom, Geom2d]
 
   - name: DEIGES
+    # the read and write parameters are public fields of DEIGES_Parameters
+    wrap_public_fields: true
     additional_deps: [DE, CDF, TopTools, Transfer, TDF, PCDM, MoniTool, Interface, IFSelect, Geom, Geom2d]
 
   - name: DESTL
+    # the parameters are the fields of a struct nested in the
+    # configuration node, wrapped with its fields
+    flatten_nested_classes: true
     additional_deps: [DE, CDF, TopTools, Transfer, TDF, PCDM, MoniTool, Interface, IFSelect, Geom, Geom2d]
 
   - name: DEVRML
+    # the parameters are the fields of a struct nested in the
+    # configuration node, wrapped with its fields
+    flatten_nested_classes: true
     additional_deps: [DE, CDF, TopTools, Transfer, TDF, PCDM, MoniTool, Interface, IFSelect, Geom, Geom2d]
 
   - name: DEOBJ
+    # the parameters are the fields of a struct nested in the
+    # configuration node, wrapped with its fields
+    flatten_nested_classes: true
     additional_deps: [DE, CDF, TopTools, Transfer, TDF, PCDM, MoniTool, Interface, IFSelect, Geom, Geom2d]
 
   - name: DEPLY
+    # the parameters are the fields of a struct nested in the
+    # configuration node, wrapped with its fields
+    flatten_nested_classes: true
     additional_deps: [DE, CDF, TopTools, Transfer, TDF, PCDM, MoniTool, Interface, IFSelect, Geom, Geom2d]
 
   - name: DEGLTF
+    # the parameters are the fields of a struct nested in the
+    # configuration node, wrapped with its fields
+    flatten_nested_classes: true
     additional_deps: [DE, CDF, TopTools, Transfer, TDF, PCDM, MoniTool, Interface, IFSelect, Geom, Geom2d]
