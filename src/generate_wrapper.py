@@ -2521,9 +2521,23 @@ def _should_skip_function(f, function_name):
     if re.fullmatch(r"operator[A-Za-z_]\w*", function_name):
         # conversion operator, e.g. operator BRepGraph_NodeId()
         return True
+    if any(_is_unqualified_nested_type(param["type"]) for param in f["parameters"]):
+        return True
     if state.flatten_nested_classes:
         return _should_skip_unwrappable_function(f)
     return False
+
+
+# typedefs declared in a base class and used unqualified in the derived
+# classes: the wrapper function is not in the class scope, the type is not
+# found there (DE_Provider::ReadStreamList in DESTEP_Provider::Read)
+_UNQUALIFIED_NESTED_TYPES = frozenset({"ReadStreamList", "WriteStreamList"})
+
+
+def _is_unqualified_nested_type(param_type):
+    """True for a parameter type of _UNQUALIFIED_NESTED_TYPES"""
+    base = re.sub(r"\bconst\b|[&*]", "", param_type).strip()
+    return base in _UNQUALIFIED_NESTED_TYPES
 
 
 def _should_skip_unwrappable_function(f):
