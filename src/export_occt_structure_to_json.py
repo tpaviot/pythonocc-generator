@@ -17,7 +17,37 @@
 
 import argparse
 import json
+import re
 from pathlib import Path
+
+
+def read_packages(toolkit):
+    """The packages of the toolkit directory, None if they are not listed.
+
+    OCCT 7 lists them in a PACKAGES file, one per line. OCCT 8 in a
+    PACKAGES.cmake file:
+        set(OCCT_TKernel_LIST_OF_PACKAGES
+          FSD
+          ...
+        )
+    """
+    packages_file = toolkit / "PACKAGES"
+    if packages_file.is_file():
+        lines = packages_file.read_text(encoding="utf8").splitlines()
+        return [line.strip() for line in lines if line.strip()]
+    packages_file = toolkit / "PACKAGES.cmake"
+    if packages_file.is_file():
+        content = packages_file.read_text(encoding="utf8")
+        match = re.search(
+            rf"set\(\s*OCCT_{re.escape(toolkit.name)}_LIST_OF_PACKAGES\b([^)]*)\)",
+            content,
+        )
+        if match:
+            # the comments of the list are dropped, a package of another
+            # toolkit is given by its path (TKOpenGles: ../TKOpenGl/OpenGl)
+            items = re.sub(r"#[^\n]*", "", match.group(1)).split()
+            return [Path(item).name for item in items]
+    return None
 
 
 def process_toolkits(occt_directory):
@@ -32,21 +62,18 @@ def process_toolkits(occt_directory):
 
     toolkits = {}
 
-    # loop over the TK folders
-    for toolkit in sorted(occt_src_path.glob("TK*")):
-        packages_file = toolkit / "PACKAGES"
-
-        if not packages_file.exists():
-            print(f"Warning: PACKAGES file not found in {toolkit}")
+    # the TK folders are in src (OCCT 7) or in src/<module> (OCCT 8, e.g.
+    # src/FoundationClasses/TKernel)
+    toolkit_dirs = [*occt_src_path.glob("TK*"), *occt_src_path.glob("*/TK*")]
+    for toolkit in sorted(toolkit_dirs, key=lambda path: path.name):
+        if not toolkit.is_dir():
             continue
-
-        with packages_file.open(encoding="utf8") as f:
-            packages = [line.strip() for line in f]
-
+        packages = read_packages(toolkit)
+        if packages is None:
+            print(f"Warning: no PACKAGES file found in {toolkit}")
+            continue
         # alphabetical sort
-        packages.sort()
-        # add the entry to the dict
-        toolkits[toolkit.name] = packages
+        toolkits[toolkit.name] = sorted(packages)
 
     return toolkits
 
@@ -57,7 +84,7 @@ def main():
     )
     parser.add_argument(
         "occt_directory",
-        help="Path to the OCCT directory (e.g., /path/to/OCCT-7_8_1/)",
+        help="Path to the OCCT source directory (e.g., /path/to/OCCT-8_0_1/)",
     )
     parser.add_argument(
         "--output",

@@ -62,12 +62,10 @@ jobs:
           $(Build.SourcesDirectory)/pythonocc-core/src/SWIG_files/wrapper
     displayName: 'Type check the generated .pyi stubs with mypy'
 
-  # export_occt_structure_to_json.py expects the src/TK*/PACKAGES layout of
-  # OCCT 7.x sources, OCCT 8 moved toolkits under src/<Module>/
   - bash: |
         set -ex
-        wget -q https://github.com/Open-Cascade-SAS/OCCT/archive/refs/tags/V7_9_0.tar.gz
-        tar -zxf V7_9_0.tar.gz
+        wget -q https://github.com/Open-Cascade-SAS/OCCT/archive/refs/tags/V8_0_1.tar.gz
+        tar -zxf V8_0_1.tar.gz
         cd src
-        conda run -n pythonoccgen --no-capture-output python export_occt_structure_to_json.py --output occt_toolkits.json ../OCCT-7_9_0
+        conda run -n pythonoccgen --no-capture-output python export_occt_structure_to_json.py --output occt_toolkits.json ../OCCT-8_0_1
     displayName: 'Run occt structure exporter'
