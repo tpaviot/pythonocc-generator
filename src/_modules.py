@@ -25,7 +25,7 @@ _YAML_PATH = Path(__file__).with_name("modules.yaml")
 
 
 def _load():
-    with open(_YAML_PATH, "r", encoding="utf8") as f:
+    with _YAML_PATH.open(encoding="utf8") as f:
         data = yaml.safe_load(f)
 
     toolkits = {}

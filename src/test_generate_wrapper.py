@@ -5,8 +5,8 @@ relative `wrapper_generator.conf` next to generate_wrapper.py is picked up
 during import).
 """
 
-import os
 import sys
+from pathlib import Path
 
 from _exclusions import HXX_TO_EXCLUDE_FROM_CPPPARSER
 from generate_wrapper import (
@@ -36,7 +36,7 @@ def test_filter_header_list():
 
 def test_filter_header_list_platform_headers():
     headers = [
-        os.path.join(OCCT_INCLUDE_DIR, name)
+        str(OCCT_INCLUDE_DIR / name)
         for name in (
             "WNT_Window.hxx",
             "OSD_WNT.hxx",
@@ -47,7 +47,7 @@ def test_filter_header_list_platform_headers():
             "gp_Pnt.hxx",
         )
     ]
-    assert [os.path.basename(h) for h in filter_header_list(headers, [])] == [
+    assert [Path(h).name for h in filter_header_list(headers, [])] == [
         "Storage_StreamUnknownTypeError.hxx",
         "gp_Pnt.hxx",
     ]

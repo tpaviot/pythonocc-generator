@@ -16,41 +16,37 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
-import glob
 import json
-import os
+from pathlib import Path
 
 
 def process_toolkits(occt_directory):
     """Process OCCT toolkits and generate JSON output."""
     # Verify the directory exists
-    if not os.path.isdir(occt_directory):
+    if not Path(occt_directory).is_dir():
         raise ValueError(f"Directory does not exist: {occt_directory}")
 
-    occt_src_path = os.path.join(occt_directory, "src")
-    if not os.path.isdir(occt_src_path):
+    occt_src_path = Path(occt_directory) / "src"
+    if not occt_src_path.is_dir():
         raise ValueError(f"Source directory not found: {occt_src_path}")
 
-    # load all TK folders
-    all_toolkits = glob.glob(os.path.join(occt_src_path, "TK*"))
     toolkits = {}
 
-    # loop over toolkits
-    for toolkit in all_toolkits:
-        toolkit_name = toolkit.split(os.sep)[-1]
-        packages_file = os.path.join(toolkit, "PACKAGES")
+    # loop over the TK folders
+    for toolkit in sorted(occt_src_path.glob("TK*")):
+        packages_file = toolkit / "PACKAGES"
 
-        if not os.path.exists(packages_file):
+        if not packages_file.exists():
             print(f"Warning: PACKAGES file not found in {toolkit}")
             continue
 
-        with open(packages_file, "r", encoding="utf8") as f:
-            packages = [l.strip() for l in f]
+        with packages_file.open(encoding="utf8") as f:
+            packages = [line.strip() for line in f]
 
         # alphabetical sort
         packages.sort()
         # add the entry to the dict
-        toolkits[toolkit_name] = packages
+        toolkits[toolkit.name] = packages
 
     return toolkits
 
@@ -74,7 +70,7 @@ def main():
     toolkits = process_toolkits(args.occt_directory)
 
     # save to json
-    with open(args.output, "w", encoding="utf8") as f:
+    with Path(args.output).open("w", encoding="utf8") as f:
         json.dump(toolkits, f, indent=4, ensure_ascii=False)
 
     print(f"Successfully wrote toolkit information to {args.output}")

@@ -22,7 +22,6 @@ import ast
 import configparser
 import copy
 import datetime
-import glob
 import hashlib  # to compute md5 function signatures
 import keyword  # to prevent using python language keywords
 import logging
@@ -34,6 +33,7 @@ import sys
 import time
 from collections import Counter
 from operator import itemgetter
+from pathlib import Path
 from typing import ClassVar
 
 import CppHeaderParser
@@ -109,22 +109,25 @@ from _swig_templates import (
 # handlers are attached to the root logger by setup_logging()
 logger = logging.getLogger(__name__)
 
+# the directory of this script
+SRC_DIR = Path(__file__).resolve().parent
+
 ##############################################
 # Load configuration file and setup settings #
 ##############################################
 # the PYTHONOCC_GENERATOR_CONFIG environment variable, if set, overrides the
 # wrapper_generator.conf next to this script (used by the CI)
-DEFAULT_CONFIG_PATH = os.environ.get("PYTHONOCC_GENERATOR_CONFIG") or os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "wrapper_generator.conf"
+DEFAULT_CONFIG_PATH = os.environ.get("PYTHONOCC_GENERATOR_CONFIG") or str(
+    SRC_DIR / "wrapper_generator.conf"
 )
 
 # path settings, set by load_config()
 PYTHONOCC_VERSION = ""
-OCCT_INCLUDE_DIR = ""
-PYTHONOCC_CORE_PATH = ""
-COMMON_OUTPUT_PATH = ""
-SWIG_OUTPUT_PATH = ""
-HEADERS_OUTPUT_PATH = ""
+OCCT_INCLUDE_DIR = Path()
+PYTHONOCC_CORE_PATH = Path()
+COMMON_OUTPUT_PATH = Path()
+SWIG_OUTPUT_PATH = Path()
+HEADERS_OUTPUT_PATH = Path()
 
 
 def load_config(config_path):
@@ -142,22 +145,22 @@ def load_config(config_path):
     # pythonocc version
     PYTHONOCC_VERSION = config.get("pythonocc-core", "version")
     # oce headers location
-    OCCT_INCLUDE_DIR = config.get("OCCT", "include_dir")
+    OCCT_INCLUDE_DIR = Path(config.get("OCCT", "include_dir"))
     # swig output path
-    PYTHONOCC_CORE_PATH = config.get("pythonocc-core", "path")
-    swig_files_path = os.path.join(PYTHONOCC_CORE_PATH, "src", "SWIG_files")
-    COMMON_OUTPUT_PATH = os.path.join(swig_files_path, "common")
-    SWIG_OUTPUT_PATH = os.path.join(swig_files_path, "wrapper")
-    HEADERS_OUTPUT_PATH = os.path.join(swig_files_path, "headers")
+    PYTHONOCC_CORE_PATH = Path(config.get("pythonocc-core", "path"))
+    swig_files_path = PYTHONOCC_CORE_PATH / "src" / "SWIG_files"
+    COMMON_OUTPUT_PATH = swig_files_path / "common"
+    SWIG_OUTPUT_PATH = swig_files_path / "wrapper"
+    HEADERS_OUTPUT_PATH = swig_files_path / "headers"
 
 
 def check_paths():
     """Fail early if the OCCT headers are missing, and create the output
     directories the generator writes into."""
-    if not os.path.isdir(OCCT_INCLUDE_DIR):
+    if not OCCT_INCLUDE_DIR.is_dir():
         raise FileNotFoundError(f"OCCT include dir {OCCT_INCLUDE_DIR} not found.")
     for output_path in (SWIG_OUTPUT_PATH, HEADERS_OUTPUT_PATH, COMMON_OUTPUT_PATH):
-        os.makedirs(output_path, exist_ok=True)
+        output_path.mkdir(parents=True, exist_ok=True)
 
 
 load_config(DEFAULT_CONFIG_PATH)
@@ -174,7 +177,7 @@ def setup_logging():
     log = logging.getLogger()
     log.setLevel(logging.INFO)
     file_handler = logging.FileHandler(
-        os.path.join(SWIG_OUTPUT_PATH, "generator.log"), mode="w", encoding="utf8"
+        SWIG_OUTPUT_PATH / "generator.log", mode="w", encoding="utf8"
     )
     file_handler.setFormatter(log_formatter)
     log.addHandler(file_handler)
@@ -198,7 +201,7 @@ class GeneratorState:
 
     def __init__(self):
         # set by ModuleWrapper.__init__ for the module currently being wrapped
-        self.current_module = None
+        self.current_module = ""
         # python modules the current module imports (transitive deps).
         # Reassigned per module; check_dependency() and process_typedefs()
         # append to it.
@@ -287,7 +290,7 @@ def get_log_header():
         generator_git_revision = (
             subprocess.check_output(
                 ["git", "rev-parse", "--short", "HEAD"],
-                cwd=os.path.dirname(os.path.abspath(__file__)),
+                cwd=SRC_DIR,
                 stderr=subprocess.DEVNULL,
             )
             .strip()
@@ -298,10 +301,10 @@ def get_log_header():
     # find the OCC VERSION targeted by the wrapper
     # the OCCT version is available from the Standard_Version.hxx header
     # e.g. define OCC_VERSION_COMPLETE     "7.4.0"
-    standard_version_header = os.path.join(OCCT_INCLUDE_DIR, "Standard_Version.hxx")
+    standard_version_header = OCCT_INCLUDE_DIR / "Standard_Version.hxx"
     occ_version = "unknown"
-    if os.path.isfile(standard_version_header):
-        with open(standard_version_header, "r", encoding="utf8") as f:
+    if standard_version_header.is_file():
+        with standard_version_header.open(encoding="utf8") as f:
             file_lines = f.readlines()
         for file_line in file_lines:
             if file_line.startswith("#define OCC_VERSION_COMPLETE"):
@@ -365,8 +368,9 @@ def filter_header_list(header_list, exclusion_list):
     The files to be excluded are specified in the exclusion list
     """
     for header_to_remove in exclusion_list:
-        if os.path.join(OCCT_INCLUDE_DIR, header_to_remove) in header_list:
-            header_list.remove(os.path.join(OCCT_INCLUDE_DIR, header_to_remove))
+        header_path = str(OCCT_INCLUDE_DIR / header_to_remove)
+        if header_path in header_list:
+            header_list.remove(header_path)
     # remove platform dependent files
     # this is done to have the same SWIG files on every platform:
     # wnt specific (WNT_*, OSD_WNT), linux (X11, XWD) and osx (Cocoa).
@@ -374,31 +378,37 @@ def filter_header_list(header_list, exclusion_list):
     # include dir path nor names such as Storage_StreamUnknownTypeError
     # ("unknowntype" contains "wnt") are caught by accident.
     platform_markers = ("WNT", "X11", "XWD", "Cocoa")
-    header_list = [
+    return [
         x
         for x in header_list
-        if not any(marker in os.path.basename(x) for marker in platform_markers)
+        if not any(marker in Path(x).name for marker in platform_markers)
     ]
-    return header_list
 
 
-def case_sensitive_glob(wildcard):
+def occt_headers(pattern):
+    """The paths, as strings, of the OCCT headers matching the glob pattern,
+    in the order of the file system"""
+    return [str(path) for path in OCCT_INCLUDE_DIR.glob(pattern)]
+
+
+def case_sensitive_glob(pattern):
     """
-    Case sensitive glob for Windows.
+    Case sensitive glob of the OCCT headers, for Windows.
     Designed for handling of GEOM and Geom modules
     This function makes the difference between GEOM_* and Geom_* under Windows
     """
-    flist = glob.glob(wildcard)
-    pattern = wildcard.split("*")[0]
-    return [file_ for file_ in flist if pattern in file_]
+    prefix = pattern.split("*")[0]
+    return [
+        path for path in occt_headers(pattern) if Path(path).name.startswith(prefix)
+    ]
 
 
 def get_all_module_headers(module_name):
     """Returns a list with all header names"""
-    mh = case_sensitive_glob(os.path.join(OCCT_INCLUDE_DIR, f"{module_name}.hxx"))
-    mh += case_sensitive_glob(os.path.join(OCCT_INCLUDE_DIR, f"{module_name}_*.hxx"))
+    mh = case_sensitive_glob(f"{module_name}.hxx")
+    mh += case_sensitive_glob(f"{module_name}_*.hxx")
     mh = filter_header_list(mh, HXX_TO_EXCLUDE_FROM_BEING_INCLUDED)
-    return sorted(map(os.path.basename, mh))
+    return sorted(Path(header).name for header in mh)
 
 
 def check_has_related_handle(class_name):
@@ -408,16 +418,12 @@ def check_has_related_handle(class_name):
     if check_is_persistent(class_name):
         return False
 
-    filename = os.path.join(OCCT_INCLUDE_DIR, f"Handle_{class_name}.hxx")
+    filename = OCCT_INCLUDE_DIR / f"Handle_{class_name}.hxx"
     other_possible_filename = filename
     if class_name.startswith("Graphic3d"):
-        other_possible_filename = os.path.join(
-            OCCT_INCLUDE_DIR, f"{class_name}_Handle.hxx"
-        )
+        other_possible_filename = OCCT_INCLUDE_DIR / f"{class_name}_Handle.hxx"
     return (
-        os.path.exists(filename)
-        or os.path.exists(other_possible_filename)
-        or need_handle(class_name)
+        filename.exists() or other_possible_filename.exists() or need_handle(class_name)
     )
 
 
@@ -545,7 +551,7 @@ def find_template_header(template_name):
         return _template_header_cache[template_name]
     header = None
     candidate = f"{template_name}.hxx"
-    if os.path.isfile(os.path.join(OCCT_INCLUDE_DIR, candidate)):
+    if (OCCT_INCLUDE_DIR / candidate).is_file():
         header = candidate
     else:
         # a class definition, not a forward declaration
@@ -553,13 +559,10 @@ def find_template_header(template_name):
             rf"\bclass\s+{re.escape(template_name)}\b\s*(?::[^;{{]*)?\{{"
         )
         prefix = template_name.split("_")[0]
-        for path in sorted(
-            glob.glob(os.path.join(OCCT_INCLUDE_DIR, f"{prefix}_*.hxx"))
-        ):
-            with open(path, "r", encoding="utf8", errors="replace") as f:
-                content = f.read()
+        for path in sorted(OCCT_INCLUDE_DIR.glob(f"{prefix}_*.hxx")):
+            content = path.read_text(encoding="utf8", errors="replace")
             if "template" in content and class_re.search(content):
-                header = os.path.basename(path)
+                header = path.name
                 break
     _template_header_cache[template_name] = header
     return header
@@ -645,13 +648,12 @@ def adapt_header_file(header_content):
     # syntax that earlier passes don't expect.
     header_content = header_content.replace("occ::handle", "opencascade::handle")
     header_content = _convert_using_to_typedef(header_content)
-    header_content = _rewrite_handle_parens(header_content)
-    return header_content
+    return _rewrite_handle_parens(header_content)
 
 
 def parse_header(header_filename):
     """Use CppHeaderParser module to parse header_filename"""
-    with open(header_filename, "r", encoding="utf-8") as header_content:
+    with Path(header_filename).open(encoding="utf-8") as header_content:
         adapted_header_content = adapt_header_file(header_content.read())
         try:
             cpp_header = CppHeaderParser.CppHeader(adapted_header_content, "string")
@@ -704,7 +706,7 @@ def get_type_for_ncollection_array(ncollection_array: str) -> str:
     """input : NCollection_Array1<Standard_Real>
     output : Standard_Real
     """
-    return ncollection_array.split("<")[1].split(">")[0].strip()
+    return ncollection_array.split("<")[1].split(">", maxsplit=1)[0].strip()
 
 
 # the item types of the NCollection_Array1/Array2 instantiations extended by
@@ -1001,10 +1003,8 @@ def adapt_type_for_hint_typedef(typedef_type_str):
         typedef_type_str = "int"
     if "double" in typedef_type_str:
         typedef_type_str = "float"
-    if (
-        "void" in typedef_type_str
-        or "VOID" in typedef_type_str
-        and "avoid" not in typedef_type_str
+    if "void" in typedef_type_str or (
+        "VOID" in typedef_type_str and "avoid" not in typedef_type_str
     ):
         typedef_type_str = "None"
     if "GUID" in typedef_type_str:
@@ -1585,8 +1585,7 @@ def adapt_return_type(return_type):
         logger.warning("%s wrapped as a copy", return_type)
         return_type = return_type.replace("const", "")
         return_type = return_type.replace("&", "")
-        return_type = return_type.strip()
-        return return_type
+        return return_type.strip()
     # replace Standard_CString with char *
     return_type = return_type.replace("const Standard_CString", "Standard_CString")
     return_type = return_type.replace("Standard_CString &", "Standard_CString")
@@ -1620,8 +1619,7 @@ def _is_reference_returned_by_value(return_type):
 
 def adapt_function_name(f_name):
     """Some function names may result in errors with SWIG"""
-    f_name = f_name.replace("operator", "operator ")
-    return f_name
+    return f_name.replace("operator", "operator ")
 
 
 def get_module_docstring(module_name):
@@ -1876,10 +1874,9 @@ def _is_class_enum(class_name, enum_name):
     """True if the header of class_name declares the enum enum_name"""
     key = (class_name, enum_name)
     if key not in _class_enums_cache:
-        header = os.path.join(OCCT_INCLUDE_DIR, f"{class_name}.hxx")
+        header = OCCT_INCLUDE_DIR / f"{class_name}.hxx"
         try:
-            with open(header, "r", encoding="utf8", errors="replace") as f:
-                content = f.read()
+            content = header.read_text(encoding="utf8", errors="replace")
         except OSError:
             content = ""
         _class_enums_cache[key] = (
@@ -1895,7 +1892,7 @@ def adapt_type_for_hint(type_str):
     if type_str == "0":  # huu ? in XCAFDoc, skip it
         logger.warning("    [TypeHint] Skipping unknown type, 0")
         return False
-    if "void" in type_str or type_str in [""]:
+    if "void" in type_str or type_str == "":
         return "None"
     # the substring tests below don't apply to a template argument, e.g.
     # const NCollection_Vec3<float> & is not a float
@@ -2212,11 +2209,12 @@ def _build_getter_setter_pair(f, function_name, return_type):
             f"{param['name']}: {adapt_type_for_hint(adapted_type)}"
         )
 
-    setter_params_type_and_names = getter_params_type_and_names + [
-        f"{modified_return_type} value"
+    setter_params_type_and_names = [
+        *getter_params_type_and_names,
+        f"{modified_return_type} value",
     ]
     hint_output_type = adapt_type_for_hint(modified_return_type)
-    setter_param_hints = getter_param_hints + [f"value: {hint_output_type}"]
+    setter_param_hints = [*getter_param_hints, f"value: {hint_output_type}"]
 
     swig_str = TEMPLATE_GETTER_SETTER.substitute(
         {
@@ -2246,10 +2244,7 @@ def _build_getter_setter_pair(f, function_name, return_type):
 def _compute_return_type(f):
     """Derive the SWIG-ready return type, accounting for constructors,
     virtual, and static modifiers."""
-    if f["constructor"]:
-        return_type = ""
-    else:
-        return_type = adapt_return_type(f["rtnType"])
+    return_type = "" if f["constructor"] else adapt_return_type(f["rtnType"])
     if f["virtual"]:
         return_type = "virtual " + return_type
     if f["static"] and "static" not in return_type:
@@ -2594,7 +2589,7 @@ def process_function(f, overload=False):
     return str_function, str_typehint
 
 
-def process_free_functions(free_functions_list):
+def process_free_functions(free_functions_list: list[dict]):
     """process a string for free functions"""
     str_free_functions = ""
     sorted_free_functions_list = sorted(free_functions_list, key=itemgetter("name"))
@@ -2670,7 +2665,7 @@ def _overrides_handle_outputs(f, g):
     if len(f["parameters"]) != len(g["parameters"]):
         return False
     derived = False
-    for param_f, param_g in zip(f["parameters"], g["parameters"]):
+    for param_f, param_g in zip(f["parameters"], g["parameters"], strict=True):
         type_f, type_g = param_f["type"].strip(), param_g["type"].strip()
         if type_f == type_g:
             continue
@@ -2809,10 +2804,7 @@ def must_ignore_default_destructor(klass):
             return True
     class_private_methods = klass["methods"]["private"]
     # finally, return True, the default constructor can be safely defined
-    for private_method in class_private_methods:
-        if private_method["destructor"]:
-            return True
-    return False
+    return any(private_method["destructor"] for private_method in class_private_methods)
 
 
 def has_public_default_constructor(klass):
@@ -2996,8 +2988,7 @@ def fix_type(type_str):
     type_str = type_str.replace("Standard_CString", "str")
     type_str = type_str.replace("std::istream &", "str")
     type_str = type_str.replace("const", "")
-    type_str = type_str.replace("& &", "&")
-    return type_str
+    return type_str.replace("& &", "&")
 
 
 def _container_pyi_mapping(h_class_name, type_key, cpp_type):
@@ -3031,13 +3022,13 @@ def process_harray1():
     """
     wrapper_str = "/* harray1 classes */\n"
     pyi_str = "\n# harray1 classes\n"
-    for HClassName, array1_type in state.all_harray1.items():
-        if HClassName.startswith(state.current_module + "_"):
+    for h_class_name, array1_type in state.all_harray1.items():
+        if h_class_name.startswith(state.current_module + "_"):
             wrapper_str += HARRAY1_TEMPLATE.substitute(
-                {"HClassName": f"{HClassName}", "Array1Type": f"{array1_type}"}
+                {"HClassName": f"{h_class_name}", "Array1Type": f"{array1_type}"}
             )
             # type hint
-            mapping = _container_pyi_mapping(HClassName, "Array1Type", array1_type)
+            mapping = _container_pyi_mapping(h_class_name, "Array1Type", array1_type)
             mapping["ItemType"] = _container_item_type_hint(array1_type)
             pyi_str += HARRAY1_TEMPLATE_PYI.substitute(mapping)
     return wrapper_str, pyi_str
@@ -3046,13 +3037,13 @@ def process_harray1():
 def process_harray2():
     wrapper_str = "/* harray2 classes */"
     pyi_str = "# harray2 classes\n"
-    for HClassName, array2_type in state.all_harray2.items():
-        if HClassName.startswith(state.current_module + "_"):
+    for h_class_name, array2_type in state.all_harray2.items():
+        if h_class_name.startswith(state.current_module + "_"):
             wrapper_str += HARRAY2_TEMPLATE.substitute(
-                {"HClassName": f"{HClassName}", "Array2Type": f"{array2_type}"}
+                {"HClassName": f"{h_class_name}", "Array2Type": f"{array2_type}"}
             )
             # type hint
-            mapping = _container_pyi_mapping(HClassName, "Array2Type", array2_type)
+            mapping = _container_pyi_mapping(h_class_name, "Array2Type", array2_type)
             mapping["ItemType"] = _container_item_type_hint(array2_type)
             pyi_str += HARRAY2_TEMPLATE_PYI.substitute(mapping)
     wrapper_str += "\n"
@@ -3062,15 +3053,17 @@ def process_harray2():
 def process_hsequence():
     wrapper_str = "/* hsequence classes */"
     pyi_str = "# hsequence classes\n"
-    for HClassName, sequence_type in state.all_hsequence.items():
-        if HClassName.startswith(state.current_module + "_"):
+    for h_class_name, sequence_type in state.all_hsequence.items():
+        if h_class_name.startswith(state.current_module + "_"):
             wrapper_str += HSEQUENCE_TEMPLATE.substitute(
-                {"HClassName": f"{HClassName}", "SequenceType": f"{sequence_type}"}
+                {"HClassName": f"{h_class_name}", "SequenceType": f"{sequence_type}"}
             )
             # type hint: Append(theItem) overloads the inherited
             # Sequence.Append(theItem), it must be declared along with
             # Append(theSequence) or mypy only sees the latter
-            mapping = _container_pyi_mapping(HClassName, "SequenceType", sequence_type)
+            mapping = _container_pyi_mapping(
+                h_class_name, "SequenceType", sequence_type
+            )
             mapping["ItemType"] = _container_item_type_hint(sequence_type)
             pyi_str += HSEQUENCE_TEMPLATE_PYI.substitute(mapping)
     wrapper_str += "\n"
@@ -3129,15 +3122,15 @@ def process_handles(classes_dict, exclude_classes):
             continue
         if check_has_related_handle(class_name) or class_name == "Standard_Transient":
             wrap_handle_str += f"%wrap_handle({class_name})\n"
-    for HClassName in state.all_harray1:
-        if HClassName.startswith(state.current_module + "_"):
-            wrap_handle_str += f"%wrap_handle({HClassName})\n"
-    for HClassName in state.all_harray2:
-        if HClassName.startswith(state.current_module + "_"):
-            wrap_handle_str += f"%wrap_handle({HClassName})\n"
-    for HClassName in state.all_hsequence:
-        if HClassName.startswith(state.current_module + "_"):
-            wrap_handle_str += f"%wrap_handle({HClassName})\n"
+    for h_class_name in state.all_harray1:
+        if h_class_name.startswith(state.current_module + "_"):
+            wrap_handle_str += f"%wrap_handle({h_class_name})\n"
+    for h_class_name in state.all_harray2:
+        if h_class_name.startswith(state.current_module + "_"):
+            wrap_handle_str += f"%wrap_handle({h_class_name})\n"
+    for h_class_name in state.all_hsequence:
+        if h_class_name.startswith(state.current_module + "_"):
+            wrap_handle_str += f"%wrap_handle({h_class_name})\n"
     wrap_handle_str += "/* end handles declaration */\n\n"
     return wrap_handle_str
 
@@ -3382,7 +3375,7 @@ def _instantiate_nested_template(alias, outer, template_name, args_str, classes_
         return None
 
     def substitute(text):
-        for name, arg in zip(param_names, args):
+        for name, arg in zip(param_names, args, strict=True):
             text = re.sub(rf"\b{name}\b", arg, text)
         text = re.sub(rf"\b{outer}::{template_name}\b", alias, text)
         return re.sub(rf"(?<![\w:]){template_name}\b", alias, text)
@@ -3431,7 +3424,7 @@ def _nested_class_access(klass, parent):
         # defined out of line, in its own header: forward declared in the
         # public section of its parent
         return "public"
-    with open(header, "r", encoding="utf8", errors="replace") as f:
+    with Path(header).open(encoding="utf8", errors="replace") as f:
         lines = f.readlines()
     access = "public" if parent.get("declaration_method") == "struct" else "private"
     depth = 0
@@ -3986,10 +3979,7 @@ def is_module(module_name):
     'Standard' should return True
     'inj' or whatever should return False
     """
-    for mod in OCCT_MODULES:
-        if mod[0] == module_name:
-            return True
-    return False
+    return any(mod[0] == module_name for mod in OCCT_MODULES)
 
 
 def parse_module(module_name):
@@ -3998,8 +3988,8 @@ def parse_module(module_name):
     SWIG files. This parser returns :
     module_enums, module_typedefs, module_classes
     """
-    module_headers = glob.glob(f"{OCCT_INCLUDE_DIR}/{module_name}_*.hxx")
-    module_headers += glob.glob(f"{OCCT_INCLUDE_DIR}/{module_name}.hxx")
+    module_headers = occt_headers(f"{module_name}_*.hxx")
+    module_headers += occt_headers(f"{module_name}.hxx")
     module_headers.sort()
     # check if there are some files
     if len(module_headers) == 0:
@@ -4142,11 +4132,11 @@ class ModuleWrapper:
 
     def _write_module_header_file(self):
         """Generate <module>_module.hxx, the C++ aggregate header included by .i."""
-        path = os.path.join(HEADERS_OUTPUT_PATH, f"{self._module_name}_module.hxx")
-        module_headers = glob.glob(f"{OCCT_INCLUDE_DIR}/{self._module_name}_*.hxx")
-        module_headers += glob.glob(f"{OCCT_INCLUDE_DIR}/{self._module_name}.hxx")
+        path = HEADERS_OUTPUT_PATH / f"{self._module_name}_module.hxx"
+        module_headers = occt_headers(f"{self._module_name}_*.hxx")
+        module_headers += occt_headers(f"{self._module_name}.hxx")
         module_headers.sort()
-        with open(path, "w", encoding="utf8") as f:
+        with path.open("w", encoding="utf8") as f:
             f.write(LICENSE_HEADER)
             f.write(f"#ifndef {self._module_name.upper()}_HXX\n")
             f.write(f"#define {self._module_name.upper()}_HXX\n\n\n")
@@ -4155,15 +4145,15 @@ class ModuleWrapper:
             for module_header in filter_header_list(
                 module_headers, HXX_TO_EXCLUDE_FROM_BEING_INCLUDED
             ):
-                basename = os.path.basename(module_header)
+                basename = Path(module_header).name
                 if basename not in HXX_TO_EXCLUDE_FROM_BEING_INCLUDED:
                     f.write(f"#include<{basename}>\n")
             f.write(f"\n#endif // {self._module_name.upper()}_HXX\n")
 
     def _write_swig_interface_file(self):
         """Generate <module>.i, the SWIG interface file."""
-        path = os.path.join(SWIG_OUTPUT_PATH, f"{self._module_name}.i")
-        with open(path, "w", encoding="utf8") as f:
+        path = SWIG_OUTPUT_PATH / f"{self._module_name}.i"
+        with path.open("w", encoding="utf8") as f:
             self._write_swig_preamble(f)
             self._write_swig_cxx_includes(f)
             self._write_swig_python_imports(f)
@@ -4247,8 +4237,8 @@ class ModuleWrapper:
         f.write(self._free_functions_str)
 
     def _write_pyi_stub_file(self):
-        path = os.path.join(SWIG_OUTPUT_PATH, f"{self._module_name}.pyi")
-        with open(path, "w", encoding="utf8") as f:
+        path = SWIG_OUTPUT_PATH / f"{self._module_name}.pyi"
+        with path.open("w", encoding="utf8") as f:
             f.write("from enum import IntEnum\n")
             # typing.Iterator is qualified: the star import of NCollection
             # below brings a placeholder class named Iterator
@@ -4388,13 +4378,12 @@ def scan_typedef_aliases():
     seen = {}
     # sorted: glob order depends on the filesystem, and both the registries
     # order and which alias wins for a given template depend on it
-    for header_path in sorted(glob.glob(os.path.join(OCCT_INCLUDE_DIR, "*.hxx"))):
-        basename = os.path.basename(header_path)
+    for header_path in sorted(OCCT_INCLUDE_DIR.glob("*.hxx")):
+        basename = header_path.name
         if not any(basename.startswith(prefix) for prefix in target_modules):
             continue
         try:
-            with open(header_path, "r", encoding="utf8", errors="replace") as f:
-                content = f.read()
+            content = header_path.read_text(encoding="utf8", errors="replace")
         except OSError:
             continue
         content = content.replace("Handle(", "opencascade::handle<").replace(
@@ -4442,8 +4431,8 @@ def write_enum_templates_file():
     """Generate common/EnumTemplates.i, shared by all modules. Must be called
     once every module has been processed, since state.all_byref_enums is
     filled in along the way."""
-    path = os.path.join(COMMON_OUTPUT_PATH, "EnumTemplates.i")
-    with open(path, "w", encoding="utf8") as f:
+    path = COMMON_OUTPUT_PATH / "EnumTemplates.i"
+    with path.open("w", encoding="utf8") as f:
         f.writelines(
             BYREF_ENUM_TEMPLATE % enum_name for enum_name in state.all_byref_enums
         )
@@ -4458,10 +4447,7 @@ def process_module(module_name, write_files=True):
         if module[0] == module_name:
             module_additionnal_dependencies = module[1]
             module_exclude_classes = module[2]
-            if len(module) == 4:
-                modules_exclude_member_functions = module[3]
-            else:
-                modules_exclude_member_functions = {}
+            modules_exclude_member_functions = module[3] if len(module) == 4 else {}
             wrapper = ModuleWrapper(
                 module_name,
                 module_additionnal_dependencies,

@@ -1,22 +1,18 @@
 # compare occt package/module structure and current pythonocc wrapper status
-import glob
 import itertools
-import os
+from pathlib import Path
 
 from _modules import TOOLKITS
 
-occt_src_dir = "/home/thomas/Téléchargements/occt-770/src"
-occt_toolkits = glob.glob(os.path.join(occt_src_dir, "TK*"))
+occt_src_dir = Path("/home/thomas/Téléchargements/occt-770/src")
+occt_toolkits = occt_src_dir.glob("TK*")
 
 # First check which toolkits are currently adressed by the wrapper
 
 # for each toolit, we parse the occt source file structure
 t = {}
 for occt_tk in occt_toolkits:
-    with open(os.path.join(occt_tk, "PACKAGES"), "r", encoding="utf8") as f:
-        d = f.read().splitlines()
-    toolkit_name = os.path.basename(occt_tk)
-    t[toolkit_name] = d
+    t[occt_tk.name] = (occt_tk / "PACKAGES").read_text(encoding="utf8").splitlines()
 
 # build the flattened list of opencascade modules
 occt_modules = list(itertools.chain(*list(t.values())))

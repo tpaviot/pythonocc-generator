@@ -54,7 +54,7 @@ HXX_TO_EXCLUDE_FROM_CPPPARSER = [
 # some includes fail at being compiled
 HXX_TO_EXCLUDE_FROM_BEING_INCLUDED = [
     # report the 3 following to upstream, buggy
-    # error: ‘ChFiDS_ChamfMode’ does not name a type;
+    # error: 'ChFiDS_ChamfMode' does not name a type;
     "ChFiKPart_ComputeData_ChPlnPln.hxx",
     "ChFiKPart_ComputeData_ChPlnCyl.hxx",
     "ChFiKPart_ComputeData_ChPlnCon.hxx",

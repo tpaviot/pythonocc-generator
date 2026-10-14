@@ -4,3 +4,48 @@ target-version = "py310"
 # generated files, compared byte-for-byte by test_golden.py
 # Documentation.md: historical page, its snippets are fragments, not modules
 extend-exclude = ["src/golden", "Documentation.md"]
+
+[lint]
+# the same selection as pythonocc-core
+select = [
+    "F",    # pyflakes
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "A",    # flake8-builtins
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+    "PIE",  # flake8-pie
+    "RET",  # flake8-return
+    "RSE",  # flake8-raise
+    "ISC",  # implicit string concatenation
+    "ICN",  # import conventions
+    "PTH",  # prefer pathlib
+    "PGH",  # pygrep hooks
+    "PL",   # pylint
+    "PERF", # perflint
+    "FURB", # refurb
+    "FLY",  # static join to f-string
+    "LOG",  # logging
+    "G",    # logging format
+    "EXE",  # shebangs
+    "RUF",  # ruff-specific
+]
+ignore = [
+    "E501",    # long lines are left to the formatter
+    "PLR0911", # too many return statements
+    "PLR0912", # too many branches
+    "PLR0913", # too many arguments
+    "PLR0915", # too many statements
+    "PLR0917", # too many positional arguments
+    "PLR2004", # magic values
+    "PLW0603", # the generator state of the module being wrapped is global
+]
+
+[lint.per-file-ignores]
+# the imports of the module under test follow the configuration loading
+"src/test_*.py" = ["PLC0415"]
+# the templates are written as is in the generated files
+"src/_swig_templates.py" = ["W291"]
