@@ -11,7 +11,10 @@ import sys
 from _exclusions import HXX_TO_EXCLUDE_FROM_CPPPARSER
 from generate_wrapper import (
     OCCT_INCLUDE_DIR,
+    _drop_single_overloads,
     _names_returning_owned_references,
+    _operator_dunder,
+    _widen_parameter_hint,
     adapt_function_name,
     adapt_param_type_and_name,
     adapt_return_type,
@@ -287,3 +290,64 @@ def test_names_returning_owned_references():
         "ChangeArray1",
         "Weights",
     }
+
+
+def test_operator_dunder():
+    def operator(name, nb_params, parent="gp_Vec", static=False, friend=False):
+        return {
+            "parent": {"name": parent} if parent else None,
+            "static": static,
+            "friend": friend,
+            "parameters": [{"type": "double"}] * nb_params,
+        }
+
+    assert _operator_dunder(operator("+", 1), "operator +") == "__add__"
+    assert _operator_dunder(operator("-", 0), "operator -") == "__neg__"
+    assert _operator_dunder(operator("-", 1), "operator -") == "__sub__"
+    assert _operator_dunder(operator("/", 1), "operator /") == "__truediv__"
+    assert _operator_dunder(operator("*=", 1), "operator *=") == "__imul__"
+    # no stub: object declares __eq__, a free or friend operator is skipped
+    assert _operator_dunder(operator("==", 1), "operator ==") is None
+    assert _operator_dunder(operator("*", 2, parent=None), "operator *") is None
+    assert _operator_dunder(operator("*", 2, friend=True), "operator *") is None
+
+
+def test_drop_single_overloads():
+    class_pyi = (
+        "class gp_Vec:\n"
+        "    @overload\n"
+        "    def __init__(self) -> None: ...\n"
+        "    @overload\n"
+        "    def __mul__(self, right: float) -> gp_Vec: ...\n"
+        "    @overload\n"
+        "    def __mul__(self, right: gp_Vec) -> float: ...\n"
+        "    @overload\n"
+        "    @staticmethod\n"
+        "    def DownCast(t: None) -> None: ...\n"
+    )
+    assert _drop_single_overloads(class_pyi) == (
+        "class gp_Vec:\n"
+        "    def __init__(self) -> None: ...\n"
+        "    @overload\n"
+        "    def __mul__(self, right: float) -> gp_Vec: ...\n"
+        "    @overload\n"
+        "    def __mul__(self, right: gp_Vec) -> float: ...\n"
+        "    @staticmethod\n"
+        "    def DownCast(t: None) -> None: ...\n"
+    )
+
+
+def test_widen_parameter_hint():
+    assert _widen_parameter_hint("std::istream &", "str") == "str | bytes"
+    assert (
+        _widen_parameter_hint("TCollection_ExtendedString", "str")
+        == "str | TCollection_ExtendedString"
+    )
+    assert (
+        _widen_parameter_hint("const TCollection_AsciiString &", "str")
+        == "str | TCollection_AsciiString"
+    )
+    # a non const reference is not converted from a str
+    assert _widen_parameter_hint("TCollection_AsciiString &", "str") == "str"
+    assert _widen_parameter_hint("Standard_CString", "str") == "str"
+    assert _widen_parameter_hint("gp_Pnt", "gp_Pnt") == "gp_Pnt"

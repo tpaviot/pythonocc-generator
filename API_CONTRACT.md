@@ -97,6 +97,16 @@ hash(a)  # opencascade::hash(self)
 
 `__repr__` falls back to `_dumps_object` from pythonocc-core.
 
+### DownCast
+
+Every transient class gets a static `DownCast`, typed in the stubs:
+
+```python
+curve = Geom_BSplineCurve.DownCast(adaptor.Curve().Curve())
+Geom_BSplineCurve.DownCast(None)  # None
+Geom_BSplineCurve.DownCast(a_line)  # TypeError, not a Geom_BSplineCurve
+```
+
 ---
 
 ## 3. Operators
@@ -114,6 +124,11 @@ hash(a)  # opencascade::hash(self)
 
 The `==`/`!=` wrappers swallow type errors silently so a comparison against a
 foreign type returns `False`/`True` rather than raising.
+
+The `.pyi` stubs declare the member operators with their Python names:
+`__add__`, `__sub__`, `__mul__`, `__truediv__`, the unary `__neg__`/`__pos__`,
+and the in-place ones, which return the instance (`typing.Self`). Several C++
+overloads (e.g. `gp_Vec * double` and `gp_Vec * gp_Vec`) are `@overload`s.
 
 ---
 
@@ -213,7 +228,10 @@ TopAbs_FORWARD = TopAbs_Orientation.TopAbs_FORWARD  # alias at module level
 
 Notes:
 
-- `enum class X` (scoped enums) are preserved as scoped enums.
+- `enum class X` (scoped enums) are preserved as scoped enums. SWIG also
+  exposes their values as plain ints named `X_Value` (e.g.
+  `BRepGraph_NodeId.Kind_Face`, next to `BRepGraph_NodeId.Kind.Face`); the
+  stubs declare both.
 - An enum value whose name collides with a Python keyword is suffixed with `_`
   (e.g. `None` → `None_`).
 - An enum passed *by reference* (e.g. `TopAbs_Orientation& Or`) is registered
@@ -300,6 +318,11 @@ In addition, `Geom_Curve`, `Geom_Surface`, and `Geom2d_Curve` are extended
 with numpy-typed evaluation helpers (`CurveArrayEvalExtend`,
 `CurveArrayEvalExtend2d`, `SurfaceArrayEvalExtend`).
 
+The stubs of these modules import `numpy` and declare the added members:
+`AddDataFromNumpyArray`, `from_numpy_array` and `to_numpy_array` on the
+arrays, `eval_numpy_array` and `eval_derivative_numpy_array` on the curves and
+surfaces.
+
 ```python
 import numpy as np
 from OCC.Core.TColgp import TColgp_Array1OfPnt
@@ -322,6 +345,9 @@ xyz = np.asarray(arr)  # zero-copy view, when the numpy path applies
 
 For the docstring generator, `TCollection_AsciiString` and
 `TCollection_ExtendedString` parameter types are documented as plain `str`.
+The stubs type such a parameter `str | TCollection_AsciiString` (resp.
+`TCollection_ExtendedString`): the typemaps accept both. A `std::istream`
+parameter is typed `str | bytes`.
 
 ---
 

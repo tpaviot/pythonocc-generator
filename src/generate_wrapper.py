@@ -32,6 +32,7 @@ import re
 import subprocess
 import sys
 import time
+from collections import Counter
 from operator import itemgetter
 from typing import ClassVar
 
@@ -54,6 +55,8 @@ from _swig_templates import (
     BREPTOOLS_WRITE_READ_FROM_STRING_PYI,
     BVH_HEADER_TEMPLATE,
     BYREF_ENUM_TEMPLATE,
+    CURVE_ARRAY_EVAL_PYI,
+    DOWNCAST_PYI,
     GETSTATE_TEMPLATE,
     GRAPHIC3D_DEFINE_HEADER,
     HARRAY1_TEMPLATE,
@@ -65,6 +68,8 @@ from _swig_templates import (
     HSEQUENCE_TEMPLATE_PYI,
     LICENSE_HEADER,
     NCOLLECTION_ARRAY1_EXTEND_TEMPLATE_PYI,
+    NCOLLECTION_ARRAY2_EXTEND_TEMPLATE_PYI,
+    NCOLLECTION_ARRAY_NUMPY_PYI,
     NCOLLECTION_DATAMAP_EXTEND_TEMPLATE,
     NCOLLECTION_HEADER_TEMPLATE,
     NCOLLECTION_LIST_EXTEND_TEMPLATE,
@@ -77,6 +82,7 @@ from _swig_templates import (
     SHAPE_ANALYSIS_FREE_BOUNDS_TEMPLATE,
     SHAPE_ANALYSIS_FREE_BOUNDS_TEMPLATE_PYI,
     STANDARD_TRANSIENT_OPERATORS_TEMPLATE,
+    SURFACE_ARRAY_EVAL_PYI,
     TEMPLATE__EQ__,
     TEMPLATE__IADD__,
     TEMPLATE__IMUL__,
@@ -687,6 +693,29 @@ def get_type_for_ncollection_array(ncollection_array: str) -> str:
     return ncollection_array.split("<")[1].split(">")[0].strip()
 
 
+# the item types of the NCollection_Array1/Array2 instantiations extended by
+# the *NumpyTemplate macros of ArrayMacros.i (Poly_Triangle: Array1 only)
+_NUMPY_ARRAY_BASE_TYPES = frozenset(
+    {
+        "Standard_ShortReal",
+        "float",
+        "Standard_Real",
+        "double",
+        "Standard_Integer",
+        "int",
+        "Poly_Triangle",
+        "gp_XY",
+        "gp_Vec2d",
+        "gp_Pnt2d",
+        "gp_Dir2d",
+        "gp_XYZ",
+        "gp_Vec",
+        "gp_Pnt",
+        "gp_Dir",
+    }
+)
+
+
 def process_templates_from_typedefs(list_of_typedefs):
     """Generate the SWIG %template directives and the .pyi hints of the
     template instantiations in list_of_typedefs."""
@@ -783,6 +812,8 @@ def process_templates_from_typedefs(list_of_typedefs):
                             "Type_T": f"{basetype_hint}",
                         }
                     )
+                    if base_type in _NUMPY_ARRAY_BASE_TYPES:
+                        pyi_str += NCOLLECTION_ARRAY_NUMPY_PYI
                 elif "NCollection_Array2" in template_type:
                     # same than NCollection_Array1
                     base_type = template_type.split("NCollection_Array2<")[1].split(
@@ -817,6 +848,17 @@ def process_templates_from_typedefs(list_of_typedefs):
                         )
                     else:
                         wrapper_str += f"%template({template_name}) {template_type};\n"
+                    pyi_str += NCOLLECTION_ARRAY2_EXTEND_TEMPLATE_PYI.substitute(
+                        {
+                            "NCollection_Array2_Template_Instanciation": template_name,
+                            "Type_T": f"{basetype_hint}",
+                        }
+                    )
+                    if (
+                        base_type in _NUMPY_ARRAY_BASE_TYPES
+                        and base_type != "Poly_Triangle"
+                    ):
+                        pyi_str += NCOLLECTION_ARRAY_NUMPY_PYI
                 elif "NCollection_List" in template_type:
                     wrapper_str += f"%template({template_name}) {template_type};\n"
                     # derive the matching ListIterator typedef name from the
@@ -1218,6 +1260,8 @@ def process_enums(enums_list):
         # in this case, the integers must ne be incremented
         # in the wrapper otherwise ther's an offset
         alias_str = ""
+        # stub only: SWIG names the values of a scoped enum Enum_Value
+        scoped_alias_str = ""
         python_proxy = True
         if "name" not in enum:
             enum_name = ""
@@ -1266,12 +1310,22 @@ def process_enums(enums_list):
                 # for instance
                 # gp_IntrisicXYZ = gp_EulerSequence.gp_IntrinsicXYZ
                 alias_str += f"{py_name} = {enum_name}.{py_name}\n"
+                if is_enum_class:
+                    # SWIG prefixes a python keyword with _, e.g. Type__None
+                    swig_value_name = (
+                        f"_{enum_value['name']}"
+                        if enum_value["name"] in keyword.kwlist
+                        else enum_value["name"]
+                    )
+                    scoped_alias_str += (
+                        f"{enum_name}_{swig_value_name} = {enum_name}.{py_name}\n"
+                    )
             else:
                 # anonymous enum (e.g. the MeshVS_DMF_* flags): SWIG exposes
                 # its values as module constants
                 enum_pyi_str += f"{enum_value['name']}: int\n"
         enum_python_proxies += alias_str
-        enum_pyi_str += "\n" + alias_str
+        enum_pyi_str += "\n" + alias_str + scoped_alias_str
         enum_str += "};\n\n"
 
     enum_python_proxies += "};\n"
@@ -2063,9 +2117,35 @@ _PRIMITIVE_BY_REF_RETURNS = {
 }
 
 
+# the python methods of the C++ operators, by operand and number of
+# parameters. SWIG wraps the arithmetic ones, the _OPERATOR_WRAPPERS templates
+# the others. == and != are not stubbed, object declares them already
+_OPERATOR_DUNDERS = {
+    ("+", 0): "__pos__",
+    ("+", 1): "__add__",
+    ("-", 0): "__neg__",
+    ("-", 1): "__sub__",
+    ("*", 1): "__mul__",
+    ("/", 1): "__truediv__",
+    ("+=", 1): "__iadd__",
+    ("-=", 1): "__isub__",
+    ("*=", 1): "__imul__",
+    ("/=", 1): "__itruediv__",
+}
+
+
+def _operator_dunder(f, function_name):
+    """The python method name of a member operator, None if it has no stub"""
+    if f["parent"] is None or f["static"] or f["friend"]:
+        return None
+    operand = function_name.split("operator ")[1].strip()
+    return _OPERATOR_DUNDERS.get((operand, len(f["parameters"])))
+
+
 def _wrap_operator(f, function_name, parent_class_name):
-    """If f is a wrappable C++ operator, return (swig_str, '') or ('', ''); None
-    if function_name is not an operator at all."""
+    """If f is a wrappable C++ operator, return (swig_str, type_hint_str) or
+    ('', ''); None if function_name is not an operator at all, or if SWIG
+    wraps it natively."""
     if "operator" not in function_name:
         return None
     operand = function_name.split("operator ")[1].strip()
@@ -2076,9 +2156,18 @@ def _wrap_operator(f, function_name, parent_class_name):
     if template is None:
         return None  # SWIG handles +,-,*,/ natively
     param_type = f["parameters"][0]["type"].replace("&", "").strip()
+    type_hint = ""
+    dunder = _operator_dunder(f, function_name)
+    if dunder is not None:
+        # the in-place operator returns the instance, see the templates
+        param_hint = adapt_type_for_hint(adapt_param_type(f["parameters"][0]["type"]))
+        type_hint = (
+            "    @overload\n"
+            f"    def {dunder}(self, right: {param_hint or 'Any'}) -> typing.Self: ...\n"
+        )
     return (
         template.substitute({"TYPE": param_type, "CLASS": parent_class_name}),
-        "",
+        type_hint,
     )
 
 
@@ -2177,6 +2266,26 @@ def _build_swig_parameter_list(f):
     return parameters_types_and_names, parameters_definition_strs, False
 
 
+_STRING_CLASS_PARAM_RE = re.compile(
+    r"^\s*(?:const\s+)?(TCollection_(?:Ascii|Extended)String)\s*(?:&\s*)?$"
+)
+
+
+def _widen_parameter_hint(param_type, hint):
+    """The hint of a parameter the typemaps accept in several forms: a
+    std::istream from a str or bytes (IOStream.i), a TCollection string from a
+    str or an instance (FunctionTransformers.i)."""
+    if hint != "str" or state.current_module == "TCollection":
+        # the TCollection string classes overload their methods for both
+        return hint
+    if "istream" in param_type:
+        return "str | bytes"
+    match = _STRING_CLASS_PARAM_RE.match(param_type)
+    if match and ("&" not in param_type or "const" in param_type):
+        return f"str | {match.group(1)}"
+    return hint
+
+
 _NON_CONST_HANDLE_REF_RE = re.compile(r"opencascade::handle<[^&]*>\s*&")
 
 
@@ -2195,7 +2304,13 @@ def _build_typehint(
 ):
     """Build the .pyi type-hint string for a function."""
     if "operator" in function_name:
-        return ""
+        # an arithmetic operator SWIG wraps natively, e.g. operator+ is
+        # __add__. Always declared as an overload, the single ones are fixed
+        # once the class is complete, see _drop_single_overloads
+        function_name = _operator_dunder(f, function_name)
+        if function_name is None:
+            return ""
+        overload = True
 
     str_typehint = ""
     # adapt_type_for_hint returns False for a type it can't translate: Any
@@ -2234,7 +2349,7 @@ def _build_typehint(
                 types_returned.append(type_to_add)
             continue
         # a type that can't be translated is written Any, the method is kept
-        par_typ = adapt_type_for_hint(par[0]) or "Any"
+        par_typ = _widen_parameter_hint(par[0], adapt_type_for_hint(par[0]) or "Any")
         # a non-const handle reference is an output: None can be passed, and
         # the handle is also appended to the returned values by the
         # OccHandle.i argout typemap (None if the handle is null)
@@ -2293,6 +2408,27 @@ def _build_typehint(
         returned_type_hint = "Optional[_TDF_AttributeT]"
     str_typehint += f") -> {returned_type_hint}: ...\n"
     return str_typehint
+
+
+_PYI_METHOD_DEF_RE = re.compile(r"^    def (\w+)\(", re.MULTILINE)
+
+
+def _drop_single_overloads(class_pyi):
+    """Remove the @overload decorator of the methods of a class stub that are
+    declared once: a lone overload is an error for the type checkers"""
+    counts = Counter(_PYI_METHOD_DEF_RE.findall(class_pyi))
+    lines = class_pyi.split("\n")
+    kept = []
+    for i, line in enumerate(lines):
+        if line == "    @overload":
+            j = i + 1
+            while j < len(lines) and lines[j].startswith("    @"):
+                j += 1
+            match = _PYI_METHOD_DEF_RE.match(lines[j]) if j < len(lines) else None
+            if match and counts[match.group(1)] == 1:
+                continue
+        kept.append(line)
+    return "\n".join(kept)
 
 
 def _should_skip_function(f, function_name):
@@ -2857,6 +2993,13 @@ def _container_pyi_mapping(h_class_name, type_key, cpp_type):
     return {"HClassName": h_class_name, type_key: py_type, "Bases": bases}
 
 
+def _container_item_type_hint(cpp_type):
+    """The type hint of the items of a container type, e.g. float for
+    NCollection_Array1<double>"""
+    item_type = cpp_type.strip().split("<", 1)[1].rsplit(">", 1)[0].strip()
+    return adapt_type_for_hint(item_type) or "Any"
+
+
 def process_harray1():
     """special wrapper for NCollection_HArray1
     Returns both the definition and the hint
@@ -2869,9 +3012,9 @@ def process_harray1():
                 {"HClassName": f"{HClassName}", "Array1Type": f"{array1_type}"}
             )
             # type hint
-            pyi_str += HARRAY1_TEMPLATE_PYI.substitute(
-                _container_pyi_mapping(HClassName, "Array1Type", array1_type)
-            )
+            mapping = _container_pyi_mapping(HClassName, "Array1Type", array1_type)
+            mapping["ItemType"] = _container_item_type_hint(array1_type)
+            pyi_str += HARRAY1_TEMPLATE_PYI.substitute(mapping)
     return wrapper_str, pyi_str
 
 
@@ -2884,9 +3027,9 @@ def process_harray2():
                 {"HClassName": f"{HClassName}", "Array2Type": f"{array2_type}"}
             )
             # type hint
-            pyi_str += HARRAY2_TEMPLATE_PYI.substitute(
-                _container_pyi_mapping(HClassName, "Array2Type", array2_type)
-            )
+            mapping = _container_pyi_mapping(HClassName, "Array2Type", array2_type)
+            mapping["ItemType"] = _container_item_type_hint(array2_type)
+            pyi_str += HARRAY2_TEMPLATE_PYI.substitute(mapping)
     wrapper_str += "\n"
     return wrapper_str, pyi_str
 
@@ -2903,8 +3046,7 @@ def process_hsequence():
             # Sequence.Append(theItem), it must be declared along with
             # Append(theSequence) or mypy only sees the latter
             mapping = _container_pyi_mapping(HClassName, "SequenceType", sequence_type)
-            item_type = sequence_type.strip()[len("NCollection_Sequence<") : -1]
-            mapping["ItemType"] = adapt_type_for_hint(item_type.strip()) or "Any"
+            mapping["ItemType"] = _container_item_type_hint(sequence_type)
             pyi_str += HSEQUENCE_TEMPLATE_PYI.substitute(mapping)
     wrapper_str += "\n"
     pyi_str += "\n"
@@ -2985,13 +3127,21 @@ _PRIMITIVE_REF_TO_CTYPE = {
 }
 
 
+_PRIMITIVE_CTYPE_TO_HINT = {"double": "float", "int": "int", "bool": "bool"}
+_PRIMITIVE_BY_REF_RETURNS_NO_SPACE = {
+    t.replace(" ", "") for t in _PRIMITIVE_BY_REF_RETURNS
+}
+
+
 def _synthesize_primitive_ref_getter_setters(class_name, other_methods):
     """occt-800: synthesize SetXxx/GetXxx pairs for parameterless methods that
     return a reference to a primitive (Standard_Real&, Standard_Integer&,
     Standard_Boolean&). OCCT 8.0 dropped the explicit setters, exposing only
     a `Type& Foo()` accessor that Python cannot assign through. Restores the
-    API pythonocc has exposed since 2014 (commit 78c320c3)."""
+    API pythonocc has exposed since 2014 (commit 78c320c3).
+    Returns (swig_str, type_hint_str)."""
     out = ""
+    pyi = ""
     for m in other_methods:
         rtype = (m.get("rtnType") or "").strip()
         if "&" not in rtype or m.get("parameters"):
@@ -3011,7 +3161,12 @@ def _synthesize_primitive_ref_getter_setters(class_name, other_methods):
             f"\t\t\tvoid Set{mname}({cpp_type} value) {{ self->{mname}() = value; }}\n"
         )
         out += "\t\t};\n"
-    return out
+        if rtype.replace(" ", "") not in _PRIMITIVE_BY_REF_RETURNS_NO_SPACE:
+            # else process_function already wrote these hints
+            hint = _PRIMITIVE_CTYPE_TO_HINT[cpp_type]
+            pyi += f"    def Get{mname}(self) -> {hint}: ...\n"
+            pyi += f"    def Set{mname}(self, value: {hint}) -> None: ...\n"
+    return out, pyi
 
 
 def _class_specific_extensions(class_name):
@@ -3019,6 +3174,11 @@ def _class_specific_extensions(class_name):
     extensions (TDF_Label name accessor, BRepTools serialization, math_*
     setters, TopoDS_Shape pickling, ...)."""
     extra_def, extra_pyi = "", ""
+    # the numpy members added after the class, see process_classes
+    if class_name in ("Geom_Curve", "Geom2d_Curve"):
+        extra_pyi += CURVE_ARRAY_EVAL_PYI
+    if class_name == "Geom_Surface":
+        extra_pyi += SURFACE_ARRAY_EVAL_PYI
     if class_name in ("BRepTools", "BRepTools_ShapeSet"):
         extra_def += BREPTOOLS_WRITE_READ_FROM_STRING
         extra_pyi += BREPTOOLS_WRITE_READ_FROM_STRING_PYI
@@ -3061,7 +3221,8 @@ def _class_specific_extensions(class_name):
             "\t\t\tvoid SetASCIIMode(bool theMode) { self->ASCIIMode() = theMode; }\n"
         )
         extra_def += "\t\t};\n"
-        extra_pyi += "    def SetASCIIMode(self, theMode: bool) -> None: ...\n"
+        # its stub is written with GetASCIIMode, see
+        # _synthesize_primitive_ref_getter_setters
     # occt-800: math_Matrix still exposes mutable Value() returning a reference
     # but Python cannot assign through it - add Get/SetValue shims (math_Vector:
     # see MATH_VECTORBASE_EXTEND).
@@ -3664,9 +3825,11 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         )
         class_def_str += other_method_definitions
         class_pyi_str += other_method_type_hints
-        class_def_str += _synthesize_primitive_ref_getter_setters(
+        accessors_def, accessors_pyi = _synthesize_primitive_ref_getter_setters(
             class_name, other_methods
         )
+        class_def_str += accessors_def
+        class_pyi_str += accessors_pyi
 
         # after that change, we remove the "pass" if it appears to be unnecessary
         # for example
@@ -3682,6 +3845,9 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
             "pass\n    @staticmethod", "@staticmethod"
         )
 
+        class_pyi_str = class_pyi_str[:class_pyi_start] + _drop_single_overloads(
+            class_pyi_str[class_pyi_start:]
+        )
         # an alias of a class enum value (e.g. X = D.X in gp_Dir) is hidden,
         # at runtime, by the method of the same name (gp_Dir.X)
         class_methods = set(
@@ -3701,6 +3867,9 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         extra_def, extra_pyi = _class_specific_extensions(class_name)
         class_def_str += extra_def
         class_pyi_str += extra_pyi
+        if check_has_related_handle(class_name) or class_name == "Standard_Transient":
+            # added by %wrap_handle, see OccHandle.i
+            class_pyi_str += DOWNCAST_PYI.substitute(ClassName=class_name_for_pyi)
         # then terminate the class definition
         class_def_str += "};\n\n"
         #
@@ -4053,10 +4222,13 @@ class ModuleWrapper:
             # typing.Iterator is qualified: the star import of NCollection
             # below brings a placeholder class named Iterator
             f.write("import typing\n")
-            f.write("from typing import Any, overload, NewType, Optional, Tuple\n\n")
             stub_body = (
                 self._typedefs_pyi_str + self._enums_pyi_str + self._classes_pyi_str
             )
+            if "numpy." in stub_body:
+                # the numpy members of ArrayMacros.i
+                f.write("import numpy\n")
+            f.write("from typing import Any, overload, NewType, Optional, Tuple\n\n")
             f.writelines(
                 f"from OCC.Core.{dep} import *\n"
                 for dep in _stub_module_dependencies(
