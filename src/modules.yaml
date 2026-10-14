@@ -1157,7 +1157,9 @@ modules:
     # DE_ConfigurationNode, wrapped with its fields
     flatten_nested_classes: true
     additional_deps: [CDF, TopTools, Transfer, TDF, PCDM, MoniTool, Interface, IFSelect, Geom, Geom2d]
-    exclude_classes: [DE_PluginHolder, DE_MultiPluginHolder]
+    # the stream nodes keep a reference to a stream, a temporary one when
+    # built from python: not wrapped
+    exclude_classes: [DE_PluginHolder, DE_MultiPluginHolder, DE_Provider_ReadStreamNode, DE_Provider_WriteStreamNode]
     exclude_member_functions:
       DE_Provider: [Read, Write]
 
