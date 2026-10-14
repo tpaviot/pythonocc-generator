@@ -1592,8 +1592,11 @@ def adapt_return_type(return_type):
     if _is_returned_as_copy(return_type):
         logger.warning("%s wrapped as a copy", return_type)
         return_type = return_type.replace("const", "")
-        return_type = return_type.replace("&", "")
-        return return_type.strip()
+        return_type = return_type.replace("&", "").strip()
+        # the module of the returned type must be imported, else SWIG
+        # returns an opaque pointer (TColGeom_SequenceOfCurve in HelixGeom)
+        check_dependency(return_type)
+        return return_type
     # replace Standard_CString with char *
     return_type = return_type.replace("const Standard_CString", "Standard_CString")
     return_type = return_type.replace("Standard_CString &", "Standard_CString")
