@@ -1,5 +1,5 @@
 # oldest Python version tested by the CI
-target-version = "py310"
+target-version = "py313"
 
 # generated files, compared byte-for-byte by test_golden.py
 # Documentation.md: historical page, its snippets are fragments, not modules
