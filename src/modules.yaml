@@ -1217,6 +1217,8 @@ modules:
     additional_deps: [DE, CDF, TopTools, Transfer, TDF, PCDM, MoniTool, Interface, IFSelect, Geom, Geom2d]
 
   - name: DESTEP
+    # the read and write parameters are public fields of DESTEP_Parameters
+    wrap_public_fields: true
     additional_deps: [DE, CDF, TopTools, Transfer, TDF, PCDM, MoniTool, Interface, IFSelect, Geom, Geom2d]
 
   - name: DEIGES

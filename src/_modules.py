@@ -14,7 +14,8 @@ Exposes:
                      that store a non-owning pointer to one of them.
     MODULE_OPTIONS — dict[module_name -> dict] of the per module options
                      that do not fit in the OCCT_MODULES tuples, e.g.
-                     flatten_nested_classes, include_classes.
+                     flatten_nested_classes, include_classes,
+                     wrap_public_fields.
 """
 
 from pathlib import Path
@@ -44,6 +45,7 @@ def _load():
         module_options[name] = {
             "flatten_nested_classes": bool(entry.get("flatten_nested_classes", False)),
             "include_classes": list(entry.get("include_classes", []) or []),
+            "wrap_public_fields": bool(entry.get("wrap_public_fields", False)),
         }
         if exclude_member:
             modules.append((name, deps, exclude_classes, exclude_member))

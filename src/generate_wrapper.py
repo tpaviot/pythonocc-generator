@@ -241,6 +241,9 @@ class GeneratorState:
         # classes of the current module wrapped even though the module
         # excludes all its classes (exclude_classes: ["*"]), from modules.yaml.
         self.include_classes = []
+        # the public fields of the classes are wrapped (e.g. DESTEP_Parameters),
+        # from modules.yaml.
+        self.wrap_public_fields = False
         # (qualified C++ name, flat SWIG name) of the flattened classes of the
         # current module, e.g. ("BRepGraph::ShapesView", "BRepGraph_ShapesView");
         # a typedef is written for each in the C++ section of the .i file.
@@ -3590,6 +3593,30 @@ _PRIMITIVE_PROPERTY_TYPES = {
 }
 
 
+# the string classes converted from and to python str by the typemaps
+_STRING_FIELD_TYPES = ("TCollection_AsciiString", "TCollection_ExtendedString")
+
+
+def _is_foreign_enum(type_str):
+    """True for an enum of a module not imported, e.g. STEPControl_StepModelType
+    in DESTEP: OCCT declares each enum in a header of its own name."""
+    module = type_str.split("_")[0]
+    if (
+        module == state.current_module
+        or module in state.python_module_dependency
+        or not is_module(module)
+    ):
+        return False
+    header = OCCT_INCLUDE_DIR / f"{type_str}.hxx"
+    return (
+        header.is_file()
+        and re.search(
+            rf"\benum\s+{re.escape(type_str)}\b", header.read_text(errors="replace")
+        )
+        is not None
+    )
+
+
 def _is_wrappable_property_type(type_str, klass):
     """A public field is wrapped when its type is a primitive, an enum or a
     typedef of the class itself or qualified by a wrapped class of the
@@ -3821,7 +3848,9 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         # process class properties here
         properties_str = ""
         properties_pyi_str = ""
-        if state.current_module == "Graphic3d" or state.flatten_nested_classes:
+        # the public fields are filtered by type, except in Graphic3d
+        filter_fields = state.flatten_nested_classes or state.wrap_public_fields
+        if state.current_module == "Graphic3d" or filter_fields:
             for property_value in list(klass["properties"]["public"]):
                 # TODO : cppheaderparser fails at finding private class properties
                 if (
@@ -3843,7 +3872,7 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
                     or "constexpr" in property_value["type"]
                 ):
                     continue  # occt-800: static constexpr constants
-                if state.flatten_nested_classes and not _is_wrappable_property_type(
+                if filter_fields and not _is_wrappable_property_type(
                     property_value["type"], klass
                 ):
                     logger.info(
@@ -3858,10 +3887,36 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
                     or "allback" in property_value["raw_type"]
                 ):
                     continue
+                field_type = fix_type(property_value["type"])
+                field_name = property_value["name"]
                 if "array_size" in property_value:
-                    temp = f"\t\t{fix_type(property_value['type'])} {property_value['name']}[{property_value['array_size']}];\n"
+                    temp = f"\t\t{field_type} {field_name}[{property_value['array_size']}];\n"
+                elif filter_fields and field_type in _STRING_FIELD_TYPES:
+                    # a member variable is accessed by pointer, which the str
+                    # typemaps of the string classes don't cover: wrapped as a
+                    # property whose accessors pass the string by value
+                    temp = (
+                        "\t\t%extend {\n"
+                        f"\t\t\t{field_type} _get_{field_name}() {{ return $self->{field_name}; }}\n"
+                        f"\t\t\tvoid _set_{field_name}({field_type} theValue) {{ $self->{field_name} = theValue; }}\n"
+                        "\t\t}\n"
+                        "\t\t%pythoncode {\n"
+                        f"\t\t\t{field_name} = property(_get_{field_name}, _set_{field_name})\n"
+                        "\t\t}\n"
+                    )
+                elif filter_fields and _is_foreign_enum(field_type):
+                    # SWIG would wrap an enum it does not know as an opaque
+                    # pointer, and importing its module may pull many others
+                    # (STEPControl for DESTEP): wrapped as an int
+                    temp = (
+                        f"\t\t%apply int {{ {field_type} }};\n"
+                        f"\t\t{field_type} {field_name};\n"
+                    )
                 else:
-                    temp = f"\t\t{fix_type(property_value['type'])} {property_value['name']};\n"
+                    temp = f"\t\t{field_type} {field_name};\n"
+                    if filter_fields:
+                        # SWIG must know the class of the field
+                        check_dependency(property_value["type"])
                 properties_str += temp
                 if not keyword.iskeyword(property_value["name"]):
                     # a C array is an opaque SWIG pointer
@@ -4106,6 +4161,9 @@ class ModuleWrapper:
         )
         state.include_classes = MODULE_OPTIONS.get(module_name, {}).get(
             "include_classes", []
+        )
+        state.wrap_public_fields = MODULE_OPTIONS.get(module_name, {}).get(
+            "wrap_public_fields", False
         )
         state.flattened_classes = []
         state.nested_template_aliases = {}
