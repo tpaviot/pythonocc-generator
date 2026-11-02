@@ -902,6 +902,10 @@ TOPODS_SHAPE_PICKLE_TEMPLATE = """
 };
 """
 
+TOPODS_SHAPE_PICKLE_TEMPLATE_PYI = """    def __getstate__(self) -> bytes: ...
+    def __setstate__(self, state: bytes | str) -> None: ...
+"""
+
 HASH_TOPODS_SHAPE_TEMPLATE = """
 %extend TopoDS_Shape {
     size_t __hash__() {
@@ -1054,7 +1058,7 @@ BINTOOLS_WRITE_READ_FROM_BYTES_PYI = """
     @staticmethod
     def WriteToBytes(sh: TopoDS_Shape, with_triangles: bool = True, with_normals: bool = False) -> bytes: ...
     @staticmethod
-    def ReadFromBytes(data: bytes) -> TopoDS_Shape: ...
+    def ReadFromBytes(data: bytes | bytearray | memoryview) -> TopoDS_Shape: ...
 """
 
 ###########################

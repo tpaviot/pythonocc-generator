@@ -50,11 +50,11 @@ from _exclusions import (
 )
 from _modules import KEEP_CONSTRUCTOR_ARGS, MODULE_OPTIONS, OCCT_MODULES, TOOLKITS
 from _swig_templates import (
+    BINTOOLS_WRITE_READ_FROM_BYTES,
+    BINTOOLS_WRITE_READ_FROM_BYTES_PYI,
     BREPALGOAPI_HEADER,
     BREPTOOLS_WRITE_READ_FROM_STRING,
     BREPTOOLS_WRITE_READ_FROM_STRING_PYI,
-    BINTOOLS_WRITE_READ_FROM_BYTES,
-    BINTOOLS_WRITE_READ_FROM_BYTES_PYI,
     BVH_HEADER_TEMPLATE,
     BYREF_ENUM_TEMPLATE,
     CURVE_ARRAY_EVAL_PYI,
@@ -105,6 +105,7 @@ from _swig_templates import (
     TOPODS_CLASS,
     TOPODS_CLASS_PYI,
     TOPODS_SHAPE_PICKLE_TEMPLATE,
+    TOPODS_SHAPE_PICKLE_TEMPLATE_PYI,
     TOPODS_SHAPE_TYPES_HEADER,
     WIN_PRAGMAS,
 )
@@ -3281,6 +3282,9 @@ def _class_specific_extensions(class_name):
     if class_name == "BinTools":
         extra_def += BINTOOLS_WRITE_READ_FROM_BYTES
         extra_pyi += BINTOOLS_WRITE_READ_FROM_BYTES_PYI
+    if class_name == "TopoDS_Shape":
+        # the pickling methods themselves are added by process_classes
+        extra_pyi += TOPODS_SHAPE_PICKLE_TEMPLATE_PYI
     if class_name == "TCollection_ExtendedString":
         # str() returns the text, decoded from UTF-8
         extra_def += "\t\t%extend{\n"
