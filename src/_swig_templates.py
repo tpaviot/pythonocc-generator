@@ -885,15 +885,25 @@ TOPODS_SHAPE_PICKLE_TEMPLATE = """
 %extend TopoDS_Shape {
 %pythoncode {
     def __getstate__(self):
-        from .BRepTools import breptools
-        str_shape = breptools.WriteToString(self, True)
-        return str_shape
+        from .BinTools import bintools
+        return bintools.WriteToBytes(self)
     def __setstate__(self, state):
-        from .BRepTools import breptools
-        the_shape = breptools.ReadFromString(state)
-        self.this = the_shape.this
+        if isinstance(state, str):
+            from .BRepTools import breptools
+            the_shape = breptools.ReadFromString(state)
+        else:
+            from .BinTools import bintools
+            the_shape = bintools.ReadFromBytes(state)
+        if the_shape is None:
+            TopoDS_Shape.__init__(self)
+        else:
+            self.this = the_shape.this
     }
 };
+"""
+
+TOPODS_SHAPE_PICKLE_TEMPLATE_PYI = """    def __getstate__(self) -> bytes: ...
+    def __setstate__(self, state: bytes | str) -> None: ...
 """
 
 HASH_TOPODS_SHAPE_TEMPLATE = """
@@ -1013,6 +1023,42 @@ BREPTOOLS_WRITE_READ_FROM_STRING_PYI = """
     @overload
     @staticmethod
     def ReadFromString(s: str, topods_shape: TopoDS_Shape) -> None: ...
+"""
+
+BINTOOLS_WRITE_READ_FROM_BYTES = """
+%feature("autodoc", "Serializes TopoDS_Shape to bytes, in the binary format of BinTools (the format of the binary .brep files). Triangulations are written if with_triangles is True, their normals if with_normals is True.") WriteToBytes;
+%extend{
+    static PyObject* WriteToBytes(const TopoDS_Shape & shape, bool with_triangles = true, bool with_normals = false) {
+        std::ostringstream s(std::ios::out | std::ios::binary);
+        BinTools::Write(shape, s, with_triangles, with_normals, BinTools_FormatVersion_CURRENT);
+        const std::string buffer = s.str();
+        return PyBytes_FromStringAndSize(buffer.data(), static_cast<Py_ssize_t>(buffer.size()));
+    }
+};
+%feature("autodoc", "Deserializes TopoDS_Shape from a bytes-like object written by WriteToBytes. Create and return a new TopoDS_Shape each time the method is called.") ReadFromBytes;
+%extend{
+    static TopoDS_Shape ReadFromBytes(PyObject* data) {
+        Py_buffer view;
+        if (PyObject_GetBuffer(data, &view, PyBUF_SIMPLE) != 0) {
+            PyErr_Clear();
+            throw Standard_TypeMismatch("ReadFromBytes expects a bytes-like object");
+        }
+        std::istringstream s(std::string(static_cast<const char*>(view.buf), static_cast<size_t>(view.len)),
+                             std::ios::in | std::ios::binary);
+        PyBuffer_Release(&view);
+        TopoDS_Shape shape;
+        BinTools::Read(shape, s);
+        return shape;
+    }
+};
+
+"""
+
+BINTOOLS_WRITE_READ_FROM_BYTES_PYI = """
+    @staticmethod
+    def WriteToBytes(sh: TopoDS_Shape, with_triangles: bool = True, with_normals: bool = False) -> bytes: ...
+    @staticmethod
+    def ReadFromBytes(data: bytes | bytearray | memoryview) -> TopoDS_Shape: ...
 """
 
 ###########################

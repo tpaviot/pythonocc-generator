@@ -50,6 +50,8 @@ from _exclusions import (
 )
 from _modules import KEEP_CONSTRUCTOR_ARGS, MODULE_OPTIONS, OCCT_MODULES, TOOLKITS
 from _swig_templates import (
+    BINTOOLS_WRITE_READ_FROM_BYTES,
+    BINTOOLS_WRITE_READ_FROM_BYTES_PYI,
     BREPALGOAPI_HEADER,
     BREPTOOLS_WRITE_READ_FROM_STRING,
     BREPTOOLS_WRITE_READ_FROM_STRING_PYI,
@@ -103,6 +105,7 @@ from _swig_templates import (
     TOPODS_CLASS,
     TOPODS_CLASS_PYI,
     TOPODS_SHAPE_PICKLE_TEMPLATE,
+    TOPODS_SHAPE_PICKLE_TEMPLATE_PYI,
     TOPODS_SHAPE_TYPES_HEADER,
     WIN_PRAGMAS,
 )
@@ -3265,7 +3268,7 @@ def _synthesize_primitive_ref_getter_setters(class_name, other_methods):
 
 def _class_specific_extensions(class_name):
     """Return (extra_def_str, extra_pyi_str) for classes that need ad-hoc SWIG
-    extensions (TDF_Label name accessor, BRepTools serialization, math_*
+    extensions (TDF_Label name accessor, BRepTools/BinTools serialization, math_*
     setters, TopoDS_Shape pickling, ...)."""
     extra_def, extra_pyi = "", ""
     # the numpy members added after the class, see process_classes
@@ -3276,6 +3279,12 @@ def _class_specific_extensions(class_name):
     if class_name in ("BRepTools", "BRepTools_ShapeSet"):
         extra_def += BREPTOOLS_WRITE_READ_FROM_STRING
         extra_pyi += BREPTOOLS_WRITE_READ_FROM_STRING_PYI
+    if class_name == "BinTools":
+        extra_def += BINTOOLS_WRITE_READ_FROM_BYTES
+        extra_pyi += BINTOOLS_WRITE_READ_FROM_BYTES_PYI
+    if class_name == "TopoDS_Shape":
+        # the pickling methods themselves are added by process_classes
+        extra_pyi += TOPODS_SHAPE_PICKLE_TEMPLATE_PYI
     if class_name == "TCollection_ExtendedString":
         # str() returns the text, decoded from UTF-8
         extra_def += "\t\t%extend{\n"
