@@ -210,6 +210,23 @@ def test_find_template_header():
     assert find_template_header("BRepLProp_NoSuchTemplate") is None
 
 
+def test_keep_owner_of_template_methods():
+    from generate_wrapper import keep_owner_of_template_methods
+
+    # the gp references are kept, they are not rewritten by adapt_return_type
+    # in a header parsed by SWIG (issue #1504)
+    swig_str = keep_owner_of_template_methods(
+        "GeomLProp_SLPropsBase", "GeomLProp_SLProps.hxx"
+    )
+    for name in ("Value", "D1U", "D1V", "D2U", "D2V", "DUV", "Normal"):
+        assert f'%feature("pythonappend") GeomLProp_SLPropsBase::{name} %{{' in swig_str
+    assert "MaxCurvature" not in swig_str  # double
+    assert "TangentU" not in swig_str  # void
+    swig_str = keep_owner_of_template_methods("Extrema_GGExtPC", "Extrema_GGExtPC.hxx")
+    assert '%feature("pythonappend") Extrema_GGExtPC::Point %{' in swig_str
+    assert keep_owner_of_template_methods("NoSuchTemplate", "Bnd_B3.hxx") == ""
+
+
 def test_derived_handle_outputs_first():
     """the overload with the most derived handle outputs is declared first,
     SWIG tries the overloads in their declaration order"""
@@ -289,6 +306,16 @@ def test_names_returning_owned_references():
         "Poles",
         "ChangeArray1",
         "Weights",
+    }
+    # in a class template header parsed by SWIG, the gp, TopoDS and curve
+    # references are not returned by value (issue #1504)
+    assert _names_returning_owned_references(methods, parsed_by_swig=True) == {
+        "Poles",
+        "ChangeArray1",
+        "Weights",
+        "Pole",
+        "Shape",
+        "Curve",
     }
 
 

@@ -22,6 +22,7 @@ import ast
 import configparser
 import copy
 import datetime
+import functools
 import hashlib  # to compute md5 function signatures
 import keyword  # to prevent using python language keywords
 import logging
@@ -100,6 +101,7 @@ from _swig_templates import (
     TEMPLATE_INITFROMJSON,
     TEMPLATE_INITFROMJSON_PYI,
     TEMPLATE_KEEP_OWNER,
+    TEMPLATE_KEEP_OWNER_OF_TEMPLATE_METHOD,
     TEMPLATE_SETTER_PYI,
     TIMESTAMP_TEMPLATE,
     TOPODS_CLASS,
@@ -789,6 +791,9 @@ def process_templates_from_typedefs(list_of_typedefs):
                     if template_header not in included_template_headers:
                         included_template_headers.add(template_header)
                         wrapper_str += TEMPLATE_CLASS_EXTENSIONS.get(template_class, "")
+                        wrapper_str += keep_owner_of_template_methods(
+                            template_class, template_header
+                        )
                         wrapper_str += f'%include "{template_header}";\n'
                     wrapper_str += f"%template({template_name}) {template_type};\n"
                 elif "NCollection_Array1" in template_type:
@@ -2836,11 +2841,16 @@ _NOT_OWNED_REFERENCE_TYPES_RE = re.compile(
 )
 
 
-def _returns_owned_reference(f):
+def _returns_owned_reference(f, parsed_by_swig=False):
     """True if the method returns a reference to an object stored in the
     instance, e.g. NCollection_HArray1::Array1() or Geom_BSplineCurve::Poles().
     SWIG wraps it as a proxy that does not own the referenced object, which is
-    freed with the instance (issue #1499)."""
+    freed with the instance (issue #1499).
+
+    parsed_by_swig: the method belongs to a class template whose header SWIG
+    parses directly (issue #1504). Its return type is not rewritten by
+    adapt_return_type, the references to the gp, TopoDS, curve and surface
+    classes are not returned by value there."""
     if f["constructor"] or f["static"] or f["friend"] or f["parent"] is None:
         return False
     if not adapt_function_name(f["name"]).isidentifier():  # operators
@@ -2848,13 +2858,18 @@ def _returns_owned_reference(f):
     rtn_type = _apply_typedef_rewrites(f["rtnType"])
     if "*" not in rtn_type and (
         "&" not in rtn_type
-        or _is_returned_as_copy(rtn_type)
-        or _is_reference_returned_by_value(rtn_type)
         or is_return_type_enum(rtn_type)
+        or (
+            not parsed_by_swig
+            and (
+                _is_returned_as_copy(rtn_type)
+                or _is_reference_returned_by_value(rtn_type)
+            )
+        )
     ):
         return False
     referenced_type = re.sub(
-        r"\b(?:const|virtual|inline|static|public|protected|private"
+        r"\b(?:const|constexpr|virtual|inline|static|public|protected|private"
         r"|Standard_EXPORT|DEFINE_NCOLLECTION_ALLOC)\b|[&*:]",
         " ",
         rtn_type,
@@ -2863,12 +2878,57 @@ def _returns_owned_reference(f):
     return not _NOT_OWNED_REFERENCE_TYPES_RE.match(referenced_type)
 
 
-def _names_returning_owned_references(methods_list):
+def _names_returning_owned_references(methods_list, parsed_by_swig=False):
     """Names of the methods whose returned reference must keep the instance
     alive. The SWIG feature applies to all the overloads of a name: a name
     with a static overload is left out, the python wrapper has no self."""
-    names = {f["name"] for f in methods_list if _returns_owned_reference(f)}
+    names = {
+        f["name"] for f in methods_list if _returns_owned_reference(f, parsed_by_swig)
+    }
     return names - {f["name"] for f in methods_list if f["static"]}
+
+
+@functools.cache
+def _parse_template_header(template_header):
+    """Parse the OCCT header of a class template, without the side effects of
+    adapt_header_file (the registries of handles, HArray and template
+    aliases are filled when the module of the header is processed)."""
+    content = (OCCT_INCLUDE_DIR / template_header).read_text(
+        encoding="utf-8", errors="replace"
+    )
+    content = _strip_macros(_comment_out_macros(content))
+    content = content.replace("occ::handle", "opencascade::handle")
+    content = _rewrite_handle_parens(content)
+    try:
+        return CppHeaderParser.CppHeader(content, "string")
+    except CppHeaderParser.CppParseError as e:
+        logger.warning("cannot parse %s: %s", template_header, e)
+        return None
+
+
+def keep_owner_of_template_methods(template_class, template_header):
+    """%pythonappend directives for the methods of the class template
+    template_class returning a reference to an object of the instance.
+
+    The OCCT 8 template aliases (BRepLProp_SLProps, Extrema_ExtPC, ...) are
+    wrapped by %including the template header: neither adapt_return_type nor
+    the %pythonappend of process_methods apply to its methods, e.g.
+    BRepLProp_SLProps.Normal() returned a proxy into a freed instance
+    (issue #1504). The directives are emitted before the %include."""
+    header = _parse_template_header(template_header)
+    klass = header.classes.get(template_class) if header else None
+    if klass is None:
+        return ""
+    names = _names_returning_owned_references(
+        klass["methods"]["public"], parsed_by_swig=True
+    )
+    return "".join(
+        TEMPLATE_KEEP_OWNER_OF_TEMPLATE_METHOD.substitute(
+            TemplateClass=template_class,
+            MethodName=adapt_function_name(name),
+        )
+        for name in sorted(names)
+    )
 
 
 def must_ignore_default_destructor(klass):
