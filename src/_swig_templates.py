@@ -227,6 +227,19 @@ TEMPLATE_KEEP_OWNER = Template(
 """
 )
 
+# the same for a method of a class template whose header SWIG parses directly
+# (the OCCT 8 template aliases, issue #1504). The feature applies to all the
+# instantiations. The const references to the gp classes are copies there
+# (FunctionTransformers.i): a copy does not keep the instance alive.
+TEMPLATE_KEEP_OWNER_OF_TEMPLATE_METHOD = Template(
+    """/* the returned reference keeps the instance alive (issue #1504) */
+%feature("pythonappend") $TemplateClass::$MethodName %{
+\tif hasattr(val, "this") and not val.thisown:
+\t    val._owner = self
+%}
+"""
+)
+
 HARRAY1_TEMPLATE = Template(
     """
 class $HClassName : public $Array1Type, public Standard_Transient {
