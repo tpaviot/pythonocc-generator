@@ -1,3 +1,5 @@
+"""Print the OCCT toolkit modules of modules.yaml as CMake lists."""
+
 from pathlib import Path
 
 import yaml

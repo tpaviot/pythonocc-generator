@@ -11,6 +11,7 @@ from pathlib import Path
 from _exclusions import HXX_TO_EXCLUDE_FROM_CPPPARSER
 from generate_wrapper import (
     OCCT_INCLUDE_DIR,
+    _drop_hidden_aliases,
     _drop_single_overloads,
     _names_returning_owned_references,
     _operator_dunder,
@@ -320,7 +321,7 @@ def test_names_returning_owned_references():
 
 
 def test_operator_dunder():
-    def operator(name, nb_params, parent="gp_Vec", static=False, friend=False):
+    def operator(nb_params, parent="gp_Vec", static=False, friend=False):
         return {
             "parent": {"name": parent} if parent else None,
             "static": static,
@@ -328,15 +329,15 @@ def test_operator_dunder():
             "parameters": [{"type": "double"}] * nb_params,
         }
 
-    assert _operator_dunder(operator("+", 1), "operator +") == "__add__"
-    assert _operator_dunder(operator("-", 0), "operator -") == "__neg__"
-    assert _operator_dunder(operator("-", 1), "operator -") == "__sub__"
-    assert _operator_dunder(operator("/", 1), "operator /") == "__truediv__"
-    assert _operator_dunder(operator("*=", 1), "operator *=") == "__imul__"
+    assert _operator_dunder(operator(1), "operator +") == "__add__"
+    assert _operator_dunder(operator(0), "operator -") == "__neg__"
+    assert _operator_dunder(operator(1), "operator -") == "__sub__"
+    assert _operator_dunder(operator(1), "operator /") == "__truediv__"
+    assert _operator_dunder(operator(1), "operator *=") == "__imul__"
     # no stub: object declares __eq__, a free or friend operator is skipped
-    assert _operator_dunder(operator("==", 1), "operator ==") is None
-    assert _operator_dunder(operator("*", 2, parent=None), "operator *") is None
-    assert _operator_dunder(operator("*", 2, friend=True), "operator *") is None
+    assert _operator_dunder(operator(1), "operator ==") is None
+    assert _operator_dunder(operator(2, parent=None), "operator *") is None
+    assert _operator_dunder(operator(2, friend=True), "operator *") is None
 
 
 def test_drop_single_overloads():
@@ -361,6 +362,18 @@ def test_drop_single_overloads():
         "    def __mul__(self, right: gp_Vec) -> float: ...\n"
         "    @staticmethod\n"
         "    def DownCast(t: None) -> None: ...\n"
+    )
+
+
+def test_drop_hidden_aliases():
+    class_pyi = (
+        "class gp_Dir:\n"
+        "    X = gp_Dir.X\n"
+        "    Y = gp_Dir.Y\n"
+        "    def X(self) -> float: ...\n"
+    )
+    assert _drop_hidden_aliases(class_pyi, {"X"}) == (
+        "class gp_Dir:\n    Y = gp_Dir.Y\n    def X(self) -> float: ...\n"
     )
 
 

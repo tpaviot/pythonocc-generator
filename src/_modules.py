@@ -19,6 +19,7 @@ Exposes:
 """
 
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -33,8 +34,8 @@ def _load():
     for toolkit in data["toolkits"].values():
         toolkits.update(toolkit)
 
-    modules = []
-    keep_constructor_args = set()
+    modules: list[tuple[Any, ...]] = []
+    keep_constructor_args: set[str] = set()
     module_options = {}
     for entry in data["modules"]:
         name = entry["name"]

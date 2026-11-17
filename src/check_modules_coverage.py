@@ -1,4 +1,6 @@
-# compare occt package/module structure and current pythonocc wrapper status
+"""Compare the OCCT package/module structure and the current pythonocc
+wrapper status."""
+
 import itertools
 from pathlib import Path
 

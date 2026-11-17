@@ -14,6 +14,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+"""Generate pythonocc-core SWIG interface files and stubs."""
+
 ###########
 # imports #
 ###########
@@ -1046,7 +1048,7 @@ def sort_templates_by_dependency(templates):
     names = {template_name for _, template_name in templates}
     remaining = list(templates)
     ordered = []
-    emitted = set()
+    emitted: set[str] = set()
     while remaining:
         ready = [
             item
@@ -2521,6 +2523,17 @@ def _drop_single_overloads(class_pyi):
     return "\n".join(kept)
 
 
+_PYI_CLASS_ALIAS_RE = re.compile(r"^    (\w+) = \w+\.\1\n", re.MULTILINE)
+
+
+def _drop_hidden_aliases(class_pyi, methods):
+    """Remove the aliases of a class stub hidden, at runtime, by the methods
+    of the same name"""
+    return _PYI_CLASS_ALIAS_RE.sub(
+        lambda m: "" if m.group(1) in methods else m.group(0), class_pyi
+    )
+
+
 def _should_skip_function(f, function_name):
     """Early-return cases where the function should not be wrapped at all."""
     if f["destructor"] or f["returns"] == "~":
@@ -3722,7 +3735,7 @@ def _propagate_abstract_classes(classes_dict):
     base class of the module without overriding them. CppHeaderParser only
     flags a class declaring pure virtual methods itself."""
     by_name = {klass["name"]: klass for klass in classes_dict.values()}
-    memo = {}
+    memo: dict[str, set[str]] = {}
 
     def unimplemented(klass):
         """The pure virtual methods klass does not implement."""
@@ -4065,19 +4078,10 @@ def process_classes(classes_dict, exclude_classes, exclude_member_functions):
         )
         # an alias of a class enum value (e.g. X = D.X in gp_Dir) is hidden,
         # at runtime, by the method of the same name (gp_Dir.X)
-        class_methods = set(
-            re.findall(
-                r"^    def (\w+)\(", class_pyi_str[class_pyi_start:], re.MULTILINE
-            )
-        )
+        class_methods = set(_PYI_METHOD_DEF_RE.findall(class_pyi_str[class_pyi_start:]))
         if class_methods:
-            class_pyi_str = class_pyi_str[:class_pyi_start] + re.sub(
-                r"^    (\w+) = \w+\.\1\n",
-                lambda m, methods=class_methods: (
-                    "" if m.group(1) in methods else m.group(0)
-                ),
-                class_pyi_str[class_pyi_start:],
-                flags=re.MULTILINE,
+            class_pyi_str = class_pyi_str[:class_pyi_start] + _drop_hidden_aliases(
+                class_pyi_str[class_pyi_start:], class_methods
             )
         extra_def, extra_pyi = _class_specific_extensions(class_name)
         class_def_str += extra_def
@@ -4217,6 +4221,8 @@ def parse_module(module_name):
 
 
 class ModuleWrapper:
+    """Generate the SWIG interface file and the stub of one OCCT module."""
+
     def __init__(
         self,
         module_name,
@@ -4509,7 +4515,7 @@ def fix_template_stubs(typedefs_pyi, other_pyi, swig_typedefs):
     templates = _SWIG_TEMPLATE_RE.findall(swig_typedefs)
     to_remove = class_names | set(templates)
     lines = typedefs_pyi.split("\n")
-    kept = []
+    kept: list[str] = []
     for line in lines:
         match = _PYI_NEWTYPE_RE.match(line)
         if match and match.group(1) in to_remove:
